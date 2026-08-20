@@ -488,6 +488,71 @@ html:has(body.tl-body) { height: 100%; overflow: hidden; }
 .tl-row--between { justify-content: space-between; }
 .tl-hr { height: var(--tl-border); background: var(--tl-rule-soft); border: 0; margin: 0; }
 
+/*
+   THE DISCLOSURE GROUP.
+
+   A panel with more controls than a 264px column can show is not answered by a
+   scrollbar. macOS overlay scrollbars are invisible until you already know to
+   scroll, which is exactly the knowledge the reader lacks — the Cube's panel
+   was 1086px of instrument in a 531px body, and the eight controls below the
+   fold had no cue of any kind that they existed. The scroll shadow above says
+   "there is a little more"; it does not say WHAT, and it cannot survive being
+   eight controls deep.
+
+   A disclosure says it in words instead. The summary row is part of the
+   layout, so it is counted in the height budget rather than hidden by it; it
+   names what is inside; and .tl-disc__v carries the state of anything switched
+   on in there, so a CLOSED group never hides an ACTIVE setting silently. Native
+   <details>/<summary>: keyboard, screen readers and find-in-page for free.
+
+   Rule at the top rather than a box around it — the panel body is already a
+   stack of labelled groups, and a nested box would read as a second panel.
+*/
+.tl-disc { border-top: var(--tl-border) solid var(--tl-rule-soft); padding-top: var(--tl-space-3); }
+.tl-disc > summary {
+  display: flex;
+  align-items: center;
+  gap: var(--tl-space-4);
+  min-height: 22px;
+  cursor: pointer;
+  list-style: none;
+  font-size: var(--tl-text-2xs);
+  font-weight: var(--tl-w-semi);
+  letter-spacing: var(--tl-track-caps);
+  text-transform: uppercase;
+  color: var(--tl-ink-2);
+}
+.tl-disc > summary::-webkit-details-marker { display: none; }
+.tl-disc > summary::after {
+  content: "";
+  order: -1;                       /* the chevron leads, the way a tree does */
+  flex: none;
+  width: 7px; height: 7px;
+  margin: 0 var(--tl-space-1) 2px 2px;
+  border-right: 1.4px solid currentColor;
+  border-bottom: 1.4px solid currentColor;
+  transform: rotate(-45deg);
+  transition: transform var(--tl-dur-fast) var(--tl-ease);
+}
+.tl-disc[open] > summary::after { transform: rotate(45deg); margin-bottom: 4px; }
+.tl-disc > summary:hover { color: var(--tl-ink); }
+/* What is on inside a closed group. Mono because it is a readout, not a label. */
+.tl-disc__v {
+  margin-left: auto;
+  font-family: var(--tl-font-mono);
+  font-size: var(--tl-text-2xs);
+  letter-spacing: var(--tl-track-xs);
+  text-transform: none;
+  color: var(--tl-ink-3);
+  font-variant-numeric: tabular-nums;
+}
+.tl-disc__bd {
+  display: flex;
+  flex-direction: column;
+  gap: var(--tl-space-5);
+  padding-top: var(--tl-space-5);
+}
+
 
 /* ── 06  Buttons, fields, chips, toggles, segments ────────────────────────── */
 

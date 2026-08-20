@@ -7,18 +7,22 @@
     "build": "next build",
     "start": "next start",
     "lint": "eslint",
-    "data": "node scripts/build-data.mjs",
+    "data": "node scripts/build-data.mjs && node scripts/build-cube-data.mjs && node scripts/build-polities.mjs",
     "design:sync": "node scripts/sync-design.mjs"
   },
   "dependencies": {
+    "earcut": "^3.2.3",
     "next": "16.3.1",
     "react": "19.2.8",
-    "react-dom": "19.2.8"
+    "react-dom": "19.2.8",
+    "three": "^0.185.1"
   },
   "devDependencies": {
+    "@types/earcut": "^3.0.0",
     "@types/node": "^20",
     "@types/react": "^19",
     "@types/react-dom": "^19",
+    "@types/three": "^0.185.4",
     "eslint": "^9",
     "eslint-config-next": "16.3.1",
     "typescript": "^5"

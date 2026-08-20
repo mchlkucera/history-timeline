@@ -212,14 +212,6 @@
 }
 .tl-pop__link:hover { color: var(--tl-ink); }
 
-/* Vertical / People placeholders — the reserved slots. */
-.tl-slot {
-  display: grid;
-  place-items: center;
-  min-height: 340px;
-  padding: var(--tl-space-9);
-}
-
 /* ── Responsive ───────────────────────────────────────────────────────────── */
 
 /* Short viewports: spend less inside the panel.
@@ -228,14 +220,45 @@
    bookmarks bar and a dock leaves about 700px of viewport, i.e. ~535px of
    panel. It scrolls, and now says so, but the better answer at these heights
    is to need less room, so the density steps down one notch. Height-only: this
-   must not fire on a tall narrow phone, where the panel is a bottom sheet. */
-@media (max-height: 780px) {
-  .tl-panel__bd { gap: var(--tl-space-3); padding: var(--tl-space-4) var(--tl-space-5); }
+   must not fire on a tall narrow phone, where the panel is a bottom sheet.
+
+   THE BREAKPOINT IS 820, NOT 780, and the 40px matters. It was set by assuming
+   browser chrome, so it missed the case it was written for: at a full 800px
+   viewport — a maximised window on that same 1280x800 laptop, and the height
+   every regression run uses — the docked column is 667px and the Timeline
+   panel wants 621px of body inside a 531px one. Two domain chips (Society &
+   economy, Exploration & movement) needed a scroll to reach. Measured after:
+   the step down frees ~120px and the panel fits with room over. 900-tall
+   viewports are above it and keep full density, where they already fit. */
+/* On a phone the control sheet is fixed over the bottom of the stage, and the
+   vertical timeline's pan rail is the one control that lives at the bottom of a
+   canvas. sizeRenderers() already shortens that canvas by the sheet's height —
+   but margin-block:auto would centre the saving, handing half of it back to the
+   top. Here the canvas hangs from the top instead, so all of it lands where the
+   sheet is. (Only the collapsed sheet is cleared; opening it is a deliberate
+   move to the controls, and it may cover the plot while it is open.) */
+@media (max-width: 759px) {
+  .tl-view[data-view="vertical"] > .tl-canvasbox { margin-block: 0 auto; }
+}
+
+/* --tl-chip-h is the chip height AS A NUMBER anything else can do arithmetic
+   with. #cubeChain's well has to end on a row boundary, and it cannot if the
+   only place the height exists is a literal inside a media query. */
+.tl-panel__bd { --tl-chip-h: var(--tl-ctl-sm); --tl-chip-gap: var(--tl-space-3); }
+
+@media (max-height: 820px) {
+  .tl-panel__bd {
+    gap: var(--tl-space-3);
+    padding: var(--tl-space-4) var(--tl-space-5);
+    --tl-chip-h: 25px;
+    --tl-chip-gap: var(--tl-space-2);
+  }
   .tl-panel__bd .tl-field-group { gap: var(--tl-space-2); }
   .tl-panel__bd .tl-cluster { gap: var(--tl-space-2); }
-  .tl-panel__bd :is(.chip, .tl-chip) { height: 25px; }
+  .tl-panel__bd :is(.chip, .tl-chip) { height: var(--tl-chip-h); }
   .tl-panel__bd :is(.btn, .tl-btn) { height: 28px; }
   .tl-panel__bd .tl-label { line-height: 1.2; }
+  .tl-panel__bd .tl-disc__bd { gap: var(--tl-space-3); padding-top: var(--tl-space-3); }
 }
 
 /* shell.css moves .tl-rail__mid onto its own scrolling row at 1023px. These
@@ -266,3 +289,175 @@
   #railPrev, #railNext, #railPrevP, #railNextP { display: none; }
   .tl-transport .btn { height: var(--tl-ctl-sm); padding: 0 var(--tl-space-3); font-size: var(--tl-text-2xs); }
 }
+
+/* ── The cube: the one WebGL view ─────────────────────────────────────────────
+   Nothing here declares a raw colour, same rule as the rest of this file.
+
+   The canvas is owned by three.js, not by fitCanvas(): cube.ts writes
+   style.height from the stage and the renderer writes the backing-store
+   width/height. So this wrapper only has to stop being a centred block and
+   become a positioning context for the two readouts that float on it. */
+.tl-canvasbox--gl { height: 100%; }
+.tl-canvasbox--gl > canvas {
+  /* an orbit surface, not a picking surface — the crosshair lies about it */
+  cursor: grab;
+  height: 100%;
+}
+.tl-canvasbox--gl > canvas:active { cursor: grabbing; }
+
+/* The big date, for single-slice playback. A readout, never a control, so it
+   takes no pointer events and wears no panel chrome — it is engraved on the
+   film the way the rail's year readout is. Bottom right, because the Controls
+   panel floats top left and the block is centred between them. */
+.tl-cube-readout {
+  position: absolute;
+  right: var(--tl-space-7);
+  bottom: var(--tl-space-7);
+  display: flex;
+  flex-direction: column;
+  align-items: flex-end;
+  gap: var(--tl-space-2);
+  pointer-events: none;
+  text-align: right;
+}
+.tl-cube-readout[hidden] { display: none; }
+.tl-cube-readout__y {
+  font-family: var(--tl-font-mono);
+  font-size: var(--tl-text-2xl);
+  font-weight: var(--tl-w-semi);
+  letter-spacing: var(--tl-track-num);
+  line-height: var(--tl-lh-flat);
+  font-variant-numeric: tabular-nums;
+  color: var(--tl-ink);
+}
+.tl-cube-readout__s {
+  font-family: var(--tl-font-ui);
+  font-size: var(--tl-text-2xs);
+  letter-spacing: var(--tl-track-caps);
+  text-transform: uppercase;
+  color: var(--tl-ink-3);
+}
+
+/* "extruding the world…" — a full second of synchronous work on first open. */
+.tl-cube-busy {
+  position: absolute;
+  left: 50%; top: 50%;
+  transform: translate(-50%, -50%);
+  padding: var(--tl-space-4) var(--tl-space-6);
+  background: var(--tl-surface-over);
+  border: var(--tl-border) solid var(--tl-rule);
+  border-radius: var(--tl-radius-md);
+  box-shadow: var(--tl-shadow-panel);
+  font-family: var(--tl-font-ui);
+  font-size: var(--tl-text-sm);
+  color: var(--tl-ink-2);
+  max-width: 60%;
+  text-align: center;
+}
+.tl-cube-busy[hidden] { display: none; }
+
+/* A value that belongs to the label above the control it measures. Mono,
+   because every one of them is a measurement. */
+.tl-label__v {
+  float: right;
+  font-family: var(--tl-font-mono);
+  font-size: var(--tl-text-2xs);
+  font-variant-numeric: tabular-nums;
+  letter-spacing: var(--tl-track-0);
+  text-transform: none;
+  color: var(--tl-ink-3);
+}
+
+/* THE TWO-HANDLE TIME CUT.
+   Built from divs rather than two overlaid <input type=range> — overlaid ranges
+   fight over pointer capture the moment the handles meet, and the fix is more
+   code than the pointer maths in cube.ts. The handles are the same needle as
+   the rail index (globals.css input[type=range]) so the shell keeps one
+   vocabulary for "a value on a time scale". */
+.tl-cutrange {
+  position: relative;
+  height: var(--tl-tap);
+  touch-action: none;
+  cursor: ew-resize;
+}
+.tl-cutrange__track,
+.tl-cutrange__fill {
+  position: absolute;
+  top: 50%;
+  height: 2px;
+  margin-top: -1px;
+  border-radius: 1px;
+}
+.tl-cutrange__track { left: 0; right: 0; background: var(--tl-rule-strong); }
+.tl-cutrange__fill  { background: var(--tl-ink-3); }
+.tl-cutrange[data-cutting="true"] .tl-cutrange__fill { background: var(--tl-accent); }
+.tl-cutrange__h {
+  position: absolute;
+  top: 50%;
+  width: 4px; height: 18px;
+  margin: -9px 0 0 -2px;
+  border-radius: 1px;
+  background: var(--tl-accent);
+  box-shadow: 0 0 0 1px var(--tl-surface);
+}
+.tl-cutrange__h[data-drag="true"] { background: var(--tl-accent-hover); height: 22px; margin-top: -11px; }
+
+/* Slice mode owns the time axis while it is on, so the cut is inert — and says
+   so, rather than silently doing nothing. Same the other way round. */
+#cubeCutRow[data-off="true"] .tl-cutrange,
+#cubeCutRow[data-off="true"] .tl-toggle,
+#cubeSliceRow[data-off="true"] .tl-transport,
+#cubeSliceRow[data-off="true"] input[type=range] {
+  opacity: .4;
+  pointer-events: none;
+}
+
+/* A chain link with no geometry in the eighteen snapshots is still part of the
+   lineage — shown, but dashed, so "we have no map of it" is visible. */
+#cubeChain .chip[data-empty="true"] { border-style: dashed; color: var(--tl-ink-3); }
+
+/* The frame meter, flush right in the Reading panel's header. A measurement,
+   so mono; tabular figures so the numbers do not jitter at 60 Hz. */
+.tl-cube-stats {
+  font-family: var(--tl-font-mono);
+  font-size: var(--tl-text-2xs);
+  font-variant-numeric: tabular-nums;
+  color: var(--tl-ink-3);
+  white-space: nowrap;
+  padding-right: var(--tl-space-3);
+}
+
+@media (max-width: 759px) {
+  .tl-cube-readout { right: var(--tl-space-5); bottom: var(--tl-space-5); }
+  .tl-cube-readout__y { font-size: var(--tl-text-xl); }
+}
+
+/* The lineage chain at 3 links is 27 chips — a third of a screen of chips, and
+   it sits ABOVE the solid, cut and slice controls. Bounding it here keeps the
+   whole panel navigable while still showing the chain in full: it is the one
+   place that says which polities the volume is actually made of.
+
+   THE BOUND IS AN EXACT NUMBER OF ROWS. A flat 86px cut the third row six
+   pixels in, so the well ended in a band of half-height chips with their
+   letters sliced through the middle ("Urnfield Culture" bisected) — which
+   reads as a broken layout, not as a scroller. Rows are chip + gap, and both
+   step down with the density query above, so the arithmetic has to be done in
+   the same variables rather than in a literal: three whole rows, plus the
+   well's own padding, and the fold always falls in a gutter. */
+#cubeChain {
+  /* padding-top + three whole rows, where a row is a chip PLUS the gap under
+     it. A scroller paints into its own bottom padding, so budgeting for that
+     padding instead of for the gap is what left two pixels of a fourth row
+     showing — three rows and three gutters is the bound that ends exactly
+     where the fourth row begins. */
+  max-height: calc(var(--tl-space-3) + 3 * (var(--tl-chip-h) + var(--tl-chip-gap)));
+  overflow-y: auto;
+  overscroll-behavior: contain;
+  /* an inset well: the sunk ground plus the styled scrollbar (§12 forces a
+     classic one, not a macOS overlay) is what says "this scrolls" now that the
+     fold no longer says it by slicing a chip in half */
+  padding: var(--tl-space-3);
+  background: var(--tl-surface-2);
+  border-radius: var(--tl-radius-xs);
+}
+#cubeChain:empty { display: none; }

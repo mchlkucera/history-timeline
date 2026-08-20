@@ -25,6 +25,7 @@ import { useCallback, useEffect, useRef, useState, useSyncExternalStore } from '
 import { initData, setGotoTab, type Datasets } from '@/render/shared';
 import { WorldMap } from '@/render/map';
 import { TL } from '@/render/timeline';
+import { VT } from '@/render/vertical';
 import { Flow, initFlow } from '@/render/flow';
 import { Cube } from '@/render/cube';
 import { Core } from '@/render/core';
@@ -59,10 +60,12 @@ const GROUPS: { id: string; label: string; members: ViewId[] }[] = [
   { id: 'g-core', label: 'Core', members: ['core'] },
 ];
 
-// Per-group landing member. Timeline lands on 'zoom' today; flip to 'vertical'
-// the day the vertical port lands — that is the whole change, here and below.
+// Per-group landing member. Timeline lands on 'vertical': the vertical projection is
+// the PRIMARY timeline — it reads down the page, which is how a person reads a
+// chronology, and it is the one that never drops a label. Horizontal keeps its seat in
+// the seg, and coming back to the group returns you to whichever you last used.
 const GROUP_DEFAULT: Record<string, ViewId> = {
-  'g-map': 'map', 'g-time': 'zoom', 'g-flow': 'flow', 'g-conn': 'conn', 'g-cube': 'cube', 'g-core': 'core',
+  'g-map': 'map', 'g-time': 'vertical', 'g-flow': 'flow', 'g-conn': 'conn', 'g-cube': 'cube', 'g-core': 'core',
 };
 const DEFAULT_VIEW: ViewId = 'map';
 
@@ -91,8 +94,8 @@ const VIEWS: Record<ViewId, ViewMeta> = {
   },
   vertical: {
     seg: 'Vertical', name: 'Vertical timeline', rail: 'span',
-    gist: 'The primary timeline. Reserved slot — the port lands separately.',
-    meta: 'reserved slot',
+    gist: 'Time runs down, past at top. Bands become columns; a label gets a full line, not a gap.',
+    meta: 'drag ↕ time · ↔ columns',
   },
   zoom: {
     seg: 'Horizontal', name: 'Zoomable timeline', rail: 'span',
@@ -116,8 +119,8 @@ const VIEWS: Record<ViewId, ViewMeta> = {
   },
   cube: {
     seg: 'Cube', name: 'Space-time cube', rail: 'legend',
-    gist: 'Latitude × longitude × time as one solid block. Drag to rotate.',
-    meta: '18 sheets · oldest at the bottom',
+    gist: 'Latitude × longitude × time as one solid block — an empire is a volume you can cut.',
+    meta: '18 sheets · WebGL · orbit what you look at',
   },
   core: {
     seg: 'Core', name: 'Core sample', rail: 'off',
@@ -166,7 +169,7 @@ const NOTES: Record<ViewId, Notes> = {
       <p>Not area, not borders &mdash; <strong>where the people actually are</strong>. A coarse density field over the land, one cell at a time. Asia holds two thirds of humanity for four thousand years, the Americas collapse after 1492, Africa surges in the last century. <strong>Press play.</strong></p>
       <p>The grid is deliberately visible, because the cell size <em>is</em> the resolution of the claim. &ldquo;Field&rdquo; smooths the same numbers for legibility; &ldquo;Plate&rdquo; shows you what was actually computed.</p>
     </>,
-    src: <>What is data and what is model: the eight macro-region totals per slice are scholarly estimates (McEvedy &amp; Jones, Biraben, the UN &mdash; wide error bars before 1500), and every region&rsquo;s field is normalised to sum back to exactly that published number. The distribution <em>inside</em> a region is a hand-written table of ~110 population centres plus desert, ice, altitude and latitude rules. Nobody measured that. Read it for shape and concentration, never for a local figure.</>,
+    src: <>What is data and what is model: the eight macro-region totals per slice are scholarly estimates (McEvedy &amp; Jones, Biraben, the UN &mdash; wide error bars before 1500), and every region&rsquo;s field is normalised to sum back to exactly that published number. The distribution <em>inside</em> a region is a hand-written table of 101 population centres plus desert, ice, altitude and latitude rules. Nobody measured that. Read it for shape and concentration, never for a local figure.</>,
   },
   horizon: {
     body: <>
@@ -177,9 +180,13 @@ const NOTES: Record<ViewId, Notes> = {
   },
   vertical: {
     body: <>
-      <p>The vertical timeline is the <strong>primary</strong> projection of the timeline &mdash; it reads down the page like a scroll, which is how a person actually reads a chronology.</p>
-      <p>It is being ported from its standalone prototype. The slot, the canvas id and the rail behaviour are reserved for it here. <strong>It shares this group&rsquo;s controls on purpose:</strong> vertical and horizontal are two projections of one timeline state &mdash; the same span, the same lenses, the same domains, the same search.</p>
+      <p>The <strong>primary</strong> projection of the timeline. It reads down the page like a scroll, which is how a person actually reads a chronology &mdash; and <strong>past is always at the top</strong>, in every state, with no flip.</p>
+      <p>Rotating it buys one enormous thing: <strong>a label no longer has to fit inside the time it describes.</strong> Every mark gets its own full line of text beside it, at whatever length the title actually is, instead of being cut to the gap before the next event. On the <strong>Mozart&rsquo;s world</strong> preset that is <strong>nine of his thirteen life events named on screen at 1280&times;800 and ten at 1440&times;900, against six either way in the horizontal view</strong> &mdash; half again as many, and the ones that are there are not abbreviated.</p>
+      <p><strong>Neither projection fits all thirteen in a laptop window, and this one does not claim to.</strong> Eight of them fall between 1778 and 1791 &mdash; thirteen years, about a seventh of the plot at that zoom. A label may step aside by up to 64px to find a clear line, drawing a hairline back to its true year; past that it is dropped rather than parked against the wrong decade, and the mark stays on the axis, hoverable and clickable. Twelve fit at 1920&times;1080, all thirteen at 2560&times;1440.</p>
+      <p>The bands are now <strong>columns, each as wide as its own longest label needs</strong>, so the surface is usually wider than the window. <strong>Drag it like a map</strong> &mdash; up and down through time, left and right across the world, in one gesture. The strip under the plot is the whole surface in miniature; the bright frame is what you can see, and you can drag that too. A chip at an edge names the next column off-screen; click it to bring it in &mdash; and <strong>turning a lens on brings its own column in for you</strong>, so the thing you just asked to see is never the thing off the right edge.</p>
+      <p><strong>It shares this group&rsquo;s controls on purpose:</strong> vertical and horizontal are two projections of one timeline state &mdash; the same span, the same lenses, the same domains, the same search. Switching the seg changes the projection, never the subject.</p>
     </>,
+    src: <>Faint hairlines mean a label had to step aside to stay legible &mdash; the mark is always at the true year, and a mark whose label was dropped is still drawn, still hoverable and still clickable. Column widths are measured over a window padded by a screenful of time above and below, so travelling does not make the columns breathe under your hand. A lens column sits next to the time axis rather than at the far end, because a lens is something you asked for.</>,
   },
   zoom: {
     body: <>
@@ -211,10 +218,11 @@ const NOTES: Record<ViewId, Notes> = {
   },
   cube: {
     body: <>
-      <p>Your third take, built: <strong>latitude × longitude × time as one solid block.</strong> The map is a horizontal slice through it, the core sample is a vertical drill, the timeline is its shadow on the wall.</p>
-      <p><strong>Reading the block:</strong> each horizontal sheet is a world map at one date, stacked oldest at the bottom. A territory that persists becomes a column; an empire that grows becomes a cone; a conquest is where one column swallows another. Drag to rotate, scroll to zoom.</p>
+      <p>Your third take, built for real this time: <strong>latitude × longitude × time as one solid block.</strong> The map is a horizontal slice through it, the core sample is a vertical drill, the timeline is its shadow on the wall.</p>
+      <p><strong>Reading the block:</strong> the translucent stack is eighteen world maps as real extruded sheets, oldest at the bottom. The traced polity is not drawn on those sheets &mdash; it is a <strong>volume</strong> through them, so an empire that persists is a column, one that grows is a cone, and a conquest is where one body swallows another.</p>
+      <p><strong>Drag</strong> to orbit whatever is under the cursor &mdash; the pivot moves to the depth you clicked, so what you are looking at stays on screen. <strong>Right-drag</strong> pans, <strong>scroll</strong> zooms toward the pointer, <strong>double-click</strong> flies somewhere. <kbd>R</kbd> home &middot; <kbd>T</kbd> top &middot; <kbd>F</kbd> front &middot; <kbd>E</kbd> side &middot; <kbd>Z</kbd> frame the trace &middot; <kbd>I</kbd> isometric &middot; <kbd>A</kbd> single slice &middot; <kbd>P</kbd> play.</p>
     </>,
-    src: <>The rail below is a legend for the block&rsquo;s third axis, not a control &mdash; there is no moment to scrub to inside a solid.</>,
+    src: <>What is data and what is inference: the <strong>bright rules</strong> around the solid are the eighteen dates somebody actually mapped; everything between them is a signed-distance blend and the material is deliberately darker there. <strong>Cut through time</strong> is capped with a lighter section face, the way a technical drawing distinguishes a cut from a surface. In <strong>single slice</strong> the ghost world cross-fades between two real snapshots and never invents a map for an in-between date &mdash; the readout says &ldquo;interpolated&rdquo; for exactly as long as that is what you are seeing. The rail below is a legend for the block&rsquo;s third axis, not a control.</>,
   },
   core: {
     body: <>
@@ -233,7 +241,9 @@ const NOTES: Record<ViewId, Notes> = {
 
 // ── Boot ────────────────────────────────────────────────────────────────────
 function boot() {
-  WorldMap.init(); TL.init(); initFlow(); Cube.init(); Core.init(); initBraid(); Horizon.init(); Pop.init(); buildGallery();
+  // VT.init() after TL.init(): the vertical projection reads its state off TL and
+  // registers itself with TL.paint(), and TL owns every shared control.
+  WorldMap.init(); TL.init(); VT.init(); initFlow(); Cube.init(); Core.init(); initBraid(); Horizon.init(); Pop.init(); buildGallery();
   initConn();
   WorldMap.render();
 }
@@ -245,8 +255,10 @@ const stageHeight = () => {
   return Math.max(420, Math.min(1200, h || 700));
 };
 
-// Four renderers expose a writable height, so they can fill the stage. TL,
-// WorldMap and Conn compute their own — never try to set those.
+// Five renderers expose a writable height, so they can fill the stage. TL, WorldMap
+// and Conn compute their own — never try to set those. (TL's height is the sum of its
+// band heights; the VERTICAL projection of the same state is viewport-driven instead,
+// because down the page is the time axis there.)
 //
 // Horizon and the cartogram are the exception: both project 360° × 145° of the
 // globe onto (width × H), so giving them the full stage height stretches the
@@ -258,6 +270,17 @@ function sizeRenderers() {
   const W = s ? s.clientWidth : 0;
   const geoH = Math.max(300, Math.min(H, Math.round(W * 403 / 1000)));
   Flow.H = H; Braid.H = H; Cube.H = H;
+  // Below 760px every panel becomes a bottom SHEET fixed over the canvas
+  // (shell.css §13). Every full-height view loses its bottom strip to it, but only
+  // the vertical timeline keeps a CONTROL down there — the pan rail that says which
+  // columns you are looking at. So it alone gets a canvas short enough to clear the
+  // sheet, measured rather than assumed so it also tracks the sheet being opened.
+  let vH = H;
+  if (typeof matchMedia !== 'undefined' && matchMedia(NARROW).matches) {
+    const sheet = document.querySelector<HTMLElement>('.tl-panel--tl:not([hidden])');
+    if (sheet) vH = Math.max(320, H - Math.min(sheet.offsetHeight + 6, Math.round(H * 0.45)));
+  }
+  VT.H = vH;
   Horizon.H = geoH; Pop.H = geoH;
 }
 
@@ -268,7 +291,7 @@ function renderTab(v: ViewId) {
     case 'pop': Pop.render(); break;
     case 'horizon': Horizon.render(); break;
     case 'zoom': TL.render(); break;
-    case 'vertical': break;                       // reserved — the port draws #vertCanvas
+    case 'vertical': VT.render(); break;
     case 'flow': Flow.render(); break;
     case 'braid': Braid.render(); break;
     case 'conn': Conn.dirty = true; Conn.render(); break;
@@ -280,7 +303,7 @@ function renderTab(v: ViewId) {
 
 const rerenderAll = () => {
   sizeRenderers();
-  WorldMap.render(); TL.render(); Flow.render(); Cube.render(); Braid.render(); Horizon.render(); Pop.render();
+  WorldMap.render(); TL.render(); VT.render(); Flow.render(); Cube.render(); Braid.render(); Horizon.render(); Pop.render();
   Conn.dirty = true; Conn.render();
 };
 
@@ -482,6 +505,10 @@ export default function Lab() {
     return () => { removeEventListener('resize', onResize); mq.removeEventListener('change', rerenderAll); mo.disconnect(); };
   }, [ready, syncRail]);
 
+  // Opening or closing the bottom sheet changes how much canvas is left under it,
+  // which sizeRenderers() measures — so the canvases have to re-fit when it moves.
+  useEffect(() => { if (ready) renderTab(viewRef.current); }, [collapsed, ready]);
+
   useEffect(() => {
     const g = groupOf(view);
     if (view !== 'concepts') lastMember.current[g] = view;
@@ -647,7 +674,10 @@ export default function Lab() {
   const panel = (corner: string, forViews: ViewId[], title: string, extra?: string) => ({
     className: `tl-panel tl-panel--${corner}${extra ? ' ' + extra : ''}`,
     'data-panelfor': forViews.join(' '),
-    'data-collapsed': corner === 'tl' && collapsed ? 'true' : undefined,
+    // The collapse control belongs to the PRIMARY panel only. Connections now
+    // stacks a secondary panel at the top of the same column, and without this
+    // the chevron on Controls would fold "Related" away with it.
+    'data-collapsed': corner === 'tl' && !(extra || '').includes('secondary') && collapsed ? 'true' : undefined,
     hidden: !forViews.includes(view),
     'aria-label': title,
   });
@@ -741,22 +771,14 @@ export default function Lab() {
             <div className="tl-canvasbox"><canvas id="hzCanvas" height={420} /></div>
           </section>
 
-          {/* ── Timeline · Vertical (reserved) ────────────────────────────── */}
+          {/* ── Timeline · Vertical — THE PRIMARY TIMELINE ────────────────────
+              Viewport-driven: sizeRenderers() writes VT.H from the stage, and
+              vertical.ts's fitCanvas() writes the real style.height on the
+              first paint. The width/height attributes only set the intrinsic
+              ratio for the single frame before that — without them a
+              width:100% canvas keeps the default 300×150 aspect. */}
           <section {...sect('vertical')}>
-            <div className="tl-centre">
-              {/* height:0 until the port's own fitCanvas() writes a real one —
-                  a width:100% canvas otherwise keeps its 300×520 attribute
-                  aspect and grows to 2,496px in an empty view. */}
-              <div className="tl-canvasbox"><canvas id="vertCanvas" height={520} style={{ height: 0 }} /></div>
-              <div className="tl-slot">
-                <div className="tl-canvas__note">
-                  <b>canvas · vertical timeline</b>
-                  <span>Reserved slot. The vertical projection is being ported from its standalone
-                    prototype; it draws into this canvas and shares the Timeline group&rsquo;s controls,
-                    span and search state with the horizontal view.</span>
-                </div>
-              </div>
-            </div>
+            <div className="tl-canvasbox"><canvas id="vertCanvas" width={1200} height={760} /></div>
           </section>
 
           {/* ── Timeline · Horizontal ─────────────────────────────────────── */}
@@ -779,9 +801,22 @@ export default function Lab() {
             <div className="tl-canvasbox"><canvas id="connCanvas" height={826} /></div>
           </section>
 
-          {/* ── Cube ──────────────────────────────────────────────────────── */}
+          {/* ── Cube — the one WebGL view ──────────────────────────────────
+              three.js owns this canvas: cube.ts writes style.height from the
+              stage and hands the element to a WebGLRenderer, so there is no
+              fitCanvas() here and the width/height attributes only set the
+              intrinsic ratio for the single frame before the chunk lands.
+              The two overlays are readouts, never controls — pointer-events
+              are off so the whole box stays draggable. */}
           <section {...sect('cube')}>
-            <div className="tl-canvasbox"><canvas id="cubeCanvas" height={600} /></div>
+            <div className="tl-canvasbox tl-canvasbox--gl">
+              <canvas id="cubeCanvas" width={1200} height={760} />
+              <div className="tl-cube-readout" id="cubeYear" hidden>
+                <span className="tl-cube-readout__y" id="cubeYearBig" />
+                <span className="tl-cube-readout__s" id="cubeYearSub" />
+              </div>
+              <div className="tl-cube-busy" id="cubeBusy" role="status" hidden />
+            </div>
           </section>
 
           {/* ── Core — no canvas; the strata ARE the time axis ────────────── */}
@@ -859,7 +894,7 @@ export default function Lab() {
                 vertical and horizontal are two projections of ONE timeline state —
                 span, lenses, domains, search. The vertical port must reuse these
                 ids, not duplicate them: #catRow, #searchBox, #searchCnt,
-                #grammarRow, #zoomReadout, #btnMozart, #btn1776z, #btnDeep,
+                #grammarRowV, #zoomReadout, #btnMozart, #btn1776z, #btnDeep,
                 #btnResetZ. The seg switches only which canvas is visible. */}
             <aside {...panel('tl', ['zoom', 'vertical'], 'Controls')}>
               <div className="tl-panel__grip" aria-hidden="true" />
@@ -892,6 +927,23 @@ export default function Lab() {
                 </div>
                 <hr className="tl-hr" />
                 <span className="note" id="zoomReadout" />
+                {/* THE GRAMMAR LEGEND LIVES HERE FOR BOTH PROJECTIONS.
+                    It used to be two panels: a --bl in the vertical dock and a
+                    floating --br over the horizontal view's empty stage space.
+                    The docked one was the problem — a secondary panel in the
+                    column has a floor of a header plus two lines, and the
+                    legend is three rows, so it clipped its own last row (14-22px
+                    of it) while also taking 104px off the Controls panel above,
+                    which is what pushed two domain chips below ITS fold.
+                    One disclosure in the shared panel fixes both, and it is the
+                    more honest arrangement anyway: vertical and horizontal are
+                    two projections of one instrument, so they share the legend
+                    the way they already share the span, the lenses and the
+                    search. buildGrammarLegend() fills it by id. */}
+                <details className="tl-disc">
+                  <summary>Grammar<span className="tl-disc__v">shape &amp; colour</span></summary>
+                  <div className="tl-disc__bd"><div className="grammar" id="grammarRowV" /></div>
+                </details>
               </div>
             </aside>
             {/* flow */}
@@ -930,7 +982,12 @@ export default function Lab() {
                 <span className="note" id="braidNote" />
               </div>
             </aside>
-            {/* conn — every id and class from the old #tab-conn subtree, intact */}
+            {/* conn — every id and class from the old #tab-conn subtree, intact.
+                THE GRAMMAR LEGEND IS FOLDED IN HERE rather than floating at the
+                bottom right of the canvas: see the note on .tl-col--r below for
+                why Connections has no right-hand panels any more.
+                buildConnLegend() fills #connGrammar by id, so it does not care
+                that the element now lives inside a <details>. */}
             <aside {...panel('tl', ['conn'], 'Controls')}>
               <div className="tl-panel__grip" aria-hidden="true" />
               {hd('Controls')}
@@ -943,32 +1000,185 @@ export default function Lab() {
                   <button className="btn" id="connClear">Clear selection</button>
                 </div>
                 <span className="note">scroll to zoom · drag to pan</span>
+                {/* #connCap is not a reading of the selection — connections.ts
+                    writes one fixed block of prose into it that explains the
+                    view, plus a live counts line. It had a panel of its own on
+                    the bottom left, which meant three panels sharing one 667px
+                    column and a per-selection list starved down to a 60px
+                    window. As standing explanation it folds, and "Related" —
+                    the one thing here that answers a click — gets the column. */}
+                <details className="tl-disc">
+                  <summary>Reading<span className="tl-disc__v">how to read this</span></summary>
+                  <div className="tl-disc__bd"><div className="caption" id="connCap" /></div>
+                </details>
+                <details className="tl-disc">
+                  <summary>Grammar<span className="tl-disc__v">shape &amp; weight</span></summary>
+                  <div className="tl-disc__bd"><div className="grammar" id="connGrammar" /></div>
+                </details>
               </div>
             </aside>
-            {/* cube */}
+            {/* CUBE. One panel, not two: splitting ~14 controls across a --tl
+                and a --tr panel would have hidden half of them on a phone,
+                where app.css keeps only the primary panel. Every id below is
+                resolved once by cube.ts; #cubeChain ships EMPTY because cube.ts
+                writes the lineage chips into it.
+
+                AND IT DOES NOT SCROLL ITS PRIMARY CONTROLS AWAY. One flat list
+                of fourteen controls was 1086px of instrument in a 531px body at
+                1280x800: Fly to, Ghost world, Cut through time, Single slice,
+                Time axis, Snapshot outlines, Ghost coastlines and Auto-orbit
+                were all below the fold, behind a scroll with no cue that
+                anything was down there. More than half the richest instrument
+                in the app, invisible on an ordinary laptop.
+
+                So the panel is now three tiers, split by what a reader is doing
+                rather than by what the engine exposes:
+
+                  OPEN, ALWAYS — the subject. What am I looking at, and what is
+                  it made of: trace, lineage, and how the trace is built.
+                  <details> CUT & SLICE — the two ways of taking the block
+                  apart. Off by default, and both are verbs, not settings.
+                  <details> VIEW & DETAIL — camera presets, projection, mesh,
+                  and the four ways of drawing the ghost world.
+
+                Every summary row is visible without scrolling, so "there is
+                more, and here is what it is" is now a piece of the layout
+                rather than a fact about a scrollbar. cube.ts opens a group
+                whose contents are no longer at rest (paintDisc), so a closed
+                group can never hide a setting that is doing something. */}
             <aside {...panel('tl', ['cube'], 'Controls')}>
               <div className="tl-panel__grip" aria-hidden="true" />
               {hd('Controls')}
               <div className="tl-panel__bd">
                 <div className="tl-field-group">
-                  <span className="tl-label">Trace</span>
-                  <select id="cubeSov" aria-label="Empire to trace" defaultValue="" style={{ width: '100%' }} />
+                  <span className="tl-label">Trace a polity</span>
+                  <div className="searchwrap">
+                    <input type="text" id="cubeFilter" style={{ width: '100%' }} autoComplete="off" spellCheck={false}
+                      placeholder="rome, ottoman, han…" aria-label="Find a polity to trace" />
+                    <span className="cnt" id="cubeCnt" />
+                  </div>
+                  <select id="cubeSov" aria-label="Polity to trace" defaultValue="" style={{ width: '100%' }} />
+                  <span className="note" id="cubeNote" />
                 </div>
-                <div className="tl-cluster">
-                  <button className="btn hero" id="cubeSpin">Spin</button>
-                  <button className="btn" id="cubeTop">Top view</button>
-                  <button className="btn" id="cubeSide">Side view</button>
-                  <button className="btn" id="cubeIso">Reset angle</button>
+                <div className="tl-field-group">
+                  <span className="tl-label">Follow lineage<span className="tl-label__v" id="cubeLineageV" /></span>
+                  <div className="tl-seg" id="cubeLineage" role="group" aria-label="Lineage depth">
+                    <button className="tl-seg__item" data-v="0">Off</button>
+                    <button className="tl-seg__item" data-v="1">1</button>
+                    <button className="tl-seg__item" data-v="2">2</button>
+                    <button className="tl-seg__item" data-v="3">3</button>
+                  </div>
+                  {/* MUST ship EMPTY — cube.ts appendChild()s the chain. */}
+                  <div className="tl-cluster" id="cubeChain" />
                 </div>
-                <hr className="tl-hr" />
-                <label className="tl-toggle">
-                  <input type="checkbox" id="cubeEvents" defaultChecked />
-                  <span className="tl-toggle__track" /><span className="tl-toggle__label">Events</span>
-                </label>
-                <label className="tl-toggle">
-                  <input type="checkbox" id="cubeLand" defaultChecked />
-                  <span className="tl-toggle__track" /><span className="tl-toggle__label">Land</span>
-                </label>
+                <div className="tl-field-group">
+                  <span className="tl-label">Solid</span>
+                  <div className="tl-seg" id="cubeMode" role="group" aria-label="How the trace is built">
+                    <button className="tl-seg__item" data-v="lofted">Volume</button>
+                    <button className="tl-seg__item" data-v="prisms">Prisms</button>
+                    <button className="tl-seg__item" data-v="off">Off</button>
+                  </div>
+                </div>
+
+                {/* ── CUT & SLICE. The two verbs. Both are off at rest, which is
+                    what makes them safe to fold away — and cube.ts opens this
+                    group the moment either one stops being at rest, including
+                    when the A or P shortcut is what turned it on. */}
+                <details className="tl-disc" id="cubeDiscCut">
+                  <summary>Cut &amp; slice<span className="tl-disc__v" id="cubeDiscCutV" /></summary>
+                  <div className="tl-disc__bd">
+                    <div className="tl-field-group" id="cubeCutRow">
+                      <span className="tl-label">Cut through time<span className="tl-label__v" id="cubeCutV" /></span>
+                      {/* Two handles, one track. Not two overlaid <input type=range>:
+                          they fight over pointer capture at the ends. cube.ts does
+                          the pointer maths; the engine snaps to slab faces. */}
+                      <div className="tl-cutrange" id="cubeCut" data-cutting="false">
+                        <div className="tl-cutrange__track" />
+                        <div className="tl-cutrange__fill" id="cubeCutFill" />
+                        <div className="tl-cutrange__h" id="cubeCutLo" title="from" />
+                        <div className="tl-cutrange__h" id="cubeCutHi" title="to" />
+                      </div>
+                      <label className="tl-toggle">
+                        <input type="checkbox" id="cubeCaps" defaultChecked />
+                        <span className="tl-toggle__track" /><span className="tl-toggle__label">Cap the cut</span>
+                      </label>
+                    </div>
+                    <div className="tl-field-group" id="cubeSliceRow" data-off="true">
+                      <span className="tl-label">Single slice<span className="tl-label__v" id="cubeSliceV">off</span></span>
+                      <label className="tl-toggle">
+                        <input type="checkbox" id="cubeSlice" />
+                        <span className="tl-toggle__track" /><span className="tl-toggle__label">One snapshot at a time</span>
+                      </label>
+                      <div className="tl-cluster tl-transport" id="cubeStep">
+                        <button className="tl-iconbtn" data-a="prev" aria-label="Previous snapshot" title="Previous  [">{I.prev}</button>
+                        <button className="btn" data-a="play" id="cubePlay" aria-pressed="false">Play</button>
+                        <button className="tl-iconbtn" data-a="next" aria-label="Next snapshot" title="Next  ]">{I.next}</button>
+                      </div>
+                      <input type="range" id="cubeSliceIdx" min="0" max="17" step="1" defaultValue="0"
+                        aria-label="Which snapshot" />
+                    </div>
+                  </div>
+                </details>
+
+                {/* ── VIEW & DETAIL. Where the camera is and how the block is
+                    drawn. Every one of these has a keyboard route as well
+                    (R/T/F/E/Z/I), and every one of them has a sane default —
+                    which is the test for whether a control may be folded. */}
+                <details className="tl-disc" id="cubeDiscView">
+                  <summary>View &amp; detail<span className="tl-disc__v" id="cubeDiscViewV" /></summary>
+                  <div className="tl-disc__bd">
+                    <div className="tl-field-group">
+                      <span className="tl-label">Fly to</span>
+                      <div className="tl-cluster" id="cubeViews">
+                        <button className="chip" data-v="home">Home</button>
+                        <button className="chip" data-v="top">Top</button>
+                        <button className="chip" data-v="front">Front</button>
+                        <button className="chip" data-v="side">Side</button>
+                        <button className="chip" data-v="low">Low</button>
+                        <button className="chip" data-v="focus">Frame the trace</button>
+                      </div>
+                    </div>
+                    <div className="tl-field-group">
+                      <span className="tl-label">Projection</span>
+                      <div className="tl-seg" id="cubeProj" role="group" aria-label="Projection">
+                        <button className="tl-seg__item" data-v="persp">Perspective</button>
+                        <button className="tl-seg__item" data-v="ortho">Isometric</button>
+                      </div>
+                    </div>
+                    <div className="tl-field-group">
+                      <span className="tl-label">Mesh detail</span>
+                      <div className="tl-seg" id="cubeRes" role="group" aria-label="Mesh detail">
+                        <button className="tl-seg__item" data-v="draft">Draft</button>
+                        <button className="tl-seg__item" data-v="normal">Normal</button>
+                        <button className="tl-seg__item" data-v="fine">Fine</button>
+                      </div>
+                    </div>
+                    <div className="tl-field-group">
+                      <span className="tl-label">Time axis</span>
+                      <div className="tl-seg" id="cubeSpacing" role="group" aria-label="Time axis spacing">
+                        <button className="tl-seg__item" data-v="even">Even</button>
+                        <button className="tl-seg__item" data-v="true">True years</button>
+                      </div>
+                    </div>
+                    <div className="tl-field-group">
+                      <span className="tl-label">Ghost world<span className="tl-label__v" id="cubeGhostV" /></span>
+                      <input type="range" id="cubeGhost" min="0" max="0.55" step="0.01" defaultValue="0.16"
+                        aria-label="Opacity of the ghost world" />
+                    </div>
+                    <label className="tl-toggle">
+                      <input type="checkbox" id="cubeOutlines" />
+                      <span className="tl-toggle__track" /><span className="tl-toggle__label">Snapshot outlines</span>
+                    </label>
+                    <label className="tl-toggle">
+                      <input type="checkbox" id="cubeGhostLines" defaultChecked />
+                      <span className="tl-toggle__track" /><span className="tl-toggle__label">Ghost coastlines</span>
+                    </label>
+                    <label className="tl-toggle">
+                      <input type="checkbox" id="cubeSpin" />
+                      <span className="tl-toggle__track" /><span className="tl-toggle__label">Auto-orbit</span>
+                    </label>
+                  </div>
+                </details>
               </div>
             </aside>
             <aside {...panel('bl', ['map'], 'Reading', 'tl-panel--secondary')}>
@@ -987,32 +1197,50 @@ export default function Lab() {
               <div className="tl-panel__hd"><span className="tl-panel__title">Reading</span></div>
               <div className="tl-panel__bd"><div className="caption" id="flowCap" /></div>
             </aside>
-            <aside {...panel('bl', ['conn'], 'Reading', 'tl-panel--secondary')}>
-              <div className="tl-panel__hd"><span className="tl-panel__title">Reading</span></div>
-              <div className="tl-panel__bd"><div className="caption" id="connCap" /></div>
+            {/* CONNECTIONS' "RELATED" LIST CAME OVER FROM THE RIGHT EDGE.
+                The dock (shell.css §04) was invented because a floating panel
+                is honest over a map and a lie over a chart — and Connections
+                floated two of them on the other edge, over 12–14% of a canvas
+                whose ribbons run the full width. Clipped ribbon labels were
+                legible underneath: "Newton's Principi", "Computing". Same bug,
+                same fix: the panels take a strip of their own and the canvas
+                takes the rest, which for a left-docked view means the left
+                column. Placed above the bottom-anchored Reading and below
+                Controls, because Related is what you look at while Reading is
+                what you look at last. It keeps every id and every title. */}
+            <aside {...panel('tl', ['conn'], 'Related', 'tl-panel--secondary')}>
+              <div className="tl-panel__hd"><span className="tl-panel__title">Related</span></div>
+              <div className="tl-panel__bd"><div className="relpanel" id="connPanel" /></div>
             </aside>
+            {/* The frame meter lives in the HEADER, not the body. shell.css §
+                .tl-col gives a secondary panel a floor of "a header plus two
+                lines" and lets the controls take the rest — so anything in the
+                body below the first two lines needs a scroll, and a panel
+                called Reading must lead with the reading. .tl-panel__title
+                carries margin-right:auto, so a second header child sits flush
+                right without a new rule. Full build detail is in its title. */}
             <aside {...panel('bl', ['cube'], 'Reading', 'tl-panel--secondary')}>
-              <div className="tl-panel__hd"><span className="tl-panel__title">Reading</span></div>
+              <div className="tl-panel__hd">
+                <span className="tl-panel__title">Reading</span>
+                <span className="tl-cube-stats" id="cubeStats" />
+              </div>
               <div className="tl-panel__bd"><div className="caption" id="cubeCap" /></div>
             </aside>
           </div>
 
+          {/* THE RIGHT COLUMN IS FOR VIEWS WHOSE CANVAS HAS NOTHING THERE.
+              Horizon floats "In transit" over ocean, and the horizontal
+              timeline's canvas is as tall as its bands (~466px) inside an
+              ~790px stage, so its "Grammar" hangs in empty stage space below
+              the plot. Both were verified covering nothing.
+
+              Connections is NOT that case and no longer lives here: its canvas
+              is 826px tall and its ribbons run the full width, so a --tr and a
+              --br panel sat on the chart. They moved into the left dock. */}
           <div className="tl-col tl-col--r">
             <aside {...panel('tr', ['horizon'], 'In transit', 'tl-panel--secondary')}>
               <div className="tl-panel__hd"><span className="tl-panel__title">In transit</span></div>
               <div className="tl-panel__bd"><div className="newsfeed" id="hzFeed" /></div>
-            </aside>
-            <aside {...panel('tr', ['conn'], 'Related', 'tl-panel--secondary')}>
-              <div className="tl-panel__hd"><span className="tl-panel__title">Related</span></div>
-              <div className="tl-panel__bd"><div className="relpanel" id="connPanel" /></div>
-            </aside>
-            <aside {...panel('br', ['zoom', 'vertical'], 'Grammar', 'tl-panel--secondary')}>
-              <div className="tl-panel__hd"><span className="tl-panel__title">Grammar</span></div>
-              <div className="tl-panel__bd"><div className="grammar" id="grammarRow" /></div>
-            </aside>
-            <aside {...panel('br', ['conn'], 'Grammar', 'tl-panel--secondary')}>
-              <div className="tl-panel__hd"><span className="tl-panel__title">Grammar</span></div>
-              <div className="tl-panel__bd"><div className="grammar" id="connGrammar" /></div>
             </aside>
           </div>
 
@@ -1020,7 +1248,11 @@ export default function Lab() {
           {/* The index, continued up from the rail. A stub on the map — a
               full-height red meridian across a world map reads as a line of
               longitude, which is exactly the mistake DESIGN.md §6 calls out. */}
-          <div className={'tl-index-line' + (meta.rail === 'span' ? ' tl-index-line--full' : '')}
+          {/* Full height only where the canvas's X AXIS IS TIME. In the vertical
+              projection X is columns, so a meridian continued up from the time
+              rail would be pointing at Asia and claiming to mean a year. It
+              keeps the 22px stub, which reads as part of the rail. */}
+          <div className={'tl-index-line' + (meta.rail === 'span' && view !== 'vertical' ? ' tl-index-line--full' : '')}
             id="indexLine" aria-hidden="true" />
 
           {/* ══ FIELD NOTES ═══════════════════════════════════════════════ */}

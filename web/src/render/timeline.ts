@@ -6,14 +6,50 @@ import {
   repaintOnFonts, showTip, tokens, yearPill,
 } from './shared';
 
+// ── projections of this state ───────────────────────────────────────────────
+// The Timeline group is ONE instrument shown two ways. vertical.ts reads d0/d1, log,
+// lens, off and q off THIS object rather than copying them, and the shared controls
+// (#btnMozart … #catRow) are bound here exactly once. So anything that WRITES that state
+// has to repaint whichever projection is currently on screen — that is what paint() is
+// for, and every state-changing handler below calls it instead of render().
+//
+// The hook fires from paint(), never from render(): render() bails at the top when its
+// own canvas is hidden (a display:none view has clientWidth 0, so fitCanvas returns
+// null), so a hook at the end of render() would never run in the case it exists for.
+// Repainting an off-screen projection costs exactly that one early return.
+const PROJECTIONS: Array<() => void> = [];
+
+// A projection that can only show PART of its surface at once needs to be told what
+// the subject of a state change was. In the horizontal projection every band is a row
+// and every row is always on screen, so this is a no-op there; in the vertical one a
+// band is a COLUMN and the surface is routinely wider than the window, so "which
+// column did the reader just ask for" is the difference between an answer and an empty
+// stretch of surface. Every control that turns a lens ON declares it here.
+const REVEALS: Array<(bandKey: string) => void> = [];
+
 export const TL = {
   cv: null as unknown as HTMLCanvasElement, d0: -3000, d1: 2026, log: false,
   lens: { MU: false, SC: false, MZ: true } as Record<string, boolean>, q: '', hoverX: null as number | null, off: new Set<string>(),
   THR: { 1: Infinity, 2: 40000, 3: 2400, 4: 650, 5: 170 } as Record<number, number>,
+  // LENS COLUMNS SIT IMMEDIATELY AFTER DEEP TIME, NOT AT THE END.
+  //
+  // A band is a row in this projection and a COLUMN in the vertical one, and in the
+  // vertical one the surface is routinely wider than the window — so "last" there
+  // means "off the right edge". Appended last, the Mozart lens drew its header at
+  // x≈1060 of a 1152px canvas and not one of his thirteen life events was on screen,
+  // in the state the "Mozart's world" preset puts you in and in the boot state (MZ is
+  // on by default). Ordering is the structural half of that fix, and it argues for
+  // itself: a lens is a question the reader asked, so it is read FIRST — nearest the
+  // time axis going across, at the top of the stack going down — and the four
+  // standing regions keep their own order behind it. Deep time stays at the head
+  // because it is the only band with anything in it on the log scale.
   bands(): [string, string, number, number | null][] {
-    const b: [string, string, number, number | null][] = [['CO', 'Deep time', 34, null], ['EU', 'Europe', 86, 0], ['ME', 'MidEast & Africa', 86, 1], ['AS', 'Asia', 86, 2], ['AM', 'Americas', 86, 3]];
-    if (this.lens.MU) b.push(['MU', 'Music', 88, 4]); if (this.lens.SC) b.push(['SC', 'Science & ideas', 88, 5]); if (this.lens.MZ) b.push(['MZ', 'Mozart', 88, 6]);
-    return b;
+    const lens: [string, string, number, number | null][] = [];
+    if (this.lens.MU) lens.push(['MU', 'Music', 88, 4]);
+    if (this.lens.SC) lens.push(['SC', 'Science & ideas', 88, 5]);
+    if (this.lens.MZ) lens.push(['MZ', 'Mozart', 88, 6]);
+    return [['CO', 'Deep time', 34, null], ...lens,
+      ['EU', 'Europe', 86, 0], ['ME', 'MidEast & Africa', 86, 1], ['AS', 'Asia', 86, 2], ['AM', 'Americas', 86, 3]];
   },
   span() { return this.d1 - this.d0; },
   LMAX: 10.2,
@@ -36,6 +72,18 @@ export const TL = {
     const d = fitCanvas(this.cv, H); return d ? { cw: d.cw, H, ctx: d.ctx } : null;
   },
   boxes: [] as any[],
+  /** Register another projection of this state (vertical.ts). Repainted by paint(). */
+  onProjection(fn: () => void) { PROJECTIONS.push(fn); },
+  /** Register a projection that has to bring a named band into view (vertical.ts). */
+  onReveal(fn: (bandKey: string) => void) { REVEALS.push(fn); },
+  /**
+   * "This band is the subject of what just happened." Called by the controls that
+   * switch a lens ON — never by a plain repaint, and never by switching one off, which
+   * has no subject. A projection that shows every band at once ignores it.
+   */
+  reveal(bandKey: string) { for (const f of REVEALS) f(bandKey); },
+  /** The state changed — repaint every projection of it, not just this one. */
+  paint() { this.render(); for (const f of PROJECTIONS) f(); },
   render() {
     const dim = this.size(); if (!dim) return;
     const { cw, H, ctx } = dim; const T = tokens();
@@ -59,7 +107,13 @@ export const TL = {
     ctx.font = fontMono(11); ctx.fillStyle = T.ink2; ctx.textAlign = 'center';   // years are measurements
     if (!this.log) {
       const steps = [2000, 1000, 500, 200, 100, 50, 20, 10, 5, 2, 1];
-      const step = steps.find(s => this.span() / s <= 14) || 1;
+      // THE STEP IS THE SMALLEST ONE THAT STILL FITS <=14 TICKS. `find` on a descending
+      // table returns the LARGEST instead, which pinned the step at 2,000 years for every
+      // span under 28,000: the Mozart preset (a 100-year window) drew a time axis with no
+      // year on it at all, and any span over 28,000 fell through to `|| 1` and tried to
+      // put 80,000 ticks in one frame. Both projections read the same axis, so both are
+      // fixed here and in the other one, together.
+      const step = steps.filter(s => this.span() / s <= 14).pop() ?? steps[0];
       const start = Math.ceil(this.d0 / step) * step;
       ctx.beginPath();
       for (let y = start; y <= this.d1; y += step) {
@@ -158,13 +212,17 @@ export const TL = {
       `showing importance ≤ ${baseL} of 5 · span ${Math.round(this.span()).toLocaleString()} yrs`;
     $('#searchCnt')!.textContent = q ? `${hitCount} hits` : '';
   },
-  animTo(a: number, b: number) {
-    if (reduceMotion()) { this.d0 = a; this.d1 = b; this.render(); return; }
+  // `done` runs once the span has SETTLED. Column widths are measured against the
+  // visible span, so a projection that has to pan to a column can only compute where
+  // that column ended up after the last frame — asking mid-flight aims at a layout
+  // that is still moving.
+  animTo(a: number, b: number, done?: () => void) {
+    if (reduceMotion()) { this.d0 = a; this.d1 = b; this.paint(); done?.(); return; }
     const A0 = this.d0, B0 = this.d1, t0 = performance.now();
     const step = (t: number) => {
       const p = clamp((t - t0) / 650, 0, 1), e = p < .5 ? 4 * p * p * p : 1 - Math.pow(-2 * p + 2, 3) / 2;
-      this.d0 = A0 + (a - A0) * e; this.d1 = B0 + (b - B0) * e; this.render();
-      if (p < 1) requestAnimationFrame(step);
+      this.d0 = A0 + (a - A0) * e; this.d1 = B0 + (b - B0) * e; this.paint();
+      if (p < 1) requestAnimationFrame(step); else done?.();
     };
     requestAnimationFrame(step);
   },
@@ -173,14 +231,21 @@ export const TL = {
     // his own life events, plus the music row so his lifespan sits beside Bach's and Beethoven's
     $('#btnMozart')!.addEventListener('click', () => {
       this.log = false; this.lens.MZ = true; this.lens.MU = true;
-      this.syncChips(); this.animTo(1735, 1835);
+      this.syncChips();
+      // The preset names its own subject, so it ends with that column in view. It is
+      // the whole promise of the button: 0 of 13 of his life events were on screen
+      // before this line existed, because the vertical surface is wider than its window.
+      this.animTo(1735, 1835, () => this.reveal('MZ'));
     });
     $('#btn1776z')!.addEventListener('click', () => { this.log = false; this.animTo(1746, 1806); });
-    $('#btnDeep')!.addEventListener('click', () => { this.log = !this.log; this.render(); });
+    $('#btnDeep')!.addEventListener('click', () => { this.log = !this.log; this.paint(); });
     $('#btnResetZ')!.addEventListener('click', () => { this.log = false; this.animTo(-3000, 2026); });
-    $('#searchBox')!.addEventListener('input', (e: any) => { this.q = e.target.value.trim(); this.render(); });
+    $('#searchBox')!.addEventListener('input', (e: any) => { this.q = e.target.value.trim(); this.paint(); });
     document.querySelectorAll<HTMLElement>('#lensRow .chip').forEach(ch => ch.addEventListener('click', () => {
-      const k = ch.dataset.lens!; this.lens[k] = !this.lens[k]; ch.classList.toggle('on', this.lens[k]); this.render();
+      const k = ch.dataset.lens!; this.lens[k] = !this.lens[k]; ch.classList.toggle('on', this.lens[k]); this.paint();
+      // Switching a lens ON is a request to look at it. Switching one off has no
+      // subject, so the vertical projection keeps whatever column it was reading.
+      if (this.lens[k]) this.reveal(k);
     }));
     this.buildCatRow();
     buildGrammarLegend();
@@ -191,7 +256,7 @@ export const TL = {
       const yc = this.ix(e.clientX - r.left, G, Wp);
       const f = Math.pow(1.0018, e.deltaY); const s = clamp(this.span() * f, 8, 80000);
       const frac = (yc - this.d0) / this.span();
-      this.d0 = yc - frac * s; this.d1 = this.d0 + s; this.render();
+      this.d0 = yc - frac * s; this.d1 = this.d0 + s; this.paint();
     }, { passive: false });
     let drag: any = null;
     cv.addEventListener('pointerdown', e => { if (!this.log) { drag = { x: e.clientX, d0: this.d0, d1: this.d1, moved: false }; cv.setPointerCapture(e.pointerId); } });
@@ -202,7 +267,7 @@ export const TL = {
         const G = 118, Wp = cv.clientWidth - G - 10;
         const dy = (e.clientX - drag.x) / Wp * (drag.d1 - drag.d0);
         if (Math.abs(e.clientX - drag.x) > 3) drag.moved = true;
-        this.d0 = drag.d0 - dy; this.d1 = drag.d1 - dy; this.render(); return;
+        this.d0 = drag.d0 - dy; this.d1 = drag.d1 - dy; this.paint(); return;
       }
       const b = this.boxes.findLast(b => mx >= b.x && mx <= b.x + b.w && my >= b.y && my <= b.y + b.h);
       this.render();
@@ -235,15 +300,15 @@ export const TL = {
   catPrevOff: null as Set<string> | null,
   // true when exactly one domain is visible (and, with an argument, when it is that one)
   catIsSolo(id?: string) { return this.off.size === CATS.length - 1 && (id === undefined || !this.off.has(id)); },
-  catAll() { this.off.clear(); this.catPrevOff = null; this.syncCatChips(); this.render(); },
+  catAll() { this.off.clear(); this.catPrevOff = null; this.syncCatChips(); this.paint(); },
   catNone() {
     if (this.off.size !== CATS.length) this.catPrevOff = new Set(this.off);
     this.off = new Set(CATS.map(c => c.id));
-    this.syncCatChips(); this.render();
+    this.syncCatChips(); this.paint();
   },
   catToggle(id: string) {
     if (this.off.has(id)) this.off.delete(id); else this.off.add(id);
-    this.syncCatChips(); this.render();
+    this.syncCatChips(); this.paint();
   },
   // "only" — isolate one domain. Pressing it again on the isolated domain restores the set
   // that was showing before the first press, so isolating is a look, not a destination.
@@ -255,7 +320,7 @@ export const TL = {
       if (!this.catIsSolo()) this.catPrevOff = new Set(this.off);   // don't clobber it while hopping solo→solo
       this.off = new Set(CATS.filter(c => c.id !== id).map(c => c.id));
     }
-    this.syncCatChips(); this.render();
+    this.syncCatChips(); this.paint();
   },
   // Builds into the EXISTING #catRow (Lab.tsx owns that element) — append only, never restructure.
   buildCatRow() {
@@ -339,15 +404,24 @@ export const TL = {
   },
 };
 
+// ONE container, shared by both projections (#grammarRowV, in the disclosure at the
+// foot of the Timeline panel). It was two — a floating panel for the horizontal view
+// and a docked one for the vertical — until the docked one turned out to clip its own
+// last row against the column's secondary-panel floor while squeezing two domain chips
+// out of the Controls panel above it. Vertical and horizontal are two projections of
+// one instrument; they share the legend the way they share everything else. The lookup
+// still tolerates the old id, so a container that comes back gets filled.
 export function buildGrammarLegend() {
-  const row = $('#grammarRow'); if (!row) return;
+  const rows = [$('#grammarRow'), $('#grammarRowV')].filter(Boolean) as HTMLElement[];
+  if (!rows.length) return;
   const g = (svg: string, label: string) => `<span class="g"><svg width="30" height="14" viewBox="0 0 30 14">${svg}</svg>${label}</span>`;
   const c = 'var(--ink2)';
-  row.innerHTML = `<span class="note" style="font-weight:600">Shape =</span>` +
+  const html = `<span class="note" style="font-weight:600">Shape =</span>` +
     g(`<circle cx="15" cy="7" r="3.2" fill="${c}"/>`, 'moment') +
     g(`<rect x="3" y="3" width="24" height="8" rx="4" fill="${c}"/>`, 'episode') +
     g(`<rect x="4" y="4" width="22" height="7" rx="3.5" fill="${c}" opacity=".55"/><circle cx="4" cy="7.5" r="3.2" fill="${c}"/><rect x="25" y="2.5" width="2" height="10" fill="${c}"/>`, 'a life') +
     g(`<path d="M2 7 L7 2.5 L23 2.5 L28 7 L23 11.5 L7 11.5 Z" fill="${c}"/>`, 'territory') +
     g(`<rect x="2" y="1" width="26" height="12" fill="${c}" opacity=".22"/><rect x="2" y="6" width="26" height="2" fill="${c}"/>`, 'era') +
     `<span class="note" style="font-weight:600;margin-left:6px">Color = domain</span>`;
+  for (const r of rows) r.innerHTML = html;
 }
