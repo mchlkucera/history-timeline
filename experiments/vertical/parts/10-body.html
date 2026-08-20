@@ -1,0 +1,37 @@
+
+<div class="wrap">
+<header class="mast">
+  <h1><span class="tl">Timeline</span> · vertical</h1>
+  <span class="sub serif">The zoomable timeline, rotated. Time runs <i>down</i>, past at top; bands become columns.</span>
+</header>
+
+<p class="lede" style="margin-top:14px">Identical engine to the horizontal view — same level-of-detail thresholds, same five shapes, same eight domain colours, same lenses and filters. Two things change. <b>A label no longer has to fit inside the time it describes:</b> every mark gets its own full line of text beside it. And <b>the columns are no longer squeezed into the window</b> — each one takes the width its labels actually need, so the whole surface is usually wider than what you can see. Drag it like a map: up and down through time, left and right across the world.</p>
+
+<div class="card">
+  <div class="controls">
+    <button class="btn hero" id="btnMozart">Mozart’s world</button>
+    <button class="btn" id="btn1776z">1776 in context</button>
+    <button class="btn" id="btnDeep">🜨 Deep time (log)</button>
+    <button class="btn" id="btnResetZ">Reset</button>
+    <span class="sep"></span>
+    <span class="hint">drag ↕ time · ↔ columns</span>
+    <div class="grow searchwrap">
+      <input type="text" id="searchBox" placeholder="Search a thread… (try: revolution, Prague, plague, music)" style="width:100%">
+      <span class="cnt" id="searchCnt"></span>
+    </div>
+  </div>
+  <div class="controls" style="padding-top:0" id="lensRow">
+    <span class="note">Lenses:</span>
+    <button class="chip" data-lens="MU"><span class="dot" style="background:var(--s5)"></span>Music</button>
+    <button class="chip" data-lens="SC"><span class="dot" style="background:var(--s6)"></span>Science &amp; ideas</button>
+    <button class="chip on" data-lens="MZ"><span class="dot" style="background:var(--s7)"></span>Mozart’s life</button>
+    <span class="note" style="margin-left:auto" id="zoomReadout"></span>
+  </div>
+  <div class="controls" style="padding-top:0" id="catRow"><span class="note">Categories:</span></div>
+  <canvas id="vertCanvas" class="instrument mid" height="760"></canvas>
+  <div class="grammar" id="grammarRow"></div>
+  <div class="caption"><b>Scroll to zoom time. Drag anywhere to travel — vertically through the years, horizontally across the columns, in the same gesture.</b> The strip under the plot is the whole surface in miniature: the bright frame is the part you can see, and you can drag it too. Columns fade out at an edge when there is more that way; the chip in the corner names the next one — click it to bring it in. Shape = what kind of thing (a moment, a stretch of time, a life, a territory, an era). Color = which domain it belongs to. Click any event to open it on Wikipedia. Faint hairlines mean a label had to step aside to stay legible — the mark is always at the true year.</div>
+</div>
+<p class="note" style="margin-top:8px">Vertical transposition of instrument ② in <span class="mono">prototypes/partB.html</span>. Data, thresholds, palette and grammar are pulled straight from the prototype at build time.</p>
+</div>
+<div class="tooltip" id="tip"></div>

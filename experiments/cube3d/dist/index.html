@@ -1,0 +1,110 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width,initial-scale=1" />
+<title>Timeline — space-time cube (3-D)</title>
+<style>
+  :root{
+    --bg0:#080b11; --bg1:#141a26;
+    --ink:#d3dceb; --ink2:#8e9db3; --ink3:#5a6a80;
+    --line:#26303f; --panel:rgba(13,17,25,.82);
+    --accent:#f0913c; --accent2:#ffd08a;
+  }
+  *{box-sizing:border-box}
+  html,body{height:100%;margin:0;background:var(--bg0);color:var(--ink);
+    font:13px/1.45 -apple-system,BlinkMacSystemFont,"Segoe UI",Inter,system-ui,sans-serif;
+    overflow:hidden;-webkit-font-smoothing:antialiased}
+  #stage{position:fixed;inset:0;background:radial-gradient(ellipse 120% 90% at 50% 42%,var(--bg1) 0%,var(--bg0) 72%)}
+  canvas{display:block;outline:none}
+
+  .panel{position:fixed;background:var(--panel);border:1px solid var(--line);border-radius:12px;
+    backdrop-filter:blur(14px);-webkit-backdrop-filter:blur(14px);box-shadow:0 18px 50px rgba(0,0,0,.5)}
+
+  #ui{top:14px;right:14px;width:286px;padding:14px 14px 12px;max-height:calc(100vh - 28px);overflow:auto}
+  #ui h1{font-size:12px;letter-spacing:.13em;text-transform:uppercase;color:var(--ink3);margin:0 0 12px;font-weight:600}
+  .row{margin:0 0 12px}
+  .row>label{display:block;font-size:10.5px;letter-spacing:.09em;text-transform:uppercase;color:var(--ink3);margin:0 0 5px;font-weight:600}
+  input[type=text],select{width:100%;background:#0c1119;color:var(--ink);border:1px solid var(--line);
+    border-radius:7px;padding:7px 9px;font:inherit;font-size:12.5px}
+  input[type=text]:focus,select:focus{outline:none;border-color:#3f5573}
+  input[type=range]{width:100%;accent-color:var(--accent);margin:2px 0 0}
+  .seg{display:flex;gap:4px}
+  .seg button{flex:1;background:#0c1119;color:var(--ink2);border:1px solid var(--line);border-radius:7px;
+    padding:6px 4px;font:inherit;font-size:11.5px;cursor:pointer;transition:.13s}
+  .seg button:hover{color:var(--ink);border-color:#3f5573}
+  .seg button.on{background:var(--accent);border-color:var(--accent);color:#160c02;font-weight:600}
+  .chk{display:flex;align-items:center;gap:7px;cursor:pointer;color:var(--ink2);font-size:12px;margin:0 0 6px}
+  .chk input{accent-color:var(--accent);margin:0}
+  .val{float:right;color:var(--ink2);font:11px ui-monospace,Menlo,monospace;text-transform:none;letter-spacing:0}
+  hr{border:0;border-top:1px solid var(--line);margin:13px 0}
+  .hint{font-size:11px;color:var(--ink3);line-height:1.5}
+  .hint b{color:var(--ink2);font-weight:600}
+  kbd{background:#0c1119;border:1px solid var(--line);border-radius:4px;padding:1px 5px;
+    font:10.5px ui-monospace,Menlo,monospace;color:var(--ink2)}
+
+  #hud{left:14px;bottom:14px;padding:9px 12px;font:11px/1.65 ui-monospace,Menlo,monospace;color:var(--ink2)}
+  #hud b{color:var(--accent2);font-weight:600}
+  #hud .k{color:var(--ink3)}
+
+  #title{position:fixed;left:16px;top:14px;pointer-events:none}
+  #title .t{font-size:16px;font-weight:650;letter-spacing:-.01em;color:var(--ink)}
+  #title .s{font-size:11.5px;color:var(--ink3);margin-top:1px;max-width:380px}
+  #title .e{font-size:12.5px;color:var(--accent2);margin-top:7px;font-weight:600;max-width:520px}
+  #title .e span{color:var(--ink3);font-weight:400}
+  #title .y{font:600 34px/1 ui-monospace,Menlo,monospace;color:var(--ink);margin-top:14px;letter-spacing:-.02em;display:none}
+  #title .y.on{display:block}
+  #title .y i{font:400 11.5px/1 -apple-system,system-ui,sans-serif;color:var(--ink3);font-style:normal;display:block;margin-top:6px;letter-spacing:.08em;text-transform:uppercase}
+
+  #busy{position:fixed;left:50%;top:50%;transform:translate(-50%,-50%);padding:10px 18px;
+    border-radius:9px;background:var(--panel);border:1px solid var(--line);font-size:12px;color:var(--ink2);display:none}
+  #busy.on{display:block}
+  #views{left:14px;bottom:96px;padding:7px;display:flex;gap:4px}
+  #views button{background:#0c1119;color:var(--ink2);border:1px solid var(--line);border-radius:6px;
+    padding:6px 10px;font:inherit;font-size:11.5px;cursor:pointer}
+  #views button:hover{color:var(--ink);border-color:#3f5573}
+  #views button.on{background:var(--accent);border-color:var(--accent);color:#160c02;font-weight:600}
+
+  /* ── two-handle time range ─────────────────────────────────────────────── */
+  .rng{position:relative;height:26px;margin:2px 0 0;touch-action:none;cursor:pointer}
+  .rng .rtrack{position:absolute;left:0;right:0;top:11px;height:4px;border-radius:2px;background:#1a2230;border:1px solid var(--line)}
+  .rng .rfill{position:absolute;top:11px;height:4px;border-radius:2px;background:linear-gradient(90deg,#b96a22,var(--accent))}
+  .rng .rh{position:absolute;top:5px;width:15px;height:16px;margin-left:-7.5px;border-radius:4px;
+    background:#151c28;border:1px solid var(--accent);box-shadow:0 1px 5px rgba(0,0,0,.6);transition:border-color .12s,background .12s}
+  .rng .rh::after{content:"";position:absolute;left:6px;top:3px;width:1px;height:10px;background:var(--accent2);opacity:.85}
+  .rng .rh:hover,.rng .rh.drag{background:var(--accent);border-color:var(--accent2)}
+  .rng.off .rfill{background:#2b3546}
+  .rng.off .rh{border-color:#41506a}
+  .rng.dis{opacity:.35;pointer-events:none}
+
+  /* ── transport ─────────────────────────────────────────────────────────── */
+  .transport{display:flex;gap:4px;margin:7px 0 6px}
+  .transport button{flex:1;background:#0c1119;color:var(--ink2);border:1px solid var(--line);border-radius:6px;
+    padding:5px 0;font:inherit;font-size:12px;cursor:pointer;transition:.12s}
+  .transport button:hover{color:var(--ink);border-color:#3f5573}
+  .transport button.on{background:var(--accent);border-color:var(--accent);color:#160c02}
+  .dis{opacity:.35;pointer-events:none}
+  .note{font-size:11px;color:var(--ink3);line-height:1.45;margin-top:6px;font-style:italic}
+  .chain{display:flex;flex-wrap:wrap;gap:3px;margin-top:7px}
+  .chain span{font-size:10.5px;padding:2px 6px;border-radius:4px;background:#141b26;border:1px solid var(--line);color:var(--ink2)}
+  .chain span.sel{border-color:var(--accent);color:var(--accent2)}
+  .chain span.dim{color:#4a596e;border-style:dashed}
+  optgroup{color:var(--ink3);font-style:normal;font-size:11px}
+  option{color:var(--ink);font-style:normal}
+</style>
+  <script type="module" crossorigin src="/assets/index-Di1z86VS.js"></script>
+</head>
+<body>
+  <div id="stage"></div>
+  <div id="title">
+    <div class="t">Space-time cube</div>
+    <div class="s">X longitude &middot; Y latitude &middot; Z time. A horizontal cut is a world map at one date; a vertical column is a state that lasted.</div>
+    <div class="e" id="eLabel"></div>
+    <div class="y" id="yearBig"></div>
+  </div>
+  <div class="panel" id="ui"></div>
+  <div class="panel" id="views"></div>
+  <div class="panel" id="hud"></div>
+  <div id="busy">building solid…</div>
+</body>
+</html>

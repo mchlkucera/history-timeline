@@ -1,0 +1,25 @@
+{
+  "name": "timeline-cube3d",
+  "private": true,
+  "version": "0.1.0",
+  "type": "module",
+  "scripts": {
+    "data": "node scripts/build-data.mjs && node scripts/build-polities.mjs",
+    "dev": "vite --port 5183 --strictPort",
+    "build": "vite build",
+    "preview": "vite preview --port 5183 --strictPort",
+    "verify": "node verify/nav.mjs && node verify/shoot.mjs",
+    "shots": "node verify/shoot.mjs",
+    "nav-test": "node verify/nav.mjs",
+    "polities": "node scripts/build-polities.mjs",
+    "smoke": "node verify/smoke.mjs"
+  },
+  "dependencies": {
+    "earcut": "^3.2.3",
+    "three": "^0.185.1"
+  },
+  "devDependencies": {
+    "playwright": "^1.62.1",
+    "vite": "^8.2.2"
+  }
+}

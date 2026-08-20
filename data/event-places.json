@@ -1,0 +1,1418 @@
+{
+ "places": [
+  {
+   "t": "Homo sapiens appears",
+   "lat": 5.4,
+   "lon": 36.0,
+   "place": "East Africa",
+   "scope": "region"
+  },
+  {
+   "t": "Out of Africa migration",
+   "lat": 12.6,
+   "lon": 43.4,
+   "place": "Horn of Africa",
+   "scope": "region"
+  },
+  {
+   "t": "Farming begins",
+   "lat": 36.5,
+   "lon": 40.0,
+   "place": "Fertile Crescent",
+   "scope": "region"
+  },
+  {
+   "t": "Writing invented (Sumer)",
+   "lat": 31.32,
+   "lon": 45.64,
+   "place": "Uruk, Sumer",
+   "scope": "point"
+  },
+  {
+   "t": "Stonehenge raised",
+   "lat": 51.18,
+   "lon": -1.83,
+   "place": "Stonehenge",
+   "scope": "point"
+  },
+  {
+   "t": "Mycenaean Greece",
+   "lat": 37.73,
+   "lon": 22.76,
+   "place": "Mycenae, Greece",
+   "scope": "region"
+  },
+  {
+   "t": "First Olympic games",
+   "lat": 37.64,
+   "lon": 21.63,
+   "place": "Olympia",
+   "scope": "point"
+  },
+  {
+   "t": "Rome founded (legend)",
+   "lat": 41.9,
+   "lon": 12.5,
+   "place": "Rome",
+   "scope": "point"
+  },
+  {
+   "t": "Athenian democracy",
+   "lat": 37.98,
+   "lon": 23.73,
+   "place": "Athens",
+   "scope": "point"
+  },
+  {
+   "t": "Battle of Marathon",
+   "lat": 38.15,
+   "lon": 23.96,
+   "place": "Marathon, Greece",
+   "scope": "point"
+  },
+  {
+   "t": "Peloponnesian War",
+   "lat": 37.9,
+   "lon": 22.9,
+   "place": "Greece & the Aegean",
+   "scope": "region"
+  },
+  {
+   "t": "Alexander conquers the East",
+   "lat": 32.54,
+   "lon": 44.42,
+   "place": "Greece to the Indus",
+   "scope": "region"
+  },
+  {
+   "t": "Punic Wars: Rome vs Carthage",
+   "lat": 37.5,
+   "lon": 11.5,
+   "place": "Rome & Carthage",
+   "scope": "region"
+  },
+  {
+   "t": "Caesar assassinated",
+   "lat": 41.89,
+   "lon": 12.48,
+   "place": "Rome",
+   "scope": "point"
+  },
+  {
+   "t": "Vesuvius buries Pompeii",
+   "lat": 40.75,
+   "lon": 14.49,
+   "place": "Pompeii",
+   "scope": "point"
+  },
+  {
+   "t": "Roman Empire at maximum",
+   "lat": 41.9,
+   "lon": 12.5,
+   "place": "Roman Empire",
+   "scope": "region"
+  },
+  {
+   "t": "Christianity legalized",
+   "lat": 45.46,
+   "lon": 9.19,
+   "place": "Milan",
+   "scope": "point"
+  },
+  {
+   "t": "Western Rome falls",
+   "lat": 41.9,
+   "lon": 12.5,
+   "place": "Rome",
+   "scope": "point"
+  },
+  {
+   "t": "Viking age begins (Lindisfarne)",
+   "lat": 55.68,
+   "lon": -1.8,
+   "place": "Lindisfarne",
+   "scope": "point"
+  },
+  {
+   "t": "Charlemagne crowned emperor",
+   "lat": 41.9,
+   "lon": 12.45,
+   "place": "Rome",
+   "scope": "point"
+  },
+  {
+   "t": "Great Schism east/west",
+   "lat": 41.01,
+   "lon": 28.98,
+   "place": "Constantinople",
+   "scope": "point"
+  },
+  {
+   "t": "Norman conquest of England",
+   "lat": 50.91,
+   "lon": 0.49,
+   "place": "Hastings",
+   "scope": "point"
+  },
+  {
+   "t": "First Crusade launched",
+   "lat": 45.78,
+   "lon": 3.08,
+   "place": "Clermont",
+   "scope": "point"
+  },
+  {
+   "t": "Magna Carta",
+   "lat": 51.44,
+   "lon": -0.57,
+   "place": "Runnymede",
+   "scope": "point"
+  },
+  {
+   "t": "Black Death kills a third of Europe",
+   "lat": 48.0,
+   "lon": 12.0,
+   "place": "Central Europe",
+   "scope": "region"
+  },
+  {
+   "t": "Charles University founded in Prague",
+   "lat": 50.09,
+   "lon": 14.42,
+   "place": "Prague",
+   "scope": "point"
+  },
+  {
+   "t": "Jan Hus burned at Konstanz",
+   "lat": 47.66,
+   "lon": 9.18,
+   "place": "Konstanz",
+   "scope": "point"
+  },
+  {
+   "t": "Constantinople falls to Ottomans",
+   "lat": 41.01,
+   "lon": 28.98,
+   "place": "Constantinople",
+   "scope": "point"
+  },
+  {
+   "t": "Columbus reaches the Americas",
+   "lat": 24.05,
+   "lon": -74.5,
+   "place": "Bahamas",
+   "scope": "point"
+  },
+  {
+   "t": "Luther's 95 theses — Reformation",
+   "lat": 51.87,
+   "lon": 12.65,
+   "place": "Wittenberg",
+   "scope": "point"
+  },
+  {
+   "t": "Spanish Armada defeated",
+   "lat": 50.6,
+   "lon": 0.5,
+   "place": "English Channel",
+   "scope": "region"
+  },
+  {
+   "t": "Thirty Years' War",
+   "lat": 50.0,
+   "lon": 11.0,
+   "place": "Germany",
+   "scope": "region"
+  },
+  {
+   "t": "Defenestration of Prague",
+   "lat": 50.09,
+   "lon": 14.4,
+   "place": "Prague Castle",
+   "scope": "point"
+  },
+  {
+   "t": "English Civil War",
+   "lat": 52.5,
+   "lon": -1.5,
+   "place": "England",
+   "scope": "region"
+  },
+  {
+   "t": "Ottomans turned back at Vienna",
+   "lat": 48.21,
+   "lon": 16.37,
+   "place": "Vienna",
+   "scope": "point"
+  },
+  {
+   "t": "Great Britain formed",
+   "lat": 51.51,
+   "lon": -0.13,
+   "place": "London",
+   "scope": "point"
+  },
+  {
+   "t": "Seven Years' War — first world war",
+   "lat": 51.0,
+   "lon": 13.0,
+   "place": "Central Europe",
+   "scope": "region"
+  },
+  {
+   "t": "French Revolution begins",
+   "lat": 48.86,
+   "lon": 2.35,
+   "place": "Paris",
+   "scope": "point"
+  },
+  {
+   "t": "Terror: Louis XVI guillotined",
+   "lat": 48.87,
+   "lon": 2.32,
+   "place": "Paris",
+   "scope": "point"
+  },
+  {
+   "t": "Napoleon crowns himself",
+   "lat": 48.85,
+   "lon": 2.35,
+   "place": "Paris",
+   "scope": "point"
+  },
+  {
+   "t": "Napoleon freezes in Russia",
+   "lat": 55.0,
+   "lon": 35.0,
+   "place": "Russia",
+   "scope": "region"
+  },
+  {
+   "t": "Waterloo — Napoleon done",
+   "lat": 50.68,
+   "lon": 4.41,
+   "place": "Waterloo",
+   "scope": "point"
+  },
+  {
+   "t": "Revolutions sweep Europe",
+   "lat": 48.0,
+   "lon": 12.0,
+   "place": "Europe",
+   "scope": "region"
+  },
+  {
+   "t": "Germany unified",
+   "lat": 52.52,
+   "lon": 13.4,
+   "place": "Berlin",
+   "scope": "point"
+  },
+  {
+   "t": "World War I",
+   "lat": 49.0,
+   "lon": 8.0,
+   "place": "Europe",
+   "scope": "region"
+  },
+  {
+   "t": "Russian Revolution",
+   "lat": 59.94,
+   "lon": 30.31,
+   "place": "Petrograd",
+   "scope": "point"
+  },
+  {
+   "t": "USSR founded",
+   "lat": 55.75,
+   "lon": 37.62,
+   "place": "Moscow",
+   "scope": "point"
+  },
+  {
+   "t": "Hitler takes power",
+   "lat": 52.52,
+   "lon": 13.4,
+   "place": "Berlin",
+   "scope": "point"
+  },
+  {
+   "t": "World War II",
+   "lat": 50.0,
+   "lon": 15.0,
+   "place": "Europe",
+   "scope": "region"
+  },
+  {
+   "t": "Iron Curtain descends",
+   "lat": 48.5,
+   "lon": 15.5,
+   "place": "Central Europe",
+   "scope": "region"
+  },
+  {
+   "t": "Treaty of Rome — EEC born",
+   "lat": 41.89,
+   "lon": 12.48,
+   "place": "Rome",
+   "scope": "point"
+  },
+  {
+   "t": "Prague Spring crushed",
+   "lat": 50.09,
+   "lon": 14.42,
+   "place": "Prague",
+   "scope": "point"
+  },
+  {
+   "t": "Berlin Wall falls · Velvet Revolution",
+   "lat": 52.52,
+   "lon": 13.38,
+   "place": "Berlin",
+   "scope": "point"
+  },
+  {
+   "t": "EU founded · Czechoslovakia splits",
+   "lat": 50.85,
+   "lon": 5.69,
+   "place": "Maastricht",
+   "scope": "point"
+  },
+  {
+   "t": "Russia invades Ukraine",
+   "lat": 49.0,
+   "lon": 32.0,
+   "place": "Ukraine",
+   "scope": "region"
+  },
+  {
+   "t": "Egypt unified under one crown",
+   "lat": 29.85,
+   "lon": 31.25,
+   "place": "Memphis, Egypt",
+   "scope": "point"
+  },
+  {
+   "t": "Great Pyramid built",
+   "lat": 29.98,
+   "lon": 31.13,
+   "place": "Giza",
+   "scope": "point"
+  },
+  {
+   "t": "Hammurabi writes his law code",
+   "lat": 32.54,
+   "lon": 44.42,
+   "place": "Babylon",
+   "scope": "point"
+  },
+  {
+   "t": "Battle of Kadesh (first recorded treaty)",
+   "lat": 34.57,
+   "lon": 36.52,
+   "place": "Kadesh, Syria",
+   "scope": "point"
+  },
+  {
+   "t": "Babylon destroys Jerusalem's temple",
+   "lat": 31.78,
+   "lon": 35.23,
+   "place": "Jerusalem",
+   "scope": "point"
+  },
+  {
+   "t": "Cyrus founds the Persian Empire",
+   "lat": 30.19,
+   "lon": 53.17,
+   "place": "Pasargadae",
+   "scope": "point"
+  },
+  {
+   "t": "Alexander takes Egypt",
+   "lat": 31.2,
+   "lon": 29.92,
+   "place": "Alexandria",
+   "scope": "point"
+  },
+  {
+   "t": "Cleopatra dies — Egypt goes Roman",
+   "lat": 31.2,
+   "lon": 29.92,
+   "place": "Alexandria",
+   "scope": "point"
+  },
+  {
+   "t": "Crucifixion of Jesus",
+   "lat": 31.78,
+   "lon": 35.23,
+   "place": "Jerusalem",
+   "scope": "point"
+  },
+  {
+   "t": "The Hijra — Islam begins",
+   "lat": 24.47,
+   "lon": 39.61,
+   "place": "Medina",
+   "scope": "point"
+  },
+  {
+   "t": "Arab conquests: Spain to Persia",
+   "lat": 33.51,
+   "lon": 36.29,
+   "place": "Damascus",
+   "scope": "region"
+  },
+  {
+   "t": "Baghdad founded — Islamic golden age",
+   "lat": 33.32,
+   "lon": 44.36,
+   "place": "Baghdad",
+   "scope": "point"
+  },
+  {
+   "t": "Saladin rules Egypt & Syria",
+   "lat": 30.04,
+   "lon": 31.24,
+   "place": "Cairo",
+   "scope": "region"
+  },
+  {
+   "t": "Mongols sack Baghdad",
+   "lat": 33.32,
+   "lon": 44.36,
+   "place": "Baghdad",
+   "scope": "point"
+  },
+  {
+   "t": "Mansa Musa's golden hajj",
+   "lat": 16.77,
+   "lon": -3.01,
+   "place": "Mali",
+   "scope": "region"
+  },
+  {
+   "t": "Ottomans take Egypt & the caliphate",
+   "lat": 30.04,
+   "lon": 31.24,
+   "place": "Cairo",
+   "scope": "point"
+  },
+  {
+   "t": "Dutch found Cape Colony",
+   "lat": -33.92,
+   "lon": 18.42,
+   "place": "Cape Town",
+   "scope": "point"
+  },
+  {
+   "t": "Napoleon invades Egypt",
+   "lat": 30.04,
+   "lon": 31.24,
+   "place": "Cairo",
+   "scope": "region"
+  },
+  {
+   "t": "Suez Canal opens",
+   "lat": 30.6,
+   "lon": 32.34,
+   "place": "Suez Canal",
+   "scope": "point"
+  },
+  {
+   "t": "Berlin Conference carves up Africa",
+   "lat": 52.52,
+   "lon": 13.38,
+   "place": "Berlin",
+   "scope": "point"
+  },
+  {
+   "t": "State of Israel founded",
+   "lat": 32.08,
+   "lon": 34.78,
+   "place": "Tel Aviv",
+   "scope": "point"
+  },
+  {
+   "t": "Year of Africa — 17 nations born",
+   "lat": 2.0,
+   "lon": 20.0,
+   "place": "Africa",
+   "scope": "region"
+  },
+  {
+   "t": "Mandela elected president",
+   "lat": -25.75,
+   "lon": 28.19,
+   "place": "Pretoria",
+   "scope": "point"
+  },
+  {
+   "t": "Indus Valley civilization",
+   "lat": 27.33,
+   "lon": 68.14,
+   "place": "Indus Valley",
+   "scope": "region"
+  },
+  {
+   "t": "Shang dynasty — Chinese writing",
+   "lat": 36.1,
+   "lon": 114.35,
+   "place": "Anyang",
+   "scope": "region"
+  },
+  {
+   "t": "Buddha born",
+   "lat": 27.47,
+   "lon": 83.28,
+   "place": "Lumbini",
+   "scope": "point"
+  },
+  {
+   "t": "Confucius born",
+   "lat": 35.6,
+   "lon": 116.99,
+   "place": "Qufu",
+   "scope": "point"
+  },
+  {
+   "t": "Maurya Empire unites India",
+   "lat": 25.61,
+   "lon": 85.14,
+   "place": "Pataliputra",
+   "scope": "region"
+  },
+  {
+   "t": "Ashoka turns to Buddhism",
+   "lat": 25.61,
+   "lon": 85.14,
+   "place": "Pataliputra",
+   "scope": "point"
+  },
+  {
+   "t": "Qin unifies China",
+   "lat": 34.34,
+   "lon": 108.71,
+   "place": "Xianyang",
+   "scope": "point"
+  },
+  {
+   "t": "Han dynasty",
+   "lat": 34.27,
+   "lon": 108.95,
+   "place": "Chang'an",
+   "scope": "region"
+  },
+  {
+   "t": "Gupta golden age of India",
+   "lat": 25.61,
+   "lon": 85.14,
+   "place": "Pataliputra",
+   "scope": "region"
+  },
+  {
+   "t": "Tang dynasty — cosmopolitan China",
+   "lat": 34.27,
+   "lon": 108.95,
+   "place": "Chang'an",
+   "scope": "region"
+  },
+  {
+   "t": "Song dynasty — paper money, gunpowder",
+   "lat": 34.8,
+   "lon": 114.31,
+   "place": "Kaifeng",
+   "scope": "region"
+  },
+  {
+   "t": "First shogunate in Japan",
+   "lat": 35.32,
+   "lon": 139.55,
+   "place": "Kamakura",
+   "scope": "point"
+  },
+  {
+   "t": "Genghis Khan unites the Mongols",
+   "lat": 47.9,
+   "lon": 107.0,
+   "place": "Mongolia",
+   "scope": "region"
+  },
+  {
+   "t": "Mongols rule all of China",
+   "lat": 39.9,
+   "lon": 116.4,
+   "place": "Khanbaliq (Beijing)",
+   "scope": "region"
+  },
+  {
+   "t": "Ming dynasty founded",
+   "lat": 32.06,
+   "lon": 118.8,
+   "place": "Nanjing",
+   "scope": "point"
+  },
+  {
+   "t": "Zheng He's treasure fleets",
+   "lat": 5.0,
+   "lon": 82.0,
+   "place": "Indian Ocean",
+   "scope": "region"
+  },
+  {
+   "t": "Mughal Empire founded",
+   "lat": 28.61,
+   "lon": 77.21,
+   "place": "Delhi",
+   "scope": "region"
+  },
+  {
+   "t": "East India Company chartered",
+   "lat": 51.51,
+   "lon": -0.09,
+   "place": "London",
+   "scope": "point"
+  },
+  {
+   "t": "Tokugawa shogunate — Japan closes",
+   "lat": 35.68,
+   "lon": 139.69,
+   "place": "Edo (Tokyo)",
+   "scope": "point"
+  },
+  {
+   "t": "Qing dynasty takes China",
+   "lat": 39.9,
+   "lon": 116.4,
+   "place": "Beijing",
+   "scope": "region"
+  },
+  {
+   "t": "Plassey: British rule in India begins",
+   "lat": 23.8,
+   "lon": 88.25,
+   "place": "Plassey, Bengal",
+   "scope": "point"
+  },
+  {
+   "t": "Opium War humiliates China",
+   "lat": 23.13,
+   "lon": 113.26,
+   "place": "Canton (Guangzhou)",
+   "scope": "region"
+  },
+  {
+   "t": "Perry forces Japan open",
+   "lat": 35.25,
+   "lon": 139.72,
+   "place": "Uraga, Tokyo Bay",
+   "scope": "point"
+  },
+  {
+   "t": "Meiji Restoration — Japan sprints",
+   "lat": 35.01,
+   "lon": 135.77,
+   "place": "Kyoto",
+   "scope": "point"
+  },
+  {
+   "t": "Last emperor: Qing falls",
+   "lat": 39.92,
+   "lon": 116.39,
+   "place": "Beijing",
+   "scope": "point"
+  },
+  {
+   "t": "India independent, partitioned",
+   "lat": 28.61,
+   "lon": 77.21,
+   "place": "Delhi",
+   "scope": "region"
+  },
+  {
+   "t": "People's Republic of China",
+   "lat": 39.91,
+   "lon": 116.39,
+   "place": "Beijing",
+   "scope": "point"
+  },
+  {
+   "t": "Deng opens China",
+   "lat": 39.9,
+   "lon": 116.4,
+   "place": "Beijing",
+   "scope": "point"
+  },
+  {
+   "t": "India liberalizes",
+   "lat": 28.61,
+   "lon": 77.21,
+   "place": "New Delhi",
+   "scope": "point"
+  },
+  {
+   "t": "First peoples reach the Americas",
+   "lat": 65.0,
+   "lon": -168.0,
+   "place": "Beringia",
+   "scope": "region"
+  },
+  {
+   "t": "Olmec — first American civilization",
+   "lat": 18.1,
+   "lon": -94.03,
+   "place": "Gulf coast, Mexico",
+   "scope": "region"
+  },
+  {
+   "t": "Maya classic period",
+   "lat": 17.22,
+   "lon": -89.62,
+   "place": "Maya lowlands",
+   "scope": "region"
+  },
+  {
+   "t": "Vikings land in Newfoundland",
+   "lat": 51.6,
+   "lon": -55.53,
+   "place": "L'Anse aux Meadows",
+   "scope": "point"
+  },
+  {
+   "t": "Tenochtitlan founded",
+   "lat": 19.43,
+   "lon": -99.13,
+   "place": "Tenochtitlan",
+   "scope": "point"
+  },
+  {
+   "t": "Inca Empire",
+   "lat": -13.53,
+   "lon": -71.97,
+   "place": "Cusco",
+   "scope": "region"
+  },
+  {
+   "t": "Cortés destroys the Aztecs",
+   "lat": 19.43,
+   "lon": -99.13,
+   "place": "Tenochtitlan",
+   "scope": "point"
+  },
+  {
+   "t": "Pizarro seizes the Inca",
+   "lat": -7.16,
+   "lon": -78.51,
+   "place": "Cajamarca",
+   "scope": "point"
+  },
+  {
+   "t": "Jamestown — English America begins",
+   "lat": 37.21,
+   "lon": -76.78,
+   "place": "Jamestown",
+   "scope": "point"
+  },
+  {
+   "t": "First enslaved Africans in Virginia",
+   "lat": 37.0,
+   "lon": -76.31,
+   "place": "Point Comfort, Virginia",
+   "scope": "point"
+  },
+  {
+   "t": "Mayflower lands",
+   "lat": 41.96,
+   "lon": -70.66,
+   "place": "Plymouth, Massachusetts",
+   "scope": "point"
+  },
+  {
+   "t": "Declaration of Independence",
+   "lat": 39.95,
+   "lon": -75.16,
+   "place": "Philadelphia",
+   "scope": "point"
+  },
+  {
+   "t": "Treaty of Paris: USA recognized",
+   "lat": 48.86,
+   "lon": 2.35,
+   "place": "Paris",
+   "scope": "point"
+  },
+  {
+   "t": "US Constitution written",
+   "lat": 39.95,
+   "lon": -75.15,
+   "place": "Philadelphia",
+   "scope": "point"
+  },
+  {
+   "t": "Haitian Revolution",
+   "lat": 19.0,
+   "lon": -72.4,
+   "place": "Haiti",
+   "scope": "region"
+  },
+  {
+   "t": "Bolívar & Latin American independence",
+   "lat": 5.0,
+   "lon": -72.0,
+   "place": "Gran Colombia",
+   "scope": "region"
+  },
+  {
+   "t": "US Civil War",
+   "lat": 36.5,
+   "lon": -79.5,
+   "place": "United States",
+   "scope": "region"
+  },
+  {
+   "t": "Slavery abolished in the US",
+   "lat": 38.9,
+   "lon": -77.04,
+   "place": "Washington, D.C.",
+   "scope": "point"
+  },
+  {
+   "t": "Canada confederates",
+   "lat": 45.42,
+   "lon": -75.7,
+   "place": "Ottawa",
+   "scope": "point"
+  },
+  {
+   "t": "Wall Street crash — Great Depression",
+   "lat": 40.71,
+   "lon": -74.01,
+   "place": "New York",
+   "scope": "point"
+  },
+  {
+   "t": "UN founded · US superpower era",
+   "lat": 37.78,
+   "lon": -122.42,
+   "place": "San Francisco",
+   "scope": "point"
+  },
+  {
+   "t": "Cuban Revolution",
+   "lat": 23.11,
+   "lon": -82.37,
+   "place": "Havana",
+   "scope": "region"
+  },
+  {
+   "t": "Cuban Missile Crisis",
+   "lat": 22.0,
+   "lon": -79.5,
+   "place": "Cuba",
+   "scope": "region"
+  },
+  {
+   "t": "Apollo 11: humans on the Moon",
+   "lat": 28.57,
+   "lon": -80.65,
+   "place": "Cape Canaveral",
+   "scope": "point"
+  },
+  {
+   "t": "September 11 attacks",
+   "lat": 40.71,
+   "lon": -74.01,
+   "place": "New York",
+   "scope": "point"
+  },
+  {
+   "t": "Global financial crisis",
+   "lat": 40.71,
+   "lon": -74.01,
+   "place": "Wall Street, New York",
+   "scope": "point"
+  },
+  {
+   "t": "Gregorian chant codified",
+   "lat": 41.9,
+   "lon": 12.45,
+   "place": "Rome",
+   "scope": "point"
+  },
+  {
+   "t": "Guido invents staff notation",
+   "lat": 43.46,
+   "lon": 11.88,
+   "place": "Arezzo",
+   "scope": "point"
+  },
+  {
+   "t": "Opera born (Monteverdi's Orfeo)",
+   "lat": 45.16,
+   "lon": 10.79,
+   "place": "Mantua",
+   "scope": "point"
+  },
+  {
+   "t": "Bach & Handel born",
+   "lat": 51.23,
+   "lon": 11.15,
+   "place": "Eisenach & Halle",
+   "scope": "region"
+  },
+  {
+   "t": "Vivaldi's Four Seasons",
+   "lat": 45.44,
+   "lon": 12.34,
+   "place": "Venice",
+   "scope": "point"
+  },
+  {
+   "t": "Bach dies — Baroque ends",
+   "lat": 51.34,
+   "lon": 12.37,
+   "place": "Leipzig",
+   "scope": "point"
+  },
+  {
+   "t": "Mozart born",
+   "lat": 47.8,
+   "lon": 13.04,
+   "place": "Salzburg",
+   "scope": "point"
+  },
+  {
+   "t": "Beethoven born",
+   "lat": 50.74,
+   "lon": 7.1,
+   "place": "Bonn",
+   "scope": "point"
+  },
+  {
+   "t": "Mozart dies at 35",
+   "lat": 48.21,
+   "lon": 16.37,
+   "place": "Vienna",
+   "scope": "point"
+  },
+  {
+   "t": "Eroica — Romanticism opens",
+   "lat": 48.21,
+   "lon": 16.37,
+   "place": "Vienna",
+   "scope": "point"
+  },
+  {
+   "t": "Beethoven's Ninth",
+   "lat": 48.2,
+   "lon": 16.37,
+   "place": "Vienna",
+   "scope": "point"
+  },
+  {
+   "t": "Dvořák born",
+   "lat": 50.26,
+   "lon": 14.3,
+   "place": "Nelahozeves",
+   "scope": "point"
+  },
+  {
+   "t": "Smetana begins Má vlast",
+   "lat": 50.09,
+   "lon": 14.42,
+   "place": "Prague",
+   "scope": "point"
+  },
+  {
+   "t": "Recorded sound (phonograph)",
+   "lat": 40.55,
+   "lon": -74.33,
+   "place": "Menlo Park, New Jersey",
+   "scope": "point"
+  },
+  {
+   "t": "Rite of Spring riot",
+   "lat": 48.87,
+   "lon": 2.3,
+   "place": "Paris",
+   "scope": "point"
+  },
+  {
+   "t": "Jazz age roars",
+   "lat": 40.71,
+   "lon": -73.99,
+   "place": "New York",
+   "scope": "region"
+  },
+  {
+   "t": "Rock'n'roll breaks out",
+   "lat": 35.15,
+   "lon": -90.05,
+   "place": "Memphis",
+   "scope": "point"
+  },
+  {
+   "t": "Beatlemania",
+   "lat": 53.41,
+   "lon": -2.98,
+   "place": "Liverpool",
+   "scope": "point"
+  },
+  {
+   "t": "Hip-hop born in the Bronx",
+   "lat": 40.85,
+   "lon": -73.87,
+   "place": "The Bronx, New York",
+   "scope": "point"
+  },
+  {
+   "t": "MTV: video kills the radio star",
+   "lat": 40.76,
+   "lon": -73.98,
+   "place": "New York",
+   "scope": "point"
+  },
+  {
+   "t": "Thales predicts an eclipse",
+   "lat": 37.53,
+   "lon": 27.28,
+   "place": "Miletus",
+   "scope": "point"
+  },
+  {
+   "t": "Plato founds the Academy",
+   "lat": 37.99,
+   "lon": 23.71,
+   "place": "Athens",
+   "scope": "point"
+  },
+  {
+   "t": "Euclid's Elements",
+   "lat": 31.2,
+   "lon": 29.92,
+   "place": "Alexandria",
+   "scope": "point"
+  },
+  {
+   "t": "Archimedes at work",
+   "lat": 37.08,
+   "lon": 15.28,
+   "place": "Syracuse, Sicily",
+   "scope": "point"
+  },
+  {
+   "t": "Paper invented in China",
+   "lat": 34.62,
+   "lon": 112.45,
+   "place": "Luoyang",
+   "scope": "point"
+  },
+  {
+   "t": "Ptolemy maps the cosmos (wrongly)",
+   "lat": 31.2,
+   "lon": 29.92,
+   "place": "Alexandria",
+   "scope": "point"
+  },
+  {
+   "t": "Al-Khwarizmi writes the algebra book",
+   "lat": 33.32,
+   "lon": 44.36,
+   "place": "Baghdad",
+   "scope": "point"
+  },
+  {
+   "t": "First printed book (Diamond Sutra)",
+   "lat": 40.14,
+   "lon": 94.66,
+   "place": "Dunhuang",
+   "scope": "point"
+  },
+  {
+   "t": "First university (Bologna)",
+   "lat": 44.49,
+   "lon": 11.34,
+   "place": "Bologna",
+   "scope": "point"
+  },
+  {
+   "t": "Gutenberg's printing press",
+   "lat": 50.0,
+   "lon": 8.27,
+   "place": "Mainz",
+   "scope": "point"
+  },
+  {
+   "t": "Copernicus: Earth moves",
+   "lat": 54.36,
+   "lon": 19.68,
+   "place": "Frombork",
+   "scope": "point"
+  },
+  {
+   "t": "Galileo points a telescope up",
+   "lat": 45.41,
+   "lon": 11.88,
+   "place": "Padua",
+   "scope": "point"
+  },
+  {
+   "t": "Newton's Principia",
+   "lat": 52.21,
+   "lon": 0.12,
+   "place": "Cambridge",
+   "scope": "point"
+  },
+  {
+   "t": "The Encyclopédie — Enlightenment engine",
+   "lat": 48.86,
+   "lon": 2.34,
+   "place": "Paris",
+   "scope": "point"
+  },
+  {
+   "t": "Watt's steam engine goes commercial",
+   "lat": 52.48,
+   "lon": -1.9,
+   "place": "Birmingham",
+   "scope": "point"
+  },
+  {
+   "t": "Adam Smith's Wealth of Nations",
+   "lat": 55.95,
+   "lon": -3.19,
+   "place": "Edinburgh",
+   "scope": "point"
+  },
+  {
+   "t": "First vaccine (smallpox)",
+   "lat": 51.69,
+   "lon": -2.46,
+   "place": "Berkeley, Gloucestershire",
+   "scope": "point"
+  },
+  {
+   "t": "Faraday: electricity from motion",
+   "lat": 51.51,
+   "lon": -0.14,
+   "place": "London",
+   "scope": "point"
+  },
+  {
+   "t": "Darwin's Origin of Species",
+   "lat": 51.51,
+   "lon": -0.13,
+   "place": "London",
+   "scope": "point"
+  },
+  {
+   "t": "Marx's Das Kapital",
+   "lat": 51.52,
+   "lon": -0.13,
+   "place": "London",
+   "scope": "point"
+  },
+  {
+   "t": "Mendeleev's periodic table",
+   "lat": 59.94,
+   "lon": 30.31,
+   "place": "Saint Petersburg",
+   "scope": "point"
+  },
+  {
+   "t": "Telephone",
+   "lat": 42.36,
+   "lon": -71.06,
+   "place": "Boston",
+   "scope": "point"
+  },
+  {
+   "t": "Electric light bulb",
+   "lat": 40.55,
+   "lon": -74.33,
+   "place": "Menlo Park, New Jersey",
+   "scope": "point"
+  },
+  {
+   "t": "First automobile",
+   "lat": 49.49,
+   "lon": 8.47,
+   "place": "Mannheim",
+   "scope": "point"
+  },
+  {
+   "t": "First powered flight",
+   "lat": 36.02,
+   "lon": -75.67,
+   "place": "Kitty Hawk",
+   "scope": "point"
+  },
+  {
+   "t": "Einstein's miracle year",
+   "lat": 46.95,
+   "lon": 7.45,
+   "place": "Bern",
+   "scope": "point"
+  },
+  {
+   "t": "Penicillin discovered",
+   "lat": 51.52,
+   "lon": -0.17,
+   "place": "London",
+   "scope": "point"
+  },
+  {
+   "t": "Turing defines computation",
+   "lat": 52.2,
+   "lon": 0.12,
+   "place": "Cambridge",
+   "scope": "point"
+  },
+  {
+   "t": "Atomic bomb",
+   "lat": 35.88,
+   "lon": -106.31,
+   "place": "Los Alamos",
+   "scope": "point"
+  },
+  {
+   "t": "Transistor invented",
+   "lat": 40.68,
+   "lon": -74.4,
+   "place": "Murray Hill, New Jersey",
+   "scope": "point"
+  },
+  {
+   "t": "DNA structure solved",
+   "lat": 52.2,
+   "lon": 0.12,
+   "place": "Cambridge",
+   "scope": "point"
+  },
+  {
+   "t": "Sputnik — space age",
+   "lat": 45.92,
+   "lon": 63.34,
+   "place": "Baikonur",
+   "scope": "point"
+  },
+  {
+   "t": "ARPANET: internet's first packet",
+   "lat": 34.07,
+   "lon": -118.44,
+   "place": "Los Angeles",
+   "scope": "point"
+  },
+  {
+   "t": "World Wide Web proposed",
+   "lat": 46.23,
+   "lon": 6.05,
+   "place": "CERN, Geneva",
+   "scope": "point"
+  },
+  {
+   "t": "iPhone",
+   "lat": 37.33,
+   "lon": -122.03,
+   "place": "Cupertino",
+   "scope": "point"
+  },
+  {
+   "t": "AI goes mainstream (ChatGPT)",
+   "lat": 37.77,
+   "lon": -122.42,
+   "place": "San Francisco",
+   "scope": "point"
+  },
+  {
+   "t": "Born in Salzburg, Jan 27",
+   "lat": 47.8,
+   "lon": 13.04,
+   "place": "Salzburg",
+   "scope": "point"
+  },
+  {
+   "t": "First compositions, age 5",
+   "lat": 47.8,
+   "lon": 13.04,
+   "place": "Salzburg",
+   "scope": "point"
+  },
+  {
+   "t": "Grand tour: Munich, Paris, London",
+   "lat": 49.5,
+   "lon": 4.6,
+   "place": "Munich, Paris, London",
+   "scope": "region"
+  },
+  {
+   "t": "Transcribes the Vatican's secret Miserere from memory, age 14",
+   "lat": 41.9,
+   "lon": 12.45,
+   "place": "Vatican, Rome",
+   "scope": "point"
+  },
+  {
+   "t": "Three Italian journeys",
+   "lat": 43.0,
+   "lon": 12.0,
+   "place": "Italy",
+   "scope": "region"
+  },
+  {
+   "t": "Job-hunting in Paris; his mother dies there",
+   "lat": 48.86,
+   "lon": 2.35,
+   "place": "Paris",
+   "scope": "point"
+  },
+  {
+   "t": "Quits Salzburg, goes freelance in Vienna",
+   "lat": 48.21,
+   "lon": 16.37,
+   "place": "Vienna",
+   "scope": "point"
+  },
+  {
+   "t": "Marries Constanze · Abduction premieres",
+   "lat": 48.21,
+   "lon": 16.37,
+   "place": "Vienna",
+   "scope": "point"
+  },
+  {
+   "t": "Joins the Freemasons",
+   "lat": 48.21,
+   "lon": 16.37,
+   "place": "Vienna",
+   "scope": "point"
+  },
+  {
+   "t": "The Marriage of Figaro",
+   "lat": 48.21,
+   "lon": 16.37,
+   "place": "Vienna",
+   "scope": "point"
+  },
+  {
+   "t": "Don Giovanni premieres in Prague — 'my Praguers understand me'",
+   "lat": 50.09,
+   "lon": 14.42,
+   "place": "Prague",
+   "scope": "point"
+  },
+  {
+   "t": "Last three symphonies in six weeks",
+   "lat": 48.21,
+   "lon": 16.37,
+   "place": "Vienna",
+   "scope": "point"
+  },
+  {
+   "t": "Magic Flute · unfinished Requiem · dies Dec 5",
+   "lat": 48.19,
+   "lon": 16.34,
+   "place": "Vienna",
+   "scope": "point"
+  }
+ ]
+}

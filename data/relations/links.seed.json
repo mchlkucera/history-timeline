@@ -1,0 +1,20 @@
+{"links":[
+{"a":"event:Gutenberg's printing press","b":"spread:printing","w":1.0,"kind":"origin"},
+{"a":"event:Luther's 95 theses — Reformation","b":"spread:printing","w":0.75,"kind":"enabled-by"},
+{"a":"event:First printed book (Diamond Sutra)","b":"spread:printing","w":0.45,"kind":"about"},
+{"a":"event:The Encyclopédie — Enlightenment engine","b":"spread:printing","w":0.6,"kind":"enabled-by"},
+{"a":"entity:Martin Luther","b":"spread:printing","w":0.55,"kind":"enabled-by"},
+
+{"a":"event:Crucifixion of Jesus","b":"belief:christianity","w":1.0,"kind":"origin"},
+{"a":"event:Crucifixion of Jesus","b":"belief:judaism","w":0.5,"kind":"about"},
+
+{"a":"event:Watt's steam engine goes commercial","b":"spread:industrial-revolution","w":1.0,"kind":"origin"},
+{"a":"event:First automobile","b":"spread:industrial-revolution","w":0.6,"kind":"part-of"},
+{"a":"event:Opium War humiliates China","b":"spread:industrial-revolution","w":0.5,"kind":"caused"},
+{"a":"event:Marx's Das Kapital","b":"spread:industrial-revolution","w":0.8,"kind":"caused"},
+{"a":"polity:british-empire","b":"spread:industrial-revolution","w":1.0,"kind":"part-of"},
+{"a":"polity:german-empire","b":"spread:industrial-revolution","w":0.65,"kind":"part-of"},
+{"a":"polity:united-states","b":"spread:industrial-revolution","w":0.7,"kind":"part-of"},
+{"a":"polity:qing-dynasty","b":"spread:industrial-revolution","w":0.15,"kind":"opposed-to"}
+],
+"_note":"SEED ONLY — 15 of ~250 expected. Note the deliberate contrast: clicking Industrial Revolution must light up Britain/Germany/USA strongly and leave Qing China dim. That is the founder's stated test."}

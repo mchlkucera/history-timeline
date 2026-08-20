@@ -1,0 +1,280 @@
+{
+ "assignments": [
+  {
+   "t": "First peoples reach the Americas",
+   "cat": "society",
+   "type": "moment",
+   "flag": false
+  },
+  {
+   "t": "Olmec — first American civilization",
+   "cat": "power",
+   "type": "zone",
+   "flag": true
+  },
+  {
+   "t": "Maya classic period",
+   "cat": "power",
+   "type": "zone",
+   "flag": true
+  },
+  {
+   "t": "Vikings land in Newfoundland",
+   "cat": "society",
+   "type": "moment",
+   "flag": false
+  },
+  {
+   "t": "Tenochtitlan founded",
+   "cat": "power",
+   "type": "moment",
+   "flag": false
+  },
+  {
+   "t": "Inca Empire",
+   "cat": "power",
+   "type": "zone",
+   "flag": true
+  },
+  {
+   "t": "Cortés destroys the Aztecs",
+   "cat": "war",
+   "type": "episode",
+   "flag": false
+  },
+  {
+   "t": "Pizarro seizes the Inca",
+   "cat": "war",
+   "type": "moment",
+   "flag": false
+  },
+  {
+   "t": "Jamestown — English America begins",
+   "cat": "power",
+   "type": "moment",
+   "flag": false
+  },
+  {
+   "t": "First enslaved Africans in Virginia",
+   "cat": "society",
+   "type": "moment",
+   "flag": false
+  },
+  {
+   "t": "Mayflower lands",
+   "cat": "power",
+   "type": "moment",
+   "flag": false
+  },
+  {
+   "t": "Declaration of Independence",
+   "cat": "power",
+   "type": "moment",
+   "flag": false
+  },
+  {
+   "t": "Treaty of Paris: USA recognized",
+   "cat": "power",
+   "type": "moment",
+   "flag": false
+  },
+  {
+   "t": "US Constitution written",
+   "cat": "power",
+   "type": "moment",
+   "flag": false
+  },
+  {
+   "t": "Haitian Revolution",
+   "cat": "power",
+   "type": "episode",
+   "flag": false
+  },
+  {
+   "t": "Bolívar & Latin American independence",
+   "cat": "power",
+   "type": "episode",
+   "flag": false
+  },
+  {
+   "t": "US Civil War",
+   "cat": "war",
+   "type": "episode",
+   "flag": false
+  },
+  {
+   "t": "Slavery abolished in the US",
+   "cat": "society",
+   "type": "moment",
+   "flag": false
+  },
+  {
+   "t": "Canada confederates",
+   "cat": "power",
+   "type": "moment",
+   "flag": false
+  },
+  {
+   "t": "Wall Street crash — Great Depression",
+   "cat": "society",
+   "type": "moment",
+   "flag": false
+  },
+  {
+   "t": "UN founded · US superpower era",
+   "cat": "power",
+   "type": "moment",
+   "flag": false
+  },
+  {
+   "t": "Cuban Revolution",
+   "cat": "power",
+   "type": "moment",
+   "flag": false
+  },
+  {
+   "t": "Cuban Missile Crisis",
+   "cat": "power",
+   "type": "moment",
+   "flag": false
+  },
+  {
+   "t": "Apollo 11: humans on the Moon",
+   "cat": "sci",
+   "type": "moment",
+   "flag": false
+  },
+  {
+   "t": "September 11 attacks",
+   "cat": "war",
+   "type": "moment",
+   "flag": false
+  },
+  {
+   "t": "Global financial crisis",
+   "cat": "society",
+   "type": "moment",
+   "flag": false
+  },
+  {
+   "t": "Gregorian chant codified",
+   "cat": "art",
+   "type": "moment",
+   "flag": false
+  },
+  {
+   "t": "Guido invents staff notation",
+   "cat": "art",
+   "type": "moment",
+   "flag": false
+  },
+  {
+   "t": "Opera born (Monteverdi's Orfeo)",
+   "cat": "art",
+   "type": "moment",
+   "flag": false
+  },
+  {
+   "t": "Bach & Handel born",
+   "cat": "art",
+   "type": "moment",
+   "flag": false
+  },
+  {
+   "t": "Vivaldi's Four Seasons",
+   "cat": "art",
+   "type": "moment",
+   "flag": false
+  },
+  {
+   "t": "Bach dies — Baroque ends",
+   "cat": "art",
+   "type": "moment",
+   "flag": false
+  },
+  {
+   "t": "Mozart born",
+   "cat": "art",
+   "type": "moment",
+   "flag": false
+  },
+  {
+   "t": "Beethoven born",
+   "cat": "art",
+   "type": "moment",
+   "flag": false
+  },
+  {
+   "t": "Mozart dies at 35",
+   "cat": "art",
+   "type": "moment",
+   "flag": false
+  },
+  {
+   "t": "Eroica — Romanticism opens",
+   "cat": "art",
+   "type": "moment",
+   "flag": false
+  },
+  {
+   "t": "Beethoven's Ninth",
+   "cat": "art",
+   "type": "moment",
+   "flag": false
+  },
+  {
+   "t": "Dvořák born",
+   "cat": "art",
+   "type": "moment",
+   "flag": false
+  },
+  {
+   "t": "Smetana begins Má vlast",
+   "cat": "art",
+   "type": "moment",
+   "flag": false
+  },
+  {
+   "t": "Recorded sound (phonograph)",
+   "cat": "sci",
+   "type": "moment",
+   "flag": false
+  },
+  {
+   "t": "Rite of Spring riot",
+   "cat": "art",
+   "type": "moment",
+   "flag": false
+  },
+  {
+   "t": "Jazz age roars",
+   "cat": "art",
+   "type": "moment",
+   "flag": false
+  },
+  {
+   "t": "Rock'n'roll breaks out",
+   "cat": "art",
+   "type": "moment",
+   "flag": false
+  },
+  {
+   "t": "Beatlemania",
+   "cat": "art",
+   "type": "moment",
+   "flag": false
+  },
+  {
+   "t": "Hip-hop born in the Bronx",
+   "cat": "art",
+   "type": "moment",
+   "flag": false
+  },
+  {
+   "t": "MTV: video kills the radio star",
+   "cat": "art",
+   "type": "moment",
+   "flag": false
+  }
+ ]
+}

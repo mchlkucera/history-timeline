@@ -1,0 +1,2038 @@
+{
+ "links": [
+  {
+   "a": "event:Gutenberg's printing press",
+   "b": "spread:printing",
+   "w": 1.0,
+   "kind": "origin"
+  },
+  {
+   "a": "event:Luther's 95 theses — Reformation",
+   "b": "spread:printing",
+   "w": 0.75,
+   "kind": "enabled-by"
+  },
+  {
+   "a": "spread:printing",
+   "b": "spread:paper",
+   "w": 0.85,
+   "kind": "enabled-by"
+  },
+  {
+   "a": "event:First printed book (Diamond Sutra)",
+   "b": "spread:printing",
+   "w": 0.45,
+   "kind": "about"
+  },
+  {
+   "a": "event:Song dynasty — paper money, gunpowder",
+   "b": "spread:printing",
+   "w": 0.35,
+   "kind": "about"
+  },
+  {
+   "a": "spread:printing",
+   "b": "spread:enlightenment",
+   "w": 0.65,
+   "kind": "enabled-by"
+  },
+  {
+   "a": "spread:printing",
+   "b": "spread:scientific-revolution",
+   "w": 0.6,
+   "kind": "enabled-by"
+  },
+  {
+   "a": "event:The Encyclopédie — Enlightenment engine",
+   "b": "spread:printing",
+   "w": 0.6,
+   "kind": "enabled-by"
+  },
+  {
+   "a": "entity:Martin Luther",
+   "b": "spread:printing",
+   "w": 0.55,
+   "kind": "enabled-by"
+  },
+  {
+   "a": "belief:lutheranism",
+   "b": "spread:printing",
+   "w": 0.6,
+   "kind": "enabled-by"
+  },
+  {
+   "a": "polity:holy-roman-empire",
+   "b": "spread:printing",
+   "w": 0.55,
+   "kind": "origin"
+  },
+  {
+   "a": "entity:Jan Hus",
+   "b": "spread:printing",
+   "w": 0.2,
+   "kind": "about"
+  },
+  {
+   "a": "event:Paper invented in China",
+   "b": "spread:paper",
+   "w": 1.0,
+   "kind": "origin"
+  },
+  {
+   "a": "event:First printed book (Diamond Sutra)",
+   "b": "spread:paper",
+   "w": 0.7,
+   "kind": "part-of"
+  },
+  {
+   "a": "spread:paper",
+   "b": "spread:silk-road",
+   "w": 0.6,
+   "kind": "part-of"
+  },
+  {
+   "a": "event:Baghdad founded — Islamic golden age",
+   "b": "spread:paper",
+   "w": 0.5,
+   "kind": "enabled-by"
+  },
+  {
+   "a": "event:Writing invented (Sumer)",
+   "b": "spread:writing",
+   "w": 1.0,
+   "kind": "origin"
+  },
+  {
+   "a": "polity:sumer",
+   "b": "spread:writing",
+   "w": 0.85,
+   "kind": "origin"
+  },
+  {
+   "a": "event:Shang dynasty — Chinese writing",
+   "b": "spread:writing",
+   "w": 0.8,
+   "kind": "origin"
+  },
+  {
+   "a": "polity:phoenicia-carthage",
+   "b": "spread:writing",
+   "w": 0.75,
+   "kind": "part-of"
+  },
+  {
+   "a": "polity:ancient-egypt",
+   "b": "spread:writing",
+   "w": 0.7,
+   "kind": "origin"
+  },
+  {
+   "a": "event:Hammurabi writes his law code",
+   "b": "spread:writing",
+   "w": 0.6,
+   "kind": "enabled-by"
+  },
+  {
+   "a": "event:Guido invents staff notation",
+   "b": "spread:writing",
+   "w": 0.4,
+   "kind": "lineage"
+  },
+  {
+   "a": "event:Indus Valley civilization",
+   "b": "spread:writing",
+   "w": 0.35,
+   "kind": "about"
+  },
+  {
+   "a": "event:Farming begins",
+   "b": "spread:agriculture",
+   "w": 1.0,
+   "kind": "origin"
+  },
+  {
+   "a": "spread:agriculture",
+   "b": "spread:columbian-exchange",
+   "w": 0.6,
+   "kind": "lineage"
+  },
+  {
+   "a": "spread:agriculture",
+   "b": "spread:bronze-age",
+   "w": 0.5,
+   "kind": "enabled-by"
+  },
+  {
+   "a": "polity:olmec-civilization",
+   "b": "spread:agriculture",
+   "w": 0.45,
+   "kind": "origin"
+  },
+  {
+   "a": "belief:prehistoric-animism",
+   "b": "spread:agriculture",
+   "w": 0.3,
+   "kind": "caused"
+  },
+  {
+   "a": "event:Stonehenge raised",
+   "b": "spread:agriculture",
+   "w": 0.45,
+   "kind": "enabled-by"
+  },
+  {
+   "a": "event:Bronze Age",
+   "b": "spread:bronze-age",
+   "w": 1.0,
+   "kind": "about"
+  },
+  {
+   "a": "polity:mycenaean-greece",
+   "b": "spread:bronze-age",
+   "w": 0.85,
+   "kind": "part-of"
+  },
+  {
+   "a": "polity:hittite-empire",
+   "b": "spread:bronze-age",
+   "w": 0.7,
+   "kind": "part-of"
+  },
+  {
+   "a": "polity:minoan-civilization",
+   "b": "spread:bronze-age",
+   "w": 0.7,
+   "kind": "part-of"
+  },
+  {
+   "a": "polity:shang-dynasty",
+   "b": "spread:bronze-age",
+   "w": 0.7,
+   "kind": "part-of"
+  },
+  {
+   "a": "event:Battle of Kadesh (first recorded treaty)",
+   "b": "spread:bronze-age",
+   "w": 0.65,
+   "kind": "part-of"
+  },
+  {
+   "a": "spread:bronze-age",
+   "b": "spread:ironworking",
+   "w": 0.5,
+   "kind": "lineage"
+  },
+  {
+   "a": "polity:hittite-empire",
+   "b": "spread:ironworking",
+   "w": 0.7,
+   "kind": "origin"
+  },
+  {
+   "a": "polity:celtic-culture",
+   "b": "spread:ironworking",
+   "w": 0.65,
+   "kind": "part-of"
+  },
+  {
+   "a": "polity:nok-culture",
+   "b": "spread:ironworking",
+   "w": 0.6,
+   "kind": "part-of"
+  },
+  {
+   "a": "polity:assyria",
+   "b": "spread:ironworking",
+   "w": 0.6,
+   "kind": "part-of"
+  },
+  {
+   "a": "spread:ironworking",
+   "b": "spread:industrial-revolution",
+   "w": 0.45,
+   "kind": "lineage"
+  },
+  {
+   "a": "polity:roman-republic",
+   "b": "spread:ironworking",
+   "w": 0.4,
+   "kind": "part-of"
+  },
+  {
+   "a": "event:The Silk Road",
+   "b": "spread:silk-road",
+   "w": 1.0,
+   "kind": "about"
+  },
+  {
+   "a": "polity:han-dynasty",
+   "b": "spread:silk-road",
+   "w": 0.85,
+   "kind": "origin"
+  },
+  {
+   "a": "polity:mongol-empire",
+   "b": "spread:silk-road",
+   "w": 0.75,
+   "kind": "part-of"
+  },
+  {
+   "a": "event:Black Death kills a third of Europe",
+   "b": "spread:silk-road",
+   "w": 0.7,
+   "kind": "caused"
+  },
+  {
+   "a": "polity:tang-dynasty",
+   "b": "spread:silk-road",
+   "w": 0.75,
+   "kind": "part-of"
+  },
+  {
+   "a": "belief:buddhism",
+   "b": "spread:silk-road",
+   "w": 0.55,
+   "kind": "part-of"
+  },
+  {
+   "a": "event:Genghis Khan unites the Mongols",
+   "b": "spread:silk-road",
+   "w": 0.6,
+   "kind": "enabled-by"
+  },
+  {
+   "a": "event:Song dynasty — paper money, gunpowder",
+   "b": "spread:gunpowder",
+   "w": 0.9,
+   "kind": "origin"
+  },
+  {
+   "a": "event:Constantinople falls to Ottomans",
+   "b": "spread:gunpowder",
+   "w": 0.8,
+   "kind": "enabled-by"
+  },
+  {
+   "a": "polity:ottoman-empire",
+   "b": "spread:gunpowder",
+   "w": 0.75,
+   "kind": "part-of"
+  },
+  {
+   "a": "polity:mughal-empire",
+   "b": "spread:gunpowder",
+   "w": 0.6,
+   "kind": "part-of"
+  },
+  {
+   "a": "polity:safavid-persia",
+   "b": "spread:gunpowder",
+   "w": 0.55,
+   "kind": "part-of"
+  },
+  {
+   "a": "event:Cortés destroys the Aztecs",
+   "b": "spread:gunpowder",
+   "w": 0.5,
+   "kind": "enabled-by"
+  },
+  {
+   "a": "spread:gunpowder",
+   "b": "spread:silk-road",
+   "w": 0.45,
+   "kind": "enabled-by"
+  },
+  {
+   "a": "event:Atomic bomb",
+   "b": "spread:gunpowder",
+   "w": 0.2,
+   "kind": "lineage"
+  },
+  {
+   "a": "event:The Renaissance",
+   "b": "spread:renaissance",
+   "w": 1.0,
+   "kind": "about"
+  },
+  {
+   "a": "entity:Leonardo da Vinci",
+   "b": "spread:renaissance",
+   "w": 0.95,
+   "kind": "part-of"
+  },
+  {
+   "a": "entity:Michelangelo",
+   "b": "spread:renaissance",
+   "w": 0.85,
+   "kind": "part-of"
+  },
+  {
+   "a": "polity:republic-of-venice",
+   "b": "spread:renaissance",
+   "w": 0.65,
+   "kind": "part-of"
+  },
+  {
+   "a": "spread:renaissance",
+   "b": "spread:scientific-revolution",
+   "w": 0.6,
+   "kind": "lineage"
+  },
+  {
+   "a": "entity:William Shakespeare",
+   "b": "spread:renaissance",
+   "w": 0.55,
+   "kind": "part-of"
+  },
+  {
+   "a": "event:Opera born (Monteverdi's Orfeo)",
+   "b": "spread:renaissance",
+   "w": 0.45,
+   "kind": "part-of"
+  },
+  {
+   "a": "event:Copernicus: Earth moves",
+   "b": "spread:scientific-revolution",
+   "w": 1.0,
+   "kind": "origin"
+  },
+  {
+   "a": "event:Newton's Principia",
+   "b": "spread:scientific-revolution",
+   "w": 1.0,
+   "kind": "part-of"
+  },
+  {
+   "a": "entity:Isaac Newton",
+   "b": "spread:scientific-revolution",
+   "w": 0.95,
+   "kind": "part-of"
+  },
+  {
+   "a": "entity:Nicolaus Copernicus",
+   "b": "spread:scientific-revolution",
+   "w": 0.9,
+   "kind": "origin"
+  },
+  {
+   "a": "entity:Galileo Galilei",
+   "b": "spread:scientific-revolution",
+   "w": 0.9,
+   "kind": "part-of"
+  },
+  {
+   "a": "event:Galileo points a telescope up",
+   "b": "spread:scientific-revolution",
+   "w": 0.9,
+   "kind": "part-of"
+  },
+  {
+   "a": "spread:scientific-revolution",
+   "b": "spread:enlightenment",
+   "w": 0.75,
+   "kind": "lineage"
+  },
+  {
+   "a": "event:Ptolemy maps the cosmos (wrongly)",
+   "b": "spread:scientific-revolution",
+   "w": 0.4,
+   "kind": "opposed-to"
+  },
+  {
+   "a": "entity:Aristotle",
+   "b": "spread:scientific-revolution",
+   "w": 0.4,
+   "kind": "opposed-to"
+  },
+  {
+   "a": "belief:roman-catholicism",
+   "b": "spread:scientific-revolution",
+   "w": 0.35,
+   "kind": "opposed-to"
+  },
+  {
+   "a": "spread:scientific-revolution",
+   "b": "spread:industrial-revolution",
+   "w": 0.45,
+   "kind": "lineage"
+  },
+  {
+   "a": "event:The Encyclopédie — Enlightenment engine",
+   "b": "spread:enlightenment",
+   "w": 1.0,
+   "kind": "part-of"
+  },
+  {
+   "a": "belief:enlightenment",
+   "b": "spread:enlightenment",
+   "w": 0.95,
+   "kind": "about"
+  },
+  {
+   "a": "event:French Revolution",
+   "b": "spread:enlightenment",
+   "w": 0.85,
+   "kind": "caused"
+  },
+  {
+   "a": "event:Declaration of Independence",
+   "b": "spread:enlightenment",
+   "w": 0.8,
+   "kind": "enabled-by"
+  },
+  {
+   "a": "event:Adam Smith's Wealth of Nations",
+   "b": "spread:enlightenment",
+   "w": 0.7,
+   "kind": "part-of"
+  },
+  {
+   "a": "belief:liberalism",
+   "b": "spread:enlightenment",
+   "w": 0.7,
+   "kind": "lineage"
+  },
+  {
+   "a": "belief:secular-nonreligious",
+   "b": "spread:enlightenment",
+   "w": 0.7,
+   "kind": "lineage"
+  },
+  {
+   "a": "belief:classical-economics",
+   "b": "spread:enlightenment",
+   "w": 0.7,
+   "kind": "lineage"
+  },
+  {
+   "a": "polity:united-states",
+   "b": "spread:enlightenment",
+   "w": 0.65,
+   "kind": "part-of"
+  },
+  {
+   "a": "event:Joins the Freemasons",
+   "b": "spread:enlightenment",
+   "w": 0.55,
+   "kind": "part-of"
+  },
+  {
+   "a": "event:Haitian Revolution",
+   "b": "spread:enlightenment",
+   "w": 0.55,
+   "kind": "caused"
+  },
+  {
+   "a": "event:Columbus reaches the Americas",
+   "b": "spread:columbian-exchange",
+   "w": 1.0,
+   "kind": "origin"
+  },
+  {
+   "a": "polity:spanish-empire",
+   "b": "spread:columbian-exchange",
+   "w": 0.9,
+   "kind": "part-of"
+  },
+  {
+   "a": "event:Age of Discovery",
+   "b": "spread:columbian-exchange",
+   "w": 0.7,
+   "kind": "part-of"
+  },
+  {
+   "a": "event:Cortés destroys the Aztecs",
+   "b": "spread:columbian-exchange",
+   "w": 0.7,
+   "kind": "part-of"
+  },
+  {
+   "a": "spread:columbian-exchange",
+   "b": "spread:atlantic-slave-trade",
+   "w": 0.8,
+   "kind": "caused"
+  },
+  {
+   "a": "polity:qing-dynasty",
+   "b": "spread:columbian-exchange",
+   "w": 0.4,
+   "kind": "part-of"
+  },
+  {
+   "a": "event:Haitian Revolution",
+   "b": "spread:atlantic-slave-trade",
+   "w": 0.9,
+   "kind": "caused"
+  },
+  {
+   "a": "event:First enslaved Africans in Virginia",
+   "b": "spread:atlantic-slave-trade",
+   "w": 0.85,
+   "kind": "part-of"
+  },
+  {
+   "a": "event:Slavery abolished in the US",
+   "b": "spread:atlantic-slave-trade",
+   "w": 0.55,
+   "kind": "caused"
+  },
+  {
+   "a": "polity:portuguese-empire",
+   "b": "spread:atlantic-slave-trade",
+   "w": 0.8,
+   "kind": "part-of"
+  },
+  {
+   "a": "polity:british-empire",
+   "b": "spread:atlantic-slave-trade",
+   "w": 0.75,
+   "kind": "part-of"
+  },
+  {
+   "a": "event:US Civil War",
+   "b": "spread:atlantic-slave-trade",
+   "w": 0.5,
+   "kind": "caused"
+  },
+  {
+   "a": "polity:kingdom-of-kongo",
+   "b": "spread:atlantic-slave-trade",
+   "w": 0.7,
+   "kind": "part-of"
+  },
+  {
+   "a": "entity:Abraham Lincoln",
+   "b": "spread:atlantic-slave-trade",
+   "w": 0.7,
+   "kind": "opposed-to"
+  },
+  {
+   "a": "spread:atlantic-slave-trade",
+   "b": "spread:industrial-revolution",
+   "w": 0.5,
+   "kind": "enabled-by"
+  },
+  {
+   "a": "event:Jazz age roars",
+   "b": "spread:atlantic-slave-trade",
+   "w": 0.35,
+   "kind": "lineage"
+  },
+  {
+   "a": "event:Industrial Revolution",
+   "b": "spread:industrial-revolution",
+   "w": 1.0,
+   "kind": "about"
+  },
+  {
+   "a": "event:Watt's steam engine goes commercial",
+   "b": "spread:industrial-revolution",
+   "w": 1.0,
+   "kind": "origin"
+  },
+  {
+   "a": "polity:british-empire",
+   "b": "spread:industrial-revolution",
+   "w": 1.0,
+   "kind": "part-of"
+  },
+  {
+   "a": "polity:united-states",
+   "b": "spread:industrial-revolution",
+   "w": 0.85,
+   "kind": "part-of"
+  },
+  {
+   "a": "polity:german-empire",
+   "b": "spread:industrial-revolution",
+   "w": 0.8,
+   "kind": "part-of"
+  },
+  {
+   "a": "polity:qing-dynasty",
+   "b": "spread:industrial-revolution",
+   "w": 0.15,
+   "kind": "caused"
+  },
+  {
+   "a": "polity:mughal-empire",
+   "b": "spread:industrial-revolution",
+   "w": 0.2,
+   "kind": "caused"
+  },
+  {
+   "a": "polity:ottoman-empire",
+   "b": "spread:industrial-revolution",
+   "w": 0.2,
+   "kind": "caused"
+  },
+  {
+   "a": "polity:british-raj",
+   "b": "spread:industrial-revolution",
+   "w": 0.35,
+   "kind": "caused"
+  },
+  {
+   "a": "polity:empire-of-japan",
+   "b": "spread:industrial-revolution",
+   "w": 0.65,
+   "kind": "part-of"
+  },
+  {
+   "a": "polity:prussia",
+   "b": "spread:industrial-revolution",
+   "w": 0.6,
+   "kind": "part-of"
+  },
+  {
+   "a": "polity:russian-empire",
+   "b": "spread:industrial-revolution",
+   "w": 0.4,
+   "kind": "part-of"
+  },
+  {
+   "a": "belief:marxism",
+   "b": "spread:industrial-revolution",
+   "w": 0.8,
+   "kind": "caused"
+  },
+  {
+   "a": "belief:socialism",
+   "b": "spread:industrial-revolution",
+   "w": 0.75,
+   "kind": "caused"
+  },
+  {
+   "a": "event:Marx's Das Kapital",
+   "b": "spread:industrial-revolution",
+   "w": 0.8,
+   "kind": "caused"
+  },
+  {
+   "a": "spread:industrial-revolution",
+   "b": "spread:railways",
+   "w": 0.85,
+   "kind": "part-of"
+  },
+  {
+   "a": "event:Meiji Restoration — Japan sprints",
+   "b": "spread:industrial-revolution",
+   "w": 0.7,
+   "kind": "caused"
+  },
+  {
+   "a": "event:World War I",
+   "b": "spread:industrial-revolution",
+   "w": 0.6,
+   "kind": "caused"
+  },
+  {
+   "a": "spread:industrial-revolution",
+   "b": "spread:electrification",
+   "w": 0.6,
+   "kind": "lineage"
+  },
+  {
+   "a": "belief:environmentalism",
+   "b": "spread:industrial-revolution",
+   "w": 0.4,
+   "kind": "opposed-to"
+  },
+  {
+   "a": "polity:united-states",
+   "b": "spread:railways",
+   "w": 0.7,
+   "kind": "part-of"
+  },
+  {
+   "a": "polity:british-empire",
+   "b": "spread:railways",
+   "w": 0.75,
+   "kind": "origin"
+  },
+  {
+   "a": "event:Watt's steam engine goes commercial",
+   "b": "spread:railways",
+   "w": 0.65,
+   "kind": "enabled-by"
+  },
+  {
+   "a": "polity:british-raj",
+   "b": "spread:railways",
+   "w": 0.65,
+   "kind": "part-of"
+  },
+  {
+   "a": "event:US Civil War",
+   "b": "spread:railways",
+   "w": 0.5,
+   "kind": "enabled-by"
+  },
+  {
+   "a": "polity:peoples-republic-of-china",
+   "b": "spread:railways",
+   "w": 0.4,
+   "kind": "part-of"
+  },
+  {
+   "a": "entity:Antonín Dvořák",
+   "b": "spread:railways",
+   "w": 0.2,
+   "kind": "about"
+  },
+  {
+   "a": "event:Faraday: electricity from motion",
+   "b": "spread:electrification",
+   "w": 1.0,
+   "kind": "origin"
+  },
+  {
+   "a": "event:Electric light bulb",
+   "b": "spread:electrification",
+   "w": 0.8,
+   "kind": "part-of"
+  },
+  {
+   "a": "polity:united-states",
+   "b": "spread:electrification",
+   "w": 0.7,
+   "kind": "part-of"
+  },
+  {
+   "a": "polity:german-empire",
+   "b": "spread:electrification",
+   "w": 0.6,
+   "kind": "part-of"
+  },
+  {
+   "a": "spread:electrification",
+   "b": "spread:telecommunications",
+   "w": 0.6,
+   "kind": "enabled-by"
+  },
+  {
+   "a": "polity:soviet-union",
+   "b": "spread:electrification",
+   "w": 0.55,
+   "kind": "part-of"
+  },
+  {
+   "a": "spread:electrification",
+   "b": "spread:computing",
+   "w": 0.5,
+   "kind": "enabled-by"
+  },
+  {
+   "a": "event:Rock'n'roll breaks out",
+   "b": "spread:electrification",
+   "w": 0.35,
+   "kind": "enabled-by"
+  },
+  {
+   "a": "event:Telephone",
+   "b": "spread:telecommunications",
+   "w": 0.8,
+   "kind": "part-of"
+  },
+  {
+   "a": "event:iPhone",
+   "b": "spread:telecommunications",
+   "w": 0.7,
+   "kind": "part-of"
+  },
+  {
+   "a": "polity:british-empire",
+   "b": "spread:telecommunications",
+   "w": 0.7,
+   "kind": "part-of"
+  },
+  {
+   "a": "spread:telecommunications",
+   "b": "spread:internet",
+   "w": 0.7,
+   "kind": "lineage"
+  },
+  {
+   "a": "event:Cuban Missile Crisis",
+   "b": "spread:telecommunications",
+   "w": 0.4,
+   "kind": "caused"
+  },
+  {
+   "a": "event:MTV: video kills the radio star",
+   "b": "spread:telecommunications",
+   "w": 0.4,
+   "kind": "part-of"
+  },
+  {
+   "a": "event:First vaccine (smallpox)",
+   "b": "spread:vaccination",
+   "w": 1.0,
+   "kind": "origin"
+  },
+  {
+   "a": "event:Penicillin discovered",
+   "b": "spread:vaccination",
+   "w": 0.7,
+   "kind": "part-of"
+  },
+  {
+   "a": "polity:british-empire",
+   "b": "spread:vaccination",
+   "w": 0.5,
+   "kind": "origin"
+  },
+  {
+   "a": "polity:french-empire",
+   "b": "spread:vaccination",
+   "w": 0.4,
+   "kind": "part-of"
+  },
+  {
+   "a": "polity:soviet-union",
+   "b": "spread:vaccination",
+   "w": 0.35,
+   "kind": "part-of"
+  },
+  {
+   "a": "event:Cortés destroys the Aztecs",
+   "b": "spread:vaccination",
+   "w": 0.3,
+   "kind": "about"
+  },
+  {
+   "a": "event:Black Death kills a third of Europe",
+   "b": "spread:vaccination",
+   "w": 0.3,
+   "kind": "opposed-to"
+  },
+  {
+   "a": "event:Turing defines computation",
+   "b": "spread:computing",
+   "w": 1.0,
+   "kind": "origin"
+  },
+  {
+   "a": "entity:Alan Turing",
+   "b": "spread:computing",
+   "w": 1.0,
+   "kind": "origin"
+  },
+  {
+   "a": "event:Transistor invented",
+   "b": "spread:computing",
+   "w": 0.8,
+   "kind": "enabled-by"
+  },
+  {
+   "a": "polity:united-states",
+   "b": "spread:computing",
+   "w": 0.8,
+   "kind": "part-of"
+  },
+  {
+   "a": "event:AI goes mainstream (ChatGPT)",
+   "b": "spread:computing",
+   "w": 0.75,
+   "kind": "part-of"
+  },
+  {
+   "a": "spread:computing",
+   "b": "spread:internet",
+   "w": 0.8,
+   "kind": "enabled-by"
+  },
+  {
+   "a": "polity:british-empire",
+   "b": "spread:computing",
+   "w": 0.45,
+   "kind": "origin"
+  },
+  {
+   "a": "event:World War II",
+   "b": "spread:computing",
+   "w": 0.5,
+   "kind": "enabled-by"
+  },
+  {
+   "a": "event:Al-Khwarizmi writes the algebra book",
+   "b": "spread:computing",
+   "w": 0.3,
+   "kind": "lineage"
+  },
+  {
+   "a": "event:ARPANET: internet's first packet",
+   "b": "spread:internet",
+   "w": 1.0,
+   "kind": "origin"
+  },
+  {
+   "a": "event:World Wide Web proposed",
+   "b": "spread:internet",
+   "w": 0.9,
+   "kind": "part-of"
+  },
+  {
+   "a": "polity:united-states",
+   "b": "spread:internet",
+   "w": 0.85,
+   "kind": "origin"
+  },
+  {
+   "a": "event:iPhone",
+   "b": "spread:internet",
+   "w": 0.75,
+   "kind": "part-of"
+  },
+  {
+   "a": "polity:peoples-republic-of-china",
+   "b": "spread:internet",
+   "w": 0.5,
+   "kind": "part-of"
+  },
+  {
+   "a": "belief:populism",
+   "b": "spread:internet",
+   "w": 0.5,
+   "kind": "enabled-by"
+  },
+  {
+   "a": "event:The Cold War",
+   "b": "spread:internet",
+   "w": 0.45,
+   "kind": "enabled-by"
+  },
+  {
+   "a": "event:Sputnik — space age",
+   "b": "spread:internet",
+   "w": 0.35,
+   "kind": "caused"
+  },
+  {
+   "a": "event:Crucifixion of Jesus",
+   "b": "belief:christianity",
+   "w": 1.0,
+   "kind": "origin"
+  },
+  {
+   "a": "event:Crucifixion of Jesus",
+   "b": "belief:judaism",
+   "w": 0.5,
+   "kind": "about"
+  },
+  {
+   "a": "event:Crucifixion of Jesus",
+   "b": "polity:roman-empire",
+   "w": 0.45,
+   "kind": "about"
+  },
+  {
+   "a": "event:Luther's 95 theses — Reformation",
+   "b": "belief:lutheranism",
+   "w": 1.0,
+   "kind": "origin"
+  },
+  {
+   "a": "event:Luther's 95 theses — Reformation",
+   "b": "belief:roman-catholicism",
+   "w": 0.8,
+   "kind": "caused"
+  },
+  {
+   "a": "event:Luther's 95 theses — Reformation",
+   "b": "belief:catholicism",
+   "w": 0.7,
+   "kind": "opposed-to"
+  },
+  {
+   "a": "entity:Martin Luther",
+   "b": "belief:lutheranism",
+   "w": 1.0,
+   "kind": "origin"
+  },
+  {
+   "a": "event:Jan Hus burned at Konstanz",
+   "b": "entity:Jan Hus",
+   "w": 1.0,
+   "kind": "part-of"
+  },
+  {
+   "a": "entity:Jan Hus",
+   "b": "belief:lutheranism",
+   "w": 0.45,
+   "kind": "lineage"
+  },
+  {
+   "a": "event:Jan Hus burned at Konstanz",
+   "b": "belief:catholicism",
+   "w": 0.55,
+   "kind": "opposed-to"
+  },
+  {
+   "a": "event:Great Schism east/west",
+   "b": "belief:catholicism",
+   "w": 0.85,
+   "kind": "origin"
+  },
+  {
+   "a": "event:Great Schism east/west",
+   "b": "belief:eastern-orthodoxy",
+   "w": 0.85,
+   "kind": "origin"
+  },
+  {
+   "a": "event:Christianity legalized",
+   "b": "polity:roman-empire",
+   "w": 0.7,
+   "kind": "part-of"
+  },
+  {
+   "a": "event:Christianity legalized",
+   "b": "belief:greco-roman-paganism",
+   "w": 0.5,
+   "kind": "opposed-to"
+  },
+  {
+   "a": "event:First Crusade launched",
+   "b": "belief:sunni-islam",
+   "w": 0.5,
+   "kind": "opposed-to"
+  },
+  {
+   "a": "event:The Hijra — Islam begins",
+   "b": "belief:islam",
+   "w": 1.0,
+   "kind": "origin"
+  },
+  {
+   "a": "event:The Hijra — Islam begins",
+   "b": "belief:sunni-islam",
+   "w": 0.6,
+   "kind": "lineage"
+  },
+  {
+   "a": "event:The Hijra — Islam begins",
+   "b": "belief:shia-islam",
+   "w": 0.6,
+   "kind": "lineage"
+  },
+  {
+   "a": "event:The Hijra — Islam begins",
+   "b": "belief:judaism",
+   "w": 0.3,
+   "kind": "about"
+  },
+  {
+   "a": "event:Arab conquests: Spain to Persia",
+   "b": "polity:rashidun-caliphate",
+   "w": 0.85,
+   "kind": "part-of"
+  },
+  {
+   "a": "event:Arab conquests: Spain to Persia",
+   "b": "polity:sassanid-persia",
+   "w": 0.7,
+   "kind": "caused"
+  },
+  {
+   "a": "event:Arab conquests: Spain to Persia",
+   "b": "belief:zoroastrianism",
+   "w": 0.55,
+   "kind": "caused"
+  },
+  {
+   "a": "event:Baghdad founded — Islamic golden age",
+   "b": "polity:abbasid-caliphate",
+   "w": 0.9,
+   "kind": "part-of"
+  },
+  {
+   "a": "event:Mongols sack Baghdad",
+   "b": "polity:abbasid-caliphate",
+   "w": 0.85,
+   "kind": "caused"
+  },
+  {
+   "a": "event:September 11 attacks",
+   "b": "belief:wahhabism",
+   "w": 0.6,
+   "kind": "caused"
+  },
+  {
+   "a": "entity:The Buddha",
+   "b": "belief:buddhism",
+   "w": 1.0,
+   "kind": "origin"
+  },
+  {
+   "a": "entity:The Buddha",
+   "b": "belief:vedic-religion",
+   "w": 0.45,
+   "kind": "opposed-to"
+  },
+  {
+   "a": "entity:The Buddha",
+   "b": "belief:hinduism",
+   "w": 0.4,
+   "kind": "about"
+  },
+  {
+   "a": "event:Ashoka turns to Buddhism",
+   "b": "polity:maurya-empire",
+   "w": 0.85,
+   "kind": "part-of"
+  },
+  {
+   "a": "event:Ashoka turns to Buddhism",
+   "b": "belief:buddhism",
+   "w": 0.75,
+   "kind": "part-of"
+  },
+  {
+   "a": "entity:Confucius",
+   "b": "belief:confucianism",
+   "w": 1.0,
+   "kind": "origin"
+  },
+  {
+   "a": "entity:Confucius",
+   "b": "belief:daoism",
+   "w": 0.3,
+   "kind": "opposed-to"
+  },
+  {
+   "a": "event:Opium War humiliates China",
+   "b": "polity:qing-dynasty",
+   "w": 0.75,
+   "kind": "part-of"
+  },
+  {
+   "a": "event:People's Republic of China",
+   "b": "belief:maoism",
+   "w": 0.9,
+   "kind": "origin"
+  },
+  {
+   "a": "event:Deng opens China",
+   "b": "belief:maoism",
+   "w": 0.5,
+   "kind": "opposed-to"
+  },
+  {
+   "a": "event:India independent, partitioned",
+   "b": "belief:hinduism",
+   "w": 0.5,
+   "kind": "about"
+  },
+  {
+   "a": "event:India independent, partitioned",
+   "b": "belief:sunni-islam",
+   "w": 0.5,
+   "kind": "about"
+  },
+  {
+   "a": "event:Meiji Restoration — Japan sprints",
+   "b": "belief:shinto",
+   "w": 0.5,
+   "kind": "part-of"
+  },
+  {
+   "a": "event:USSR founded",
+   "b": "polity:soviet-union",
+   "w": 1.0,
+   "kind": "origin"
+  },
+  {
+   "a": "event:USSR founded",
+   "b": "belief:marxism-leninism",
+   "w": 0.8,
+   "kind": "part-of"
+  },
+  {
+   "a": "event:Berlin Wall falls · Velvet Revolution",
+   "b": "event:The Cold War",
+   "w": 0.9,
+   "kind": "part-of"
+  },
+  {
+   "a": "event:Berlin Wall falls · Velvet Revolution",
+   "b": "polity:soviet-union",
+   "w": 0.85,
+   "kind": "caused"
+  },
+  {
+   "a": "event:Berlin Wall falls · Velvet Revolution",
+   "b": "belief:marxism-leninism",
+   "w": 0.8,
+   "kind": "caused"
+  },
+  {
+   "a": "event:Russian Revolution",
+   "b": "belief:marxism-leninism",
+   "w": 0.95,
+   "kind": "origin"
+  },
+  {
+   "a": "event:Russian Revolution",
+   "b": "polity:russian-empire",
+   "w": 0.85,
+   "kind": "caused"
+  },
+  {
+   "a": "event:Russian Revolution",
+   "b": "event:World War I",
+   "w": 0.65,
+   "kind": "caused"
+  },
+  {
+   "a": "event:Marx's Das Kapital",
+   "b": "entity:Karl Marx",
+   "w": 1.0,
+   "kind": "part-of"
+  },
+  {
+   "a": "event:Marx's Das Kapital",
+   "b": "belief:marxism",
+   "w": 0.95,
+   "kind": "origin"
+  },
+  {
+   "a": "event:The Cold War",
+   "b": "polity:soviet-union",
+   "w": 0.9,
+   "kind": "part-of"
+  },
+  {
+   "a": "event:The Cold War",
+   "b": "polity:united-states",
+   "w": 0.9,
+   "kind": "part-of"
+  },
+  {
+   "a": "event:Atomic bomb",
+   "b": "event:World War II",
+   "w": 0.7,
+   "kind": "part-of"
+  },
+  {
+   "a": "event:Atomic bomb",
+   "b": "event:The Cold War",
+   "w": 0.7,
+   "kind": "caused"
+  },
+  {
+   "a": "event:Hitler takes power",
+   "b": "belief:nazism",
+   "w": 0.95,
+   "kind": "origin"
+  },
+  {
+   "a": "event:Hitler takes power",
+   "b": "event:Wall Street crash — Great Depression",
+   "w": 0.6,
+   "kind": "caused"
+  },
+  {
+   "a": "event:World War II",
+   "b": "polity:nazi-germany",
+   "w": 0.9,
+   "kind": "part-of"
+  },
+  {
+   "a": "event:Wall Street crash — Great Depression",
+   "b": "belief:keynesianism",
+   "w": 0.7,
+   "kind": "caused"
+  },
+  {
+   "a": "event:Global financial crisis",
+   "b": "belief:populism",
+   "w": 0.6,
+   "kind": "caused"
+  },
+  {
+   "a": "event:French Revolution",
+   "b": "polity:kingdom-of-france",
+   "w": 0.85,
+   "kind": "caused"
+  },
+  {
+   "a": "event:French Revolution",
+   "b": "belief:liberalism",
+   "w": 0.8,
+   "kind": "origin"
+  },
+  {
+   "a": "event:French Revolution",
+   "b": "belief:nationalism",
+   "w": 0.7,
+   "kind": "origin"
+  },
+  {
+   "a": "event:French Revolution",
+   "b": "belief:conservatism",
+   "w": 0.45,
+   "kind": "caused"
+  },
+  {
+   "a": "event:Napoleon crowns himself",
+   "b": "entity:Napoleon Bonaparte",
+   "w": 1.0,
+   "kind": "part-of"
+  },
+  {
+   "a": "entity:Napoleon Bonaparte",
+   "b": "polity:french-empire",
+   "w": 0.95,
+   "kind": "part-of"
+  },
+  {
+   "a": "event:Eroica — Romanticism opens",
+   "b": "entity:Ludwig van Beethoven",
+   "w": 1.0,
+   "kind": "part-of"
+  },
+  {
+   "a": "event:Eroica — Romanticism opens",
+   "b": "entity:Napoleon Bonaparte",
+   "w": 0.5,
+   "kind": "about"
+  },
+  {
+   "a": "event:Cyrus founds the Persian Empire",
+   "b": "polity:achaemenid-persia",
+   "w": 1.0,
+   "kind": "origin"
+  },
+  {
+   "a": "event:Cyrus founds the Persian Empire",
+   "b": "belief:judaism",
+   "w": 0.5,
+   "kind": "about"
+  },
+  {
+   "a": "event:Cyrus founds the Persian Empire",
+   "b": "belief:zoroastrianism",
+   "w": 0.6,
+   "kind": "part-of"
+  },
+  {
+   "a": "event:Babylon destroys Jerusalem's temple",
+   "b": "belief:judaism",
+   "w": 0.9,
+   "kind": "part-of"
+  },
+  {
+   "a": "event:Caesar assassinated",
+   "b": "entity:Julius Caesar",
+   "w": 1.0,
+   "kind": "part-of"
+  },
+  {
+   "a": "event:Alexander conquers the East",
+   "b": "entity:Alexander the Great",
+   "w": 1.0,
+   "kind": "part-of"
+  },
+  {
+   "a": "event:Alexander conquers the East",
+   "b": "polity:achaemenid-persia",
+   "w": 0.8,
+   "kind": "caused"
+  },
+  {
+   "a": "entity:Alexander the Great",
+   "b": "entity:Aristotle",
+   "w": 0.45,
+   "kind": "about"
+  },
+  {
+   "a": "entity:Aristotle",
+   "b": "entity:Plato",
+   "w": 0.7,
+   "kind": "lineage"
+  },
+  {
+   "a": "event:Constantinople falls to Ottomans",
+   "b": "polity:byzantine-empire",
+   "w": 1.0,
+   "kind": "caused"
+  },
+  {
+   "a": "event:Constantinople falls to Ottomans",
+   "b": "belief:eastern-orthodoxy",
+   "w": 0.6,
+   "kind": "caused"
+  },
+  {
+   "a": "event:Charlemagne crowned emperor",
+   "b": "entity:Charlemagne",
+   "w": 1.0,
+   "kind": "part-of"
+  },
+  {
+   "a": "event:Declaration of Independence",
+   "b": "polity:united-states",
+   "w": 1.0,
+   "kind": "origin"
+  },
+  {
+   "a": "event:Declaration of Independence",
+   "b": "polity:british-empire",
+   "w": 0.6,
+   "kind": "opposed-to"
+  },
+  {
+   "a": "event:Cortés destroys the Aztecs",
+   "b": "polity:aztec-empire",
+   "w": 0.9,
+   "kind": "caused"
+  },
+  {
+   "a": "event:Pizarro seizes the Inca",
+   "b": "polity:inca-empire",
+   "w": 0.9,
+   "kind": "caused"
+  },
+  {
+   "a": "event:US Civil War",
+   "b": "entity:Abraham Lincoln",
+   "w": 0.9,
+   "kind": "part-of"
+  },
+  {
+   "a": "event:Slavery abolished in the US",
+   "b": "event:US Civil War",
+   "w": 0.85,
+   "kind": "caused"
+  },
+  {
+   "a": "event:Berlin Conference carves up Africa",
+   "b": "polity:colonial-africa",
+   "w": 0.85,
+   "kind": "origin"
+  },
+  {
+   "a": "event:Berlin Conference carves up Africa",
+   "b": "polity:ethiopian-empire",
+   "w": 0.3,
+   "kind": "opposed-to"
+  },
+  {
+   "a": "event:State of Israel founded",
+   "b": "polity:israel",
+   "w": 1.0,
+   "kind": "origin"
+  },
+  {
+   "a": "event:State of Israel founded",
+   "b": "belief:judaism",
+   "w": 0.75,
+   "kind": "part-of"
+  },
+  {
+   "a": "entity:Johann Sebastian Bach",
+   "b": "belief:lutheranism",
+   "w": 0.6,
+   "kind": "part-of"
+  },
+  {
+   "a": "entity:Bedřich Smetana",
+   "b": "belief:nationalism",
+   "w": 0.6,
+   "kind": "part-of"
+  },
+  {
+   "a": "entity:Bedřich Smetana",
+   "b": "event:Smetana begins Má vlast",
+   "w": 1.0,
+   "kind": "part-of"
+  },
+  {
+   "a": "event:Beethoven's Ninth",
+   "b": "polity:european-union",
+   "w": 0.3,
+   "kind": "about"
+  },
+  {
+   "a": "entity:Wolfgang Amadeus Mozart",
+   "b": "event:Magic Flute · unfinished Requiem · dies Dec 5",
+   "w": 0.95,
+   "kind": "part-of"
+  },
+  {
+   "a": "event:Magic Flute · unfinished Requiem · dies Dec 5",
+   "b": "event:Joins the Freemasons",
+   "w": 0.5,
+   "kind": "about"
+  },
+  {
+   "a": "entity:Charles Darwin",
+   "b": "event:Darwin's Origin of Species",
+   "w": 1.0,
+   "kind": "part-of"
+  },
+  {
+   "a": "event:Darwin's Origin of Species",
+   "b": "belief:secular-nonreligious",
+   "w": 0.6,
+   "kind": "caused"
+  },
+  {
+   "a": "event:Darwin's Origin of Species",
+   "b": "belief:anglicanism",
+   "w": 0.35,
+   "kind": "opposed-to"
+  },
+  {
+   "a": "entity:Galileo Galilei",
+   "b": "belief:roman-catholicism",
+   "w": 0.5,
+   "kind": "opposed-to"
+  },
+  {
+   "a": "entity:Franz Kafka",
+   "b": "belief:judaism",
+   "w": 0.4,
+   "kind": "about"
+  },
+  {
+   "a": "entity:Albert Einstein",
+   "b": "belief:judaism",
+   "w": 0.35,
+   "kind": "about"
+  },
+  {
+   "a": "event:Charles University founded in Prague",
+   "b": "entity:Jan Hus",
+   "w": 0.55,
+   "kind": "enabled-by"
+  },
+  {
+   "a": "polity:nazi-germany",
+   "b": "belief:nazism",
+   "w": 1.0,
+   "kind": "part-of"
+  },
+  {
+   "a": "polity:soviet-union",
+   "b": "belief:marxism-leninism",
+   "w": 0.95,
+   "kind": "part-of"
+  },
+  {
+   "a": "polity:safavid-persia",
+   "b": "belief:shia-islam",
+   "w": 0.9,
+   "kind": "part-of"
+  },
+  {
+   "a": "polity:saudi-arabia",
+   "b": "belief:wahhabism",
+   "w": 0.9,
+   "kind": "part-of"
+  },
+  {
+   "a": "polity:sassanid-persia",
+   "b": "belief:zoroastrianism",
+   "w": 0.9,
+   "kind": "part-of"
+  },
+  {
+   "a": "polity:papal-states",
+   "b": "belief:catholicism",
+   "w": 0.85,
+   "kind": "part-of"
+  },
+  {
+   "a": "polity:ethiopian-empire",
+   "b": "belief:oriental-orthodoxy",
+   "w": 0.8,
+   "kind": "part-of"
+  },
+  {
+   "a": "polity:israel",
+   "b": "belief:judaism",
+   "w": 0.65,
+   "kind": "part-of"
+  },
+  {
+   "a": "polity:england",
+   "b": "belief:anglicanism",
+   "w": 0.8,
+   "kind": "part-of"
+  },
+  {
+   "a": "polity:ottoman-empire",
+   "b": "belief:sunni-islam",
+   "w": 0.75,
+   "kind": "part-of"
+  },
+  {
+   "a": "polity:russian-empire",
+   "b": "belief:eastern-orthodoxy",
+   "w": 0.7,
+   "kind": "part-of"
+  },
+  {
+   "a": "polity:khmer-empire",
+   "b": "belief:hinduism",
+   "w": 0.6,
+   "kind": "part-of"
+  },
+  {
+   "a": "polity:khmer-empire",
+   "b": "belief:theravada",
+   "w": 0.5,
+   "kind": "part-of"
+  },
+  {
+   "a": "polity:mughal-empire",
+   "b": "belief:sikhism",
+   "w": 0.35,
+   "kind": "opposed-to"
+  },
+  {
+   "a": "event:First university (Bologna)",
+   "b": "spread:printing",
+   "w": 0.25,
+   "kind": "enabled-by"
+  },
+  {
+   "a": "event:Al-Khwarizmi writes the algebra book",
+   "b": "spread:paper",
+   "w": 0.3,
+   "kind": "enabled-by"
+  },
+  {
+   "a": "entity:Jan Amos Komenský (Comenius)",
+   "b": "spread:writing",
+   "w": 0.25,
+   "kind": "about"
+  },
+  {
+   "a": "event:Euclid's Elements",
+   "b": "spread:writing",
+   "w": 0.2,
+   "kind": "enabled-by"
+  },
+  {
+   "a": "polity:phoenicia-carthage",
+   "b": "spread:bronze-age",
+   "w": 0.35,
+   "kind": "part-of"
+  },
+  {
+   "a": "event:Battle of Kadesh (first recorded treaty)",
+   "b": "spread:ironworking",
+   "w": 0.25,
+   "kind": "about"
+  },
+  {
+   "a": "event:Watt's steam engine goes commercial",
+   "b": "spread:ironworking",
+   "w": 0.3,
+   "kind": "lineage"
+  },
+  {
+   "a": "event:Zheng He's treasure fleets",
+   "b": "spread:silk-road",
+   "w": 0.35,
+   "kind": "about"
+  },
+  {
+   "a": "event:Mongols sack Baghdad",
+   "b": "spread:silk-road",
+   "w": 0.3,
+   "kind": "caused"
+  },
+  {
+   "a": "event:Plassey: British rule in India begins",
+   "b": "spread:gunpowder",
+   "w": 0.35,
+   "kind": "enabled-by"
+  },
+  {
+   "a": "event:Perry forces Japan open",
+   "b": "spread:gunpowder",
+   "w": 0.3,
+   "kind": "enabled-by"
+  },
+  {
+   "a": "event:Age of Discovery",
+   "b": "spread:gunpowder",
+   "w": 0.35,
+   "kind": "enabled-by"
+  },
+  {
+   "a": "event:Black Death kills a third of Europe",
+   "b": "spread:renaissance",
+   "w": 0.4,
+   "kind": "caused"
+  },
+  {
+   "a": "belief:roman-catholicism",
+   "b": "spread:renaissance",
+   "w": 0.3,
+   "kind": "part-of"
+  },
+  {
+   "a": "event:Einstein's miracle year",
+   "b": "spread:scientific-revolution",
+   "w": 0.25,
+   "kind": "lineage"
+  },
+  {
+   "a": "event:Darwin's Origin of Species",
+   "b": "spread:scientific-revolution",
+   "w": 0.35,
+   "kind": "lineage"
+  },
+  {
+   "a": "event:Al-Khwarizmi writes the algebra book",
+   "b": "spread:scientific-revolution",
+   "w": 0.35,
+   "kind": "enabled-by"
+  },
+  {
+   "a": "event:Magna Carta",
+   "b": "spread:enlightenment",
+   "w": 0.25,
+   "kind": "lineage"
+  },
+  {
+   "a": "belief:conservatism",
+   "b": "spread:enlightenment",
+   "w": 0.4,
+   "kind": "opposed-to"
+  },
+  {
+   "a": "event:Hip-hop born in the Bronx",
+   "b": "spread:atlantic-slave-trade",
+   "w": 0.25,
+   "kind": "lineage"
+  },
+  {
+   "a": "event:Wall Street crash — Great Depression",
+   "b": "spread:industrial-revolution",
+   "w": 0.3,
+   "kind": "lineage"
+  },
+  {
+   "a": "event:MTV: video kills the radio star",
+   "b": "spread:internet",
+   "w": 0.25,
+   "kind": "lineage"
+  },
+  {
+   "a": "entity:Karl Marx",
+   "b": "belief:anarchism",
+   "w": 0.35,
+   "kind": "opposed-to"
+  },
+  {
+   "a": "entity:Mahatma Gandhi",
+   "b": "belief:jainism",
+   "w": 0.3,
+   "kind": "about"
+  },
+  {
+   "a": "event:The Hijra — Islam begins",
+   "b": "belief:church-of-the-east",
+   "w": 0.3,
+   "kind": "about"
+  },
+  {
+   "a": "polity:safavid-persia",
+   "b": "belief:sunni-islam",
+   "w": 0.3,
+   "kind": "opposed-to"
+  },
+  {
+   "a": "event:Charlemagne crowned emperor",
+   "b": "polity:byzantine-empire",
+   "w": 0.35,
+   "kind": "opposed-to"
+  },
+  {
+   "a": "event:Joins the Freemasons",
+   "b": "belief:secular-nonreligious",
+   "w": 0.3,
+   "kind": "about"
+  },
+  {
+   "a": "entity:Genghis Khan",
+   "b": "polity:mongol-empire",
+   "w": 1.0,
+   "kind": "origin"
+  },
+  {
+   "a": "event:Buddha born",
+   "b": "belief:buddhism",
+   "w": 0.9,
+   "kind": "origin"
+  },
+  {
+   "a": "event:Qin unifies China",
+   "b": "polity:qin-dynasty",
+   "w": 1.0,
+   "kind": "about"
+  },
+  {
+   "a": "event:Western Rome falls",
+   "b": "polity:western-roman-empire",
+   "w": 1.0,
+   "kind": "caused"
+  },
+  {
+   "a": "event:Egypt unified under one crown",
+   "b": "polity:ancient-egypt",
+   "w": 1.0,
+   "kind": "origin"
+  },
+  {
+   "a": "event:Great Pyramid built",
+   "b": "polity:ancient-egypt",
+   "w": 0.9,
+   "kind": "part-of"
+  },
+  {
+   "a": "event:First peoples reach the Americas",
+   "b": "polity:clovis-culture",
+   "w": 0.8,
+   "kind": "origin"
+  },
+  {
+   "a": "event:Out of Africa migration",
+   "b": "event:Homo sapiens appears",
+   "w": 0.7,
+   "kind": "lineage"
+  },
+  {
+   "a": "event:Farming begins",
+   "b": "event:Writing invented (Sumer)",
+   "w": 0.5,
+   "kind": "enabled-by"
+  },
+  {
+   "a": "event:Columbus reaches the Americas",
+   "b": "event:Age of Discovery",
+   "w": 0.9,
+   "kind": "part-of"
+  },
+  {
+   "a": "entity:Albert Einstein",
+   "b": "event:Einstein's miracle year",
+   "w": 1.0,
+   "kind": "part-of"
+  },
+  {
+   "a": "entity:Isaac Newton",
+   "b": "event:Newton's Principia",
+   "w": 1.0,
+   "kind": "part-of"
+  },
+  {
+   "a": "entity:Nicolaus Copernicus",
+   "b": "event:Copernicus: Earth moves",
+   "w": 1.0,
+   "kind": "part-of"
+  },
+  {
+   "a": "entity:Plato",
+   "b": "event:Plato founds the Academy",
+   "w": 1.0,
+   "kind": "part-of"
+  },
+  {
+   "a": "entity:Wolfgang Amadeus Mozart",
+   "b": "event:Mozart born",
+   "w": 1.0,
+   "kind": "part-of"
+  },
+  {
+   "a": "entity:Julius Caesar",
+   "b": "polity:roman-republic",
+   "w": 0.7,
+   "kind": "part-of"
+  },
+  {
+   "a": "entity:Mahatma Gandhi",
+   "b": "event:India independent, partitioned",
+   "w": 0.8,
+   "kind": "caused"
+  },
+  {
+   "a": "entity:Mahatma Gandhi",
+   "b": "polity:british-raj",
+   "w": 0.7,
+   "kind": "opposed-to"
+  },
+  {
+   "a": "event:Apollo 11: humans on the Moon",
+   "b": "event:The Cold War",
+   "w": 0.6,
+   "kind": "part-of"
+  },
+  {
+   "a": "entity:William Shakespeare",
+   "b": "polity:england",
+   "w": 0.6,
+   "kind": "part-of"
+  },
+  {
+   "a": "event:Gutenberg's printing press",
+   "b": "spread:paper",
+   "w": 0.5,
+   "kind": "enabled-by"
+  },
+  {
+   "a": "event:World Wide Web proposed",
+   "b": "spread:computing",
+   "w": 0.55,
+   "kind": "part-of"
+  },
+  {
+   "a": "entity:Leonardo da Vinci",
+   "b": "entity:Michelangelo",
+   "w": 0.4,
+   "kind": "about"
+  },
+  {
+   "a": "event:French Revolution",
+   "b": "belief:roman-catholicism",
+   "w": 0.55,
+   "kind": "opposed-to"
+  },
+  {
+   "a": "event:French Revolution",
+   "b": "belief:secular-nonreligious",
+   "w": 0.6,
+   "kind": "origin"
+  },
+  {
+   "a": "event:Al-Khwarizmi writes the algebra book",
+   "b": "polity:abbasid-caliphate",
+   "w": 0.7,
+   "kind": "part-of"
+  },
+  {
+   "a": "event:Al-Khwarizmi writes the algebra book",
+   "b": "event:Baghdad founded — Islamic golden age",
+   "w": 0.65,
+   "kind": "part-of"
+  },
+  {
+   "a": "entity:Johann Sebastian Bach",
+   "b": "event:Bach dies — Baroque ends",
+   "w": 1.0,
+   "kind": "part-of"
+  },
+  {
+   "a": "entity:Antonín Dvořák",
+   "b": "event:Dvořák born",
+   "w": 1.0,
+   "kind": "part-of"
+  }
+ ]
+}

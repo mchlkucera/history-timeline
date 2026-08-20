@@ -1,0 +1,575 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Timeline Shell — Survey</title>
+<meta name="description" content="Design system review page for the Timeline application shell.">
+
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500;600&family=Instrument+Sans:wght@400;500;600;700&family=Instrument+Serif&display=swap">
+
+<link rel="stylesheet" href="tokens.css">
+<link rel="stylesheet" href="shell.css">
+
+<style>
+/* ── Review-page scaffolding only. Not part of the shell.
+      Uses shell tokens exclusively so it cannot flatter the design. ── */
+.tl-spec { position: absolute; inset: 0; overflow-y: auto; background: var(--tl-ground); }
+.tl-spec__in { padding: var(--tl-space-8) var(--tl-space-9) var(--tl-space-12); display: flex; flex-direction: column; gap: var(--tl-space-9); }
+.tl-spec h2 { font-size: var(--tl-text-2xs); font-weight: 600; letter-spacing: var(--tl-track-caps);
+  text-transform: uppercase; color: var(--tl-ink-3); padding-bottom: var(--tl-space-3);
+  border-bottom: 1px solid var(--tl-rule); margin-bottom: var(--tl-space-6); }
+.tl-spec section { max-width: 1080px; }
+.tl-sw-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(148px, 1fr)); gap: var(--tl-space-5); }
+.tl-sw { border: 1px solid var(--tl-rule); border-radius: var(--tl-radius-sm); overflow: hidden; background: var(--tl-surface); }
+.tl-sw__c { height: 46px; }
+.tl-sw__m { padding: var(--tl-space-3) var(--tl-space-4); display: flex; flex-direction: column; gap: 1px;
+  border-top: 1px solid var(--tl-rule); }
+.tl-sw__n { font-size: var(--tl-text-xs); font-weight: 600; color: var(--tl-ink); }
+.tl-sw__h { font-family: var(--tl-font-mono); font-size: var(--tl-text-2xs); color: var(--tl-ink-3); text-transform: uppercase; }
+.tl-sw__r { font-size: var(--tl-text-2xs); color: var(--tl-ink-3); line-height: 1.35; margin-top: 2px; }
+.tl-type-row { display: grid; grid-template-columns: 132px 1fr; gap: var(--tl-space-6); align-items: baseline;
+  padding: var(--tl-space-4) 0; border-bottom: 1px solid var(--tl-rule-soft); }
+.tl-type-row > code { font-family: var(--tl-font-mono); font-size: var(--tl-text-2xs); color: var(--tl-ink-3); }
+.tl-demo-row { display: flex; flex-wrap: wrap; align-items: center; gap: var(--tl-space-5); margin-bottom: var(--tl-space-5); }
+.tl-demo-box { border: 1px solid var(--tl-rule); border-radius: var(--tl-radius-md); background: var(--tl-surface);
+  padding: var(--tl-space-6); display: flex; flex-direction: column; gap: var(--tl-space-5); }
+.tl-spec__lead { font-size: var(--tl-text-prose); line-height: var(--tl-lh-prose); color: var(--tl-ink-2); max-width: var(--tl-measure); }
+.tl-spec__lead b { color: var(--tl-ink); }
+/* Sample-tooltip placement is demo-only; the app positions it at the cursor. */
+.tl-stage > .tl-tip { left: 31%; top: 33%; }
+@media (max-width: 759px) {
+  .tl-spec__in { padding: var(--tl-space-6) var(--tl-space-5) var(--tl-space-12); }
+  .tl-type-row { grid-template-columns: 1fr; gap: var(--tl-space-1); }
+  .tl-stage > .tl-tip { top: auto; bottom: 92px; left: var(--tl-space-5); right: var(--tl-space-5); }
+}
+</style>
+</head>
+
+<body class="tl-body">
+<div class="tl-app" id="app" style="--tl-index-pos:74.5%">
+
+  <!-- ══ TOP RAIL ════════════════════════════════════════════════════════ -->
+  <header class="tl-rail">
+
+    <a class="tl-mark" href="#" aria-label="Timeline — home">
+      <span class="tl-mark__glyph" aria-hidden="true">
+        <svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.3">
+          <circle cx="8" cy="8" r="6"></circle><path d="M8 2v12M2 8h12"></path>
+          <ellipse cx="8" cy="8" rx="2.7" ry="6"></ellipse>
+        </svg>
+      </span>
+      <span class="tl-mark__word">Timeline</span>
+    </a>
+
+    <div class="tl-rail__mid">
+      <nav class="tl-switch" role="tablist" aria-label="View">
+        <button class="tl-switch__item" role="tab" aria-selected="true"  data-view="map">Map</button>
+        <button class="tl-switch__item" role="tab" aria-selected="false" data-view="time">Timeline</button>
+        <button class="tl-switch__item" role="tab" aria-selected="false" data-view="flow">Flow</button>
+        <button class="tl-switch__item" role="tab" aria-selected="false" data-view="cube">Cube</button>
+        <button class="tl-switch__item" role="tab" aria-selected="false" data-view="core">Core</button>
+        <button class="tl-switch__item" role="tab" aria-selected="false" data-view="tokens">Tokens</button>
+      </nav>
+      <p class="tl-gist">Fix a moment, show me everywhere — drag the index to move the world.</p>
+    </div>
+
+    <div class="tl-rail__end">
+      <span class="tl-meta">18 snapshots · 3000 BCE – 1994</span>
+
+      <button class="tl-field" id="cmdk" style="width:186px" aria-label="Search history">
+        <svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.4" aria-hidden="true">
+          <circle cx="7" cy="7" r="4.5"></circle><path d="M10.5 10.5L14 14"></path>
+        </svg>
+        <span style="flex:1;text-align:left;font-size:var(--tl-text-sm)">Search history</span>
+        <kbd class="tl-kbd">⌘K</kbd>
+      </button>
+
+      <button class="tl-iconbtn" id="notesBtn" data-unread="true" aria-expanded="false"
+              aria-controls="notes" aria-label="Field notes for this view" title="Field notes  ?">
+        <svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.4" aria-hidden="true">
+          <circle cx="8" cy="8" r="6.2"></circle><path d="M8 7.2v4"></path><path d="M8 4.7v.6"></path>
+        </svg>
+      </button>
+
+      <button class="tl-iconbtn" id="themeBtn" aria-label="Switch theme" title="Switch theme">
+        <svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.4" aria-hidden="true">
+          <path d="M13.2 9.6A5.6 5.6 0 0 1 6.4 2.8a5.6 5.6 0 1 0 6.8 6.8z"></path>
+        </svg>
+      </button>
+    </div>
+  </header>
+
+  <!-- ══ STAGE ═══════════════════════════════════════════════════════════ -->
+  <main class="tl-stage">
+
+    <!-- Canvas placeholder — the real <canvas> replaces this -->
+    <div class="tl-canvas tl-canvas--empty" id="viewCanvas">
+      <div class="tl-graticule" aria-hidden="true"></div>
+      <div class="tl-canvas__note">
+        <b>canvas · world map</b>
+        <span>Full bleed. 100% width, 88% of viewport height. The renderer draws here; the shell never touches it.</span>
+      </div>
+    </div>
+
+    <!-- The index hairline, continued from the time rail -->
+    <div class="tl-index-line" aria-hidden="true"></div>
+
+    <!-- Crosshair readout -->
+    <div class="tl-readout">
+      <span><b>50.09</b>°N</span><span><b>14.42</b>°E</span><span>z<b>3.4</b></span>
+    </div>
+
+    <!-- Floating control cluster -->
+    <aside class="tl-panel tl-panel--tl" id="lensPanel">
+      <div class="tl-panel__grip" aria-hidden="true"></div>
+      <div class="tl-panel__hd">
+        <span class="tl-panel__title">Lenses</span>
+        <span class="tl-panel__count">6 / 8</span>
+        <button class="tl-iconbtn" id="collapseBtn" style="width:24px;height:24px"
+                aria-label="Collapse panel" aria-expanded="true">
+          <svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5" aria-hidden="true">
+            <path d="M4 6.5L8 10.5L12 6.5"></path>
+          </svg>
+        </button>
+      </div>
+      <div class="tl-panel__bd">
+
+        <div class="tl-field-group">
+          <span class="tl-label">Domain</span>
+          <div class="tl-cluster">
+            <button class="tl-chip" aria-pressed="true"  style="--tl-dot:var(--tl-cat-power)"><i class="tl-chip__dot"></i>Power<span class="tl-chip__n">214</span></button>
+            <button class="tl-chip" aria-pressed="true"  style="--tl-dot:var(--tl-cat-war)"><i class="tl-chip__dot"></i>War<span class="tl-chip__n">168</span></button>
+            <button class="tl-chip" aria-pressed="true"  style="--tl-dot:var(--tl-cat-belief)"><i class="tl-chip__dot"></i>Belief<span class="tl-chip__n">92</span></button>
+            <button class="tl-chip" aria-pressed="true"  style="--tl-dot:var(--tl-cat-sci)"><i class="tl-chip__dot"></i>Science<span class="tl-chip__n">147</span></button>
+            <button class="tl-chip" aria-pressed="true"  style="--tl-dot:var(--tl-cat-art)"><i class="tl-chip__dot"></i>Art<span class="tl-chip__n">131</span></button>
+            <button class="tl-chip" aria-pressed="false" style="--tl-dot:var(--tl-cat-nature)"><i class="tl-chip__dot"></i>Nature<span class="tl-chip__n">44</span></button>
+            <button class="tl-chip" aria-pressed="false" style="--tl-dot:var(--tl-cat-society)"><i class="tl-chip__dot"></i>Society<span class="tl-chip__n">88</span></button>
+            <button class="tl-chip" aria-pressed="true"  style="--tl-dot:var(--tl-cat-reach)"><i class="tl-chip__dot"></i>Reach<span class="tl-chip__n">61</span></button>
+          </div>
+        </div>
+
+        <hr class="tl-hr">
+
+        <div class="tl-field-group">
+          <div class="tl-row tl-row--between">
+            <span class="tl-label">Detail</span>
+            <span class="tl-num" style="font-size:var(--tl-text-2xs);color:var(--tl-ink-3)">level 3 · 612 marks</span>
+          </div>
+          <input class="tl-range" type="range" min="1" max="5" value="3" aria-label="Level of detail">
+        </div>
+
+        <div class="tl-field-group">
+          <span class="tl-label">Projection</span>
+          <div class="tl-select" style="width:100%">
+            <select aria-label="Map projection">
+              <option>Equirectangular</option>
+              <option selected>Natural Earth II</option>
+              <option>Winkel tripel</option>
+              <option>Orthographic</option>
+            </select>
+          </div>
+        </div>
+
+        <hr class="tl-hr">
+
+        <label class="tl-toggle">
+          <input type="checkbox" checked>
+          <span class="tl-toggle__track"></span>
+          <span class="tl-toggle__label">Place labels</span>
+        </label>
+        <label class="tl-toggle">
+          <input type="checkbox">
+          <span class="tl-toggle__track"></span>
+          <span class="tl-toggle__label">Contested borders</span>
+        </label>
+
+        <div class="tl-row" style="gap:var(--tl-space-3)">
+          <button class="tl-btn tl-btn--primary tl-btn--sm" style="flex:1">Show me 1776</button>
+          <button class="tl-btn tl-btn--sm" title="Reset view">Reset</button>
+        </div>
+      </div>
+    </aside>
+
+    <!-- Legend -->
+    <aside class="tl-panel tl-panel--br tl-panel--secondary" style="width:198px">
+      <div class="tl-panel__hd">
+        <span class="tl-panel__title">Sovereigns · 1776</span>
+        <span class="tl-panel__count">41</span>
+      </div>
+      <div class="tl-panel__bd" style="gap:var(--tl-space-4)">
+        <ul class="tl-legend">
+          <li class="tl-legend__row" style="--tl-dot:var(--tl-cat-power)"><i class="tl-legend__sw"></i>British Empire<span class="tl-legend__n">9</span></li>
+          <li class="tl-legend__row" style="--tl-dot:var(--tl-cat-reach)"><i class="tl-legend__sw"></i>Spanish Empire<span class="tl-legend__n">7</span></li>
+          <li class="tl-legend__row" style="--tl-dot:var(--tl-cat-war)"><i class="tl-legend__sw"></i>Ottoman Empire<span class="tl-legend__n">5</span></li>
+          <li class="tl-legend__row" style="--tl-dot:var(--tl-cat-belief)"><i class="tl-legend__sw"></i>Qing China<span class="tl-legend__n">4</span></li>
+          <li class="tl-legend__row" style="--tl-dot:var(--tl-cat-nature)"><i class="tl-legend__sw"></i>Maratha Confederacy<span class="tl-legend__n">3</span></li>
+        </ul>
+        <div class="tl-row" style="gap:var(--tl-space-4);flex-wrap:wrap">
+          <span class="tl-conf tl-conf--attested" style="font-size:var(--tl-text-2xs);color:var(--tl-ink-3)">attested</span>
+          <span class="tl-conf tl-conf--approximate" style="font-size:var(--tl-text-2xs);color:var(--tl-ink-3)">approximate</span>
+          <span class="tl-conf tl-conf--contested" style="font-size:var(--tl-text-2xs);color:var(--tl-ink-3)">contested</span>
+        </div>
+      </div>
+    </aside>
+
+    <!-- Hover tooltip -->
+    <div class="tl-tip" role="tooltip">
+      <div class="tl-tip__t">Thirteen Colonies</div>
+      <div class="tl-tip__s">British Empire · declared independent 4 Jul 1776</div>
+      <div class="tl-tip__m">
+        <span class="tl-conf tl-conf--attested">attested</span>
+        <span style="margin-left:auto">39.9°N 75.2°W</span>
+      </div>
+    </div>
+
+    <!-- Field notes — where the long paragraph went -->
+    <aside class="tl-pop" id="notes" style="top:12px;right:12px" role="dialog" aria-label="Field notes">
+      <span class="tl-pop__arrow" style="right:64px" aria-hidden="true"></span>
+      <div class="tl-pop__hd">
+        <div style="flex:1;min-width:0">
+          <div class="tl-pop__eyebrow">Field notes</div>
+          <h2 class="tl-pop__title">World map + time dial</h2>
+        </div>
+        <button class="tl-iconbtn" id="notesClose" aria-label="Close field notes">
+          <svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5" aria-hidden="true">
+            <path d="M4 4l8 8M12 4l-8 8"></path>
+          </svg>
+        </button>
+      </div>
+      <div class="tl-pop__bd">
+        <p>The <strong>“Google Earth of history”</strong> answer to <em>“I see 1776 and can’t imagine the world.”</em> Drag the index along the bottom rail and every border on the map moves with it.</p>
+        <p>Territories are real research data — 18 snapshots between 3000 BCE and 1994 — coloured by sovereign. Scroll to zoom, drag to pan, and <strong>click any spot to drill a core sample</strong> through everything that ever happened there.</p>
+        <p class="tl-pop__src">Border data: aourednik/historical-basemaps (GPL-3.0). Scholarly approximation — historical borders are fuzzy and contested by nature, so read every edge as an argument rather than a fact.</p>
+      </div>
+      <div class="tl-pop__ft">
+        <span class="tl-pop__key"><kbd class="tl-kbd">←</kbd><kbd class="tl-kbd">→</kbd> step a snapshot</span>
+        <span class="tl-pop__key"><kbd class="tl-kbd">Space</kbd> play</span>
+        <span class="tl-pop__key"><kbd class="tl-kbd">⌘K</kbd> search</span>
+        <span class="tl-pop__key"><kbd class="tl-kbd">?</kbd> these notes</span>
+      </div>
+    </aside>
+
+    <!-- ── TOKENS view: the full spec sheet ─────────────────────────────── -->
+    <div class="tl-spec" id="viewSpec" hidden>
+      <div class="tl-spec__in">
+
+        <section>
+          <h2>Survey — the system in one screen</h2>
+          <p class="tl-spec__lead">Chrome for a full-viewport historical atlas. The ground is <b>chart film</b> in light and <b>bathymetric blue-black</b> in dark. The chrome has <b>exactly one accent hue</b> — minium — and it means one thing: <b>where you are</b>. Every other state is carried by the neutral ramp or by form. The eight data hues below are a separate system, drawn on the canvas, never in the chrome. Use the moon button in the rail to check both themes.</p>
+        </section>
+
+        <section>
+          <h2>Palette · named, with roles</h2>
+          <div class="tl-sw-grid" id="swGrid"></div>
+        </section>
+
+        <section>
+          <h2>Data palette · eight domains, no pure red</h2>
+          <div class="tl-sw-grid" id="catGrid"></div>
+        </section>
+
+        <section>
+          <h2>Type scale · measurements are mono, language is sans</h2>
+          <div class="tl-type-row"><code>--tl-text-3xl / mono</code><span class="tl-num" style="font-size:var(--tl-text-3xl);letter-spacing:var(--tl-track-num);line-height:1">1776</span></div>
+          <div class="tl-type-row"><code>--tl-text-2xl / mono</code><span class="tl-num" style="font-size:var(--tl-text-2xl);letter-spacing:var(--tl-track-num);line-height:1.05">1776</span></div>
+          <div class="tl-type-row"><code>--tl-text-xl / sans</code><span style="font-size:var(--tl-text-xl);letter-spacing:var(--tl-track-num)">Waterloo — Napoleon done</span></div>
+          <div class="tl-type-row"><code>--tl-text-lg / sans 600</code><span style="font-size:var(--tl-text-lg);font-weight:600;letter-spacing:var(--tl-track-tight)">World map + time dial</span></div>
+          <div class="tl-type-row"><code>--tl-text-md / mark</code><span style="font-family:var(--tl-font-mark);font-size:var(--tl-text-md)">Timeline</span></div>
+          <div class="tl-type-row"><code>--tl-text-prose</code><span style="font-size:var(--tl-text-prose);line-height:var(--tl-lh-prose);color:var(--tl-ink-2)">The map asks “fix a moment, show me everywhere.” The core sample asks the opposite.</span></div>
+          <div class="tl-type-row"><code>--tl-text-base</code><span>Interface default — 13px Instrument Sans</span></div>
+          <div class="tl-type-row"><code>--tl-text-sm</code><span style="font-size:var(--tl-text-sm)">Secondary controls, chips, field text</span></div>
+          <div class="tl-type-row"><code>--tl-text-xs</code><span style="font-size:var(--tl-text-xs);color:var(--tl-ink-2)">Legend rows, micro-labels, meta</span></div>
+          <div class="tl-type-row"><code>--tl-text-2xs caps</code><span class="tl-label">Sovereigns · 1776</span></div>
+          <div class="tl-type-row"><code>--tl-text-2xs mono</code><span class="tl-num" style="font-size:var(--tl-text-2xs);letter-spacing:var(--tl-track-caps)">3000 BCE — 1994 · 18 SNAPSHOTS</span></div>
+        </section>
+
+        <section>
+          <h2>Confidence · form, not hue</h2>
+          <p class="tl-spec__lead" style="margin-bottom:var(--tl-space-6)">One gauge, one neutral ink, three silhouettes — <b>full, half, empty</b>. Legible in greyscale, under any colour vision, and impossible to mistake for one of the eight data hues it sits beside.</p>
+          <div class="tl-demo-box">
+            <div class="tl-demo-row" style="gap:var(--tl-space-8)">
+              <span class="tl-conf tl-conf--attested" style="font-size:var(--tl-text-sm);color:var(--tl-ink-2)">attested <span style="color:var(--tl-ink-3)">— sourced and dated</span></span>
+              <span class="tl-conf tl-conf--approximate" style="font-size:var(--tl-text-sm);color:var(--tl-ink-2)">approximate <span style="color:var(--tl-ink-3)">— scholarly estimate</span></span>
+              <span class="tl-conf tl-conf--contested" style="font-size:var(--tl-text-sm);color:var(--tl-ink-2)">contested <span style="color:var(--tl-ink-3)">— sources disagree</span></span>
+            </div>
+            <div class="tl-demo-row" style="margin-bottom:0">
+              <span class="tl-spec__lead" style="font-size:var(--tl-text-xs)">On the canvas the same three are stroke patterns laid over the domain colour, so hue still says <b>what</b> and stroke says <b>how sure</b>.</span>
+            </div>
+          </div>
+        </section>
+
+        <section>
+          <h2>Controls</h2>
+          <div class="tl-demo-box">
+            <div class="tl-demo-row">
+              <button class="tl-btn tl-btn--primary">Show me 1776</button>
+              <button class="tl-btn">Reset view</button>
+              <button class="tl-btn tl-btn--quiet">Cancel</button>
+              <button class="tl-btn tl-btn--danger">Clear lenses</button>
+              <button class="tl-btn" disabled>Unavailable</button>
+              <button class="tl-btn tl-btn--sm">Small</button>
+            </div>
+            <div class="tl-demo-row">
+              <div class="tl-btngroup">
+                <button class="tl-iconbtn" aria-label="Previous snapshot"><svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5"><path d="M10 3.5L5.5 8l4.5 4.5"/></svg></button>
+                <button class="tl-iconbtn" aria-label="Play"><svg viewBox="0 0 16 16" fill="currentColor"><path d="M5 3.4v9.2L13 8z"/></svg></button>
+                <button class="tl-iconbtn" aria-label="Next snapshot"><svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5"><path d="M6 3.5L10.5 8 6 12.5"/></svg></button>
+              </div>
+              <div class="tl-seg">
+                <button class="tl-seg__item" aria-pressed="false">0.5×</button>
+                <button class="tl-seg__item" aria-pressed="true">1×</button>
+                <button class="tl-seg__item" aria-pressed="false">4×</button>
+              </div>
+              <label class="tl-toggle"><input type="checkbox" checked><span class="tl-toggle__track"></span><span class="tl-toggle__label">Labels</span></label>
+              <label class="tl-toggle"><input type="checkbox"><span class="tl-toggle__track"></span><span class="tl-toggle__label">Graticule</span></label>
+            </div>
+            <div class="tl-demo-row">
+              <div class="tl-field" style="width:240px">
+                <svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.4"><circle cx="7" cy="7" r="4.5"/><path d="M10.5 10.5L14 14"/></svg>
+                <input type="text" placeholder="Try: revolution, Prague, plague">
+                <kbd class="tl-kbd">⌘K</kbd>
+              </div>
+              <div class="tl-select"><select aria-label="Empire to trace"><option>Roman Empire</option><option>Byzantium</option><option>Ottoman Empire</option></select></div>
+              <span class="tl-badge tl-badge--index">index 1776</span>
+              <span class="tl-badge tl-badge--strong">1 CE anchor</span>
+              <span class="tl-badge">v0.1</span>
+              <button class="tl-iconbtn" data-unread="true" aria-label="Field notes — unread" title="Unread field notes">
+                <svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.4"><circle cx="8" cy="8" r="6.2"/><path d="M8 7.2v4"/><path d="M8 4.7v.6"/></svg>
+              </button>
+              <button class="tl-iconbtn" aria-pressed="true" aria-label="Toggle, pressed"><svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.4"><path d="M3 8.4l3.2 3.1L13 4.6"/></svg></button>
+            </div>
+            <div class="tl-demo-row" style="gap:var(--tl-space-3)">
+              <button class="tl-chip" aria-pressed="true"  style="--tl-dot:var(--tl-cat-power)"><i class="tl-chip__dot"></i>Power</button>
+              <button class="tl-chip" aria-pressed="true"  style="--tl-dot:var(--tl-cat-war)"><i class="tl-chip__dot"></i>War</button>
+              <button class="tl-chip" aria-pressed="false" style="--tl-dot:var(--tl-cat-belief)"><i class="tl-chip__dot"></i>Belief</button>
+              <button class="tl-chip" aria-pressed="false" style="--tl-dot:var(--tl-cat-sci)"><i class="tl-chip__dot"></i>Science</button>
+              <span class="tl-pop__key"><kbd class="tl-kbd">⌥</kbd><kbd class="tl-kbd">1</kbd> solo a lens</span>
+            </div>
+            <div class="tl-demo-row" style="width:min(420px,100%)">
+              <input class="tl-range" type="range" min="0" max="17" value="11" aria-label="Snapshot">
+            </div>
+          </div>
+        </section>
+
+        <section>
+          <h2>Rejected as AI-default</h2>
+          <p class="tl-spec__lead">Warm cream <b>#F2ECDC</b> with a Palatino display and a brass accent · centred 1240px column · 12px rounded cards with double shadows · 999px pill tabs · a 45-word paragraph above every view · ① ② ③ and emoji as markers · Inter and Space Grotesk · purple-to-blue gradients · generic success/warning/error · <b>a second chrome accent for positive states</b>. Full reasoning in <span class="tl-num" style="font-size:var(--tl-text-sm)">DESIGN.md</span> section 8.</p>
+        </section>
+
+      </div>
+    </div>
+  </main>
+
+  <!-- ══ TIME RAIL — the signature ═══════════════════════════════════════ -->
+  <footer class="tl-timerail">
+
+    <div class="tl-timerail__year">
+      <span class="tl-year" id="yearOut">1776</span>
+      <span class="tl-year__era" id="eraOut">CE · 12/18</span>
+    </div>
+
+    <div class="tl-scale">
+      <div class="tl-scale__bands" aria-hidden="true"></div>
+
+      <span class="tl-scale__era" style="left:16%">Antiquity</span>
+      <span class="tl-scale__era" style="left:45%">Post-classical</span>
+      <span class="tl-scale__era" style="left:68%">Early modern</span>
+      <span class="tl-scale__era" style="left:89%">Modern</span>
+
+      <span class="tl-scale__label tl-scale__label--start" data-edge>3000 BCE</span>
+      <span class="tl-scale__label" style="left:16%" data-minor>1000 BCE</span>
+      <span class="tl-scale__label" style="left:30%">1 CE</span>
+      <span class="tl-scale__label" style="left:38%" data-minor>500</span>
+      <span class="tl-scale__label" style="left:46%" data-minor>1000</span>
+      <span class="tl-scale__label" style="left:60%" data-minor>1500</span>
+      <span class="tl-scale__label" style="left:76%">1800</span>
+      <span class="tl-scale__label" style="left:86%" data-minor>1900</span>
+      <span class="tl-scale__label tl-scale__label--end" data-edge>2000</span>
+
+      <div class="tl-scale__ticks" aria-hidden="true"></div>
+      <div class="tl-scale__ticks tl-scale__ticks--major" aria-hidden="true"></div>
+
+      <div class="tl-index" aria-hidden="true"><span class="tl-index__flag">1776</span></div>
+
+      <input class="tl-range" type="range" min="0" max="1000" value="745" id="scrub"
+             aria-label="Year" aria-valuetext="1776 CE">
+    </div>
+
+    <div class="tl-transport">
+      <div class="tl-btngroup">
+        <button class="tl-iconbtn" aria-label="Previous snapshot" title="Previous snapshot  ←">
+          <svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5"><path d="M10 3.5L5.5 8l4.5 4.5"/></svg>
+        </button>
+        <button class="tl-iconbtn" id="playBtn" aria-label="Play through time" aria-pressed="false" title="Play  Space">
+          <svg viewBox="0 0 16 16" fill="currentColor"><path d="M5 3.4v9.2L13 8z"/></svg>
+        </button>
+        <button class="tl-iconbtn" aria-label="Next snapshot" title="Next snapshot  →">
+          <svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5"><path d="M6 3.5L10.5 8 6 12.5"/></svg>
+        </button>
+      </div>
+      <div class="tl-seg" role="group" aria-label="Playback speed">
+        <button class="tl-seg__item" aria-pressed="false">0.5×</button>
+        <button class="tl-seg__item" aria-pressed="true">1×</button>
+        <button class="tl-seg__item" aria-pressed="false">4×</button>
+      </div>
+    </div>
+  </footer>
+</div>
+
+<script>
+(function () {
+  var root = document.documentElement;
+  var q = new URLSearchParams(location.search);
+
+  /* Theme: ?theme=dark|light stamps data-theme; otherwise the OS decides. */
+  var t = q.get('theme');
+  if (t === 'dark' || t === 'light') root.setAttribute('data-theme', t);
+
+  document.getElementById('themeBtn').addEventListener('click', function () {
+    var cur = root.getAttribute('data-theme');
+    if (!cur) cur = matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light';
+    root.setAttribute('data-theme', cur === 'dark' ? 'light' : 'dark');
+  });
+
+  /* View switcher — the Tokens tab swaps the canvas for the spec sheet. */
+  var canvas = document.getElementById('viewCanvas');
+  var spec   = document.getElementById('viewSpec');
+  function setView(name) {
+    var isSpec = name === 'tokens';
+    spec.hidden = !isSpec;
+    canvas.hidden = isSpec;
+    document.querySelectorAll('.tl-stage > .tl-panel, .tl-stage > .tl-tip, .tl-stage > .tl-readout, .tl-stage > .tl-index-line, .tl-stage > .tl-pop')
+      .forEach(function (el) { el.style.display = isSpec ? 'none' : ''; });
+    document.querySelectorAll('.tl-switch__item').forEach(function (b) {
+      b.setAttribute('aria-selected', String(b.dataset.view === name));
+    });
+  }
+  document.querySelectorAll('.tl-switch__item').forEach(function (b) {
+    b.addEventListener('click', function () { setView(b.dataset.view); });
+  });
+  if (q.get('view')) setView(q.get('view'));
+
+  /* Field notes */
+  var notes = document.getElementById('notes');
+  var notesBtn = document.getElementById('notesBtn');
+  function setNotes(open) {
+    notes.hidden = !open;
+    notesBtn.setAttribute('aria-expanded', String(open));
+    if (open) notesBtn.removeAttribute('data-unread');
+  }
+  notesBtn.addEventListener('click', function () { setNotes(notes.hidden); });
+  document.getElementById('notesClose').addEventListener('click', function () { setNotes(false); notesBtn.focus(); });
+  addEventListener('keydown', function (ev) {
+    var k = ev['key'];
+    if (k === '?') { setNotes(true); }
+    if (k === 'Escape' && !notes.hidden) { setNotes(false); notesBtn.focus(); }
+  });
+  setNotes(q.get('notes') !== 'closed');
+
+  /* Panel collapse. On narrow widths the sheet starts collapsed so the
+     canvas keeps the screen; tapping the header opens it. */
+  var panel = document.getElementById('lensPanel');
+  if (matchMedia('(max-width: 759px)').matches && q.get('sheet') !== 'open') {
+    panel.dataset.collapsed = 'true';
+  }
+  var cb = document.getElementById('collapseBtn');
+  if (panel.dataset.collapsed === 'true') { cb.setAttribute('aria-expanded', 'false'); cb.style.transform = 'rotate(180deg)'; }
+  cb.addEventListener('click', function () {
+    var open = panel.dataset.collapsed !== 'true';
+    panel.dataset.collapsed = String(open);
+    cb.setAttribute('aria-expanded', String(!open));
+    cb.style.transform = open ? 'rotate(180deg)' : '';
+  });
+
+  /* Scrub. --tl-index-pos drives the rail; --tl-index-x is that same point
+     re-expressed in stage pixels so the canvas index lines up exactly. */
+  var app = document.getElementById('app');
+  var scaleEl = document.querySelector('.tl-scale');
+  function syncIndexX(pct) {
+    app.style.setProperty('--tl-index-x', (scaleEl.offsetLeft + pct / 100 * scaleEl.offsetWidth) + 'px');
+  }
+  var scrub = document.getElementById('scrub');
+  var out = document.getElementById('yearOut');
+  var era = document.getElementById('eraOut');
+  var flag = document.querySelector('.tl-index__flag');
+  var stops = [[0, -3000], [16, -1000], [30, 1], [46, 1000], [60, 1500], [76, 1800], [86, 1900], [100, 2060]];
+  function yearAt(pct) {
+    for (var i = 1; i < stops.length; i++) {
+      if (pct <= stops[i][0]) {
+        var a = stops[i - 1], b = stops[i];
+        var f = (pct - a[0]) / (b[0] - a[0]);
+        return Math.round(a[1] + f * (b[1] - a[1]));
+      }
+    }
+    return 2060;
+  }
+  scrub.addEventListener('input', function () {
+    var pct = scrub.value / 10;
+    app.style.setProperty('--tl-index-pos', pct + '%');
+    syncIndexX(pct);
+    var y = yearAt(pct);
+    var txt = String(y < 0 ? Math.abs(y) : y);
+    out.textContent = txt;
+    flag.textContent = txt;
+    era.textContent = (y < 0 ? 'BCE' : 'CE') + ' · scrub';
+    scrub.setAttribute('aria-valuetext', txt + (y < 0 ? ' BCE' : ' CE'));
+  });
+
+  syncIndexX(74.5);
+  addEventListener('resize', function () { syncIndexX(parseFloat(scrub.value) / 10); });
+
+  /* Play toggle — visual only */
+  var play = document.getElementById('playBtn');
+  play.addEventListener('click', function () {
+    var on = play.getAttribute('aria-pressed') === 'true';
+    play.setAttribute('aria-pressed', String(!on));
+    play.innerHTML = on
+      ? '<svg viewBox="0 0 16 16" fill="currentColor"><path d="M5 3.4v9.2L13 8z"/></svg>'
+      : '<svg viewBox="0 0 16 16" fill="currentColor"><rect x="4.5" y="3.6" width="2.6" height="8.8"/><rect x="8.9" y="3.6" width="2.6" height="8.8"/></svg>';
+  });
+
+  /* Chips and segments — pressed state, for review */
+  document.addEventListener('click', function (ev) {
+    var chip = ev.target.closest('.tl-chip');
+    if (chip) chip.setAttribute('aria-pressed', String(chip.getAttribute('aria-pressed') !== 'true'));
+    var seg = ev.target.closest('.tl-seg__item');
+    if (seg) {
+      seg.parentElement.querySelectorAll('.tl-seg__item').forEach(function (s) { s.setAttribute('aria-pressed', 'false'); });
+      seg.setAttribute('aria-pressed', 'true');
+    }
+  });
+
+  /* Spec sheet swatches, generated from the live tokens */
+  var PAL = [
+    ['Plate',     '--tl-plate',     'Primary ink — engraved-plate blue-black'],
+    ['Graphite',  '--tl-graphite',  'Secondary ink — labels, muted copy'],
+    ['Chalk',     '--tl-chalk',     'Tertiary ink — ticks, disabled'],
+    ['Film',      '--tl-film',      'Chrome surface — rails, panels'],
+    ['Chart',     '--tl-chart',     'App ground and canvas backdrop'],
+    ['Rule',      '--tl-rule-c',    'The one hairline colour'],
+    ['Minium',    '--tl-minium',    'THE ONE ACCENT — year, playhead, focus'],
+    ['Rubric',    '--tl-rubric',    'Deep step of the SAME hue — hover, pressed']
+  ];
+  var CATS = [
+    ['power', 'indigo'], ['war', 'iron oxide'], ['belief', 'aubergine'], ['sci', 'verdigris'],
+    ['art', 'madder rose'], ['nature', 'terre verte'], ['society', 'ochre'], ['reach', 'sea blue']
+  ];
+  function hexOf(v) { return (getComputedStyle(root).getPropertyValue(v) || v).trim(); }
+  function card(name, varName, role) {
+    return '<div class="tl-sw"><div class="tl-sw__c" style="background:var(' + varName + ')"></div>' +
+      '<div class="tl-sw__m"><span class="tl-sw__n">' + name + '</span>' +
+      '<span class="tl-sw__h" data-var="' + varName + '">' + hexOf(varName) + '</span>' +
+      '<span class="tl-sw__r">' + role + '</span></div></div>';
+  }
+  document.getElementById('swGrid').innerHTML = PAL.map(function (p) { return card(p[0], p[1], p[2]); }).join('');
+  document.getElementById('catGrid').innerHTML = CATS.map(function (c) { return card(c[0], '--tl-cat-' + c[0], c[1]); }).join('');
+  new MutationObserver(function () {
+    document.querySelectorAll('.tl-sw__h').forEach(function (el) { el.textContent = hexOf(el.dataset.var); });
+  }).observe(root, { attributes: true, attributeFilter: ['data-theme'] });
+})();
+</script>
+</body>
+</html>

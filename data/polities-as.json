@@ -1,0 +1,196 @@
+{"polities":[
+  {"id":"indus-valley-civilization","name":"Indus Valley Civilisation","start":-2600,"end":-1900,"region":"AS",
+   "weight":[[-2600,3],[-2300,5],[-2000,4],[-1900,2]],
+   "from":[],"to":[],
+   "note":"largest Bronze Age civilisation by area, with planned brick cities and an undeciphered script"},
+
+  {"id":"shang-dynasty","name":"Shang Dynasty","start":-1600,"end":-1046,"region":"AS",
+   "weight":[[-1600,2],[-1250,4],[-1100,3],[-1046,3]],
+   "from":[],"to":["zhou-dynasty"],
+   "note":"first Chinese state confirmed by writing, via oracle-bone divination records"},
+
+  {"id":"zhou-dynasty","name":"Zhou Dynasty","start":-1046,"end":-256,"region":"AS",
+   "weight":[[-1046,4],[-950,6],[-771,4],[-475,2],[-256,1]],
+   "from":["shang-dynasty"],"to":["qin-dynasty"],
+   "note":"longest Chinese dynasty; its slow collapse into warring states produced Confucius, Laozi and Chinese political philosophy"},
+
+  {"id":"maurya-empire","name":"Maurya Empire","start":-322,"end":-185,"region":"AS",
+   "weight":[[-322,5],[-260,8],[-232,7],[-185,3]],
+   "from":[],"to":[],
+   "note":"first empire to unify almost all of South Asia; Ashoka's edicts spread Buddhism across Asia"},
+
+  {"id":"qin-dynasty","name":"Qin Dynasty","start":-221,"end":-206,"region":"AS",
+   "weight":[[-221,7],[-212,8],[-206,3]],
+   "from":["zhou-dynasty"],"to":["han-dynasty"],
+   "note":"unified China in a single generation and set the imperial template that lasted 2,100 years"},
+
+  {"id":"xiongnu","name":"Xiongnu Confederation","start":-209,"end":155,"region":"AS",
+   "weight":[[-209,4],[-176,6],[-100,4],[48,3],[155,1]],
+   "from":[],"to":[],
+   "note":"first steppe empire; forced the Han into tribute and set the nomad-versus-farmer pattern of Eurasian history"},
+
+  {"id":"han-dynasty","name":"Han Dynasty","start":-206,"end":220,"region":"AS",
+   "weight":[[-206,5],[-100,9],[9,6],[100,10],[190,4],[220,2]],
+   "from":["qin-dynasty"],"to":["three-kingdoms"],
+   "note":"Rome's eastern equal; opened the Silk Road and gave the Chinese majority its name"},
+
+  {"id":"three-kingdoms","name":"Three Kingdoms","start":220,"end":280,"region":"AS",
+   "weight":[[220,4],[250,4],[280,3]],
+   "from":["han-dynasty"],"to":["jin-dynasty"],
+   "note":"Wei, Shu and Wu split the Han inheritance, becoming East Asia's most retold historical drama"},
+
+  {"id":"jin-dynasty","name":"Jin Dynasty","start":266,"end":420,"region":"AS",
+   "weight":[[266,5],[290,6],[316,3],[400,3],[420,2]],
+   "from":["three-kingdoms"],"to":["sui-dynasty"],
+   "note":"briefly reunified China in 280, then lost the north and preserved classical culture in the south"},
+
+  {"id":"yamato-japan","name":"Yamato Japan","start":300,"end":794,"region":"AS",
+   "weight":[[300,1],[500,2],[700,4],[794,4]],
+   "from":[],"to":["heian-japan"],
+   "note":"first unified Japanese state; imported Chinese writing, Buddhism and law codes"},
+
+  {"id":"gupta-empire","name":"Gupta Empire","start":320,"end":550,"region":"AS",
+   "weight":[[320,4],[400,7],[500,4],[550,2]],
+   "from":[],"to":[],
+   "note":"classical golden age of India; gave the world the decimal place-value system and the zero"},
+
+  {"id":"gokturk-khaganate","name":"Gokturk Khaganate","start":552,"end":744,"region":"AS",
+   "weight":[[552,4],[580,6],[630,2],[700,5],[744,2]],
+   "from":[],"to":[],
+   "note":"first empire to call itself Turk, stretching from Manchuria to the Black Sea and linking Byzantium to China"},
+
+  {"id":"sui-dynasty","name":"Sui Dynasty","start":581,"end":618,"region":"AS",
+   "weight":[[581,5],[605,7],[618,3]],
+   "from":["jin-dynasty"],"to":["tang-dynasty"],
+   "note":"reunified China after three centuries of division and dug the Grand Canal that still binds north to south"},
+
+  {"id":"tang-dynasty","name":"Tang Dynasty","start":618,"end":907,"region":"AS",
+   "weight":[[618,7],[700,10],[755,9],[820,6],[907,2]],
+   "from":["sui-dynasty"],"to":["song-dynasty"],
+   "note":"the cosmopolitan peak of the Chinese world order; Chang'an was the largest city on Earth"},
+
+  {"id":"srivijaya","name":"Srivijaya","start":671,"end":1288,"region":"AS",
+   "weight":[[671,2],[900,4],[1025,3],[1288,1]],
+   "from":[],"to":["majapahit"],
+   "note":"maritime hegemon of the Malacca and Sunda straits and a great centre of Buddhist learning"},
+
+  {"id":"heian-japan","name":"Heian Japan","start":794,"end":1185,"region":"AS",
+   "weight":[[794,4],[1000,4],[1150,3],[1185,3]],
+   "from":["yamato-japan"],"to":["kamakura-shogunate"],
+   "note":"aristocratic court culture that produced the world's first novel and a distinctly Japanese identity"},
+
+  {"id":"khmer-empire","name":"Khmer Empire","start":802,"end":1431,"region":"AS",
+   "weight":[[802,3],[1150,6],[1250,5],[1350,3],[1431,1]],
+   "from":[],"to":[],
+   "note":"mainland Southeast Asia's dominant power; Angkor was the largest pre-industrial city ever built"},
+
+  {"id":"goryeo","name":"Goryeo","start":918,"end":1392,"region":"AS",
+   "weight":[[918,3],[1100,4],[1270,2],[1392,3]],
+   "from":[],"to":["joseon"],
+   "note":"gave Korea its name and printed with movable metal type two centuries before Gutenberg"},
+
+  {"id":"dai-viet","name":"Dai Viet (Vietnam)","start":939,"end":1883,"region":"AS",
+   "weight":[[939,2],[1100,3],[1470,4],[1700,3],[1883,2]],
+   "from":[],"to":["french-empire"],
+   "note":"won independence from China in 939 and held it for nine centuries, expanding south to the Mekong"},
+
+  {"id":"song-dynasty","name":"Song Dynasty","start":960,"end":1279,"region":"AS",
+   "weight":[[960,6],[1100,8],[1127,4],[1200,5],[1279,2]],
+   "from":["tang-dynasty"],"to":["yuan-dynasty"],
+   "note":"the world's richest and most technologically advanced economy: gunpowder, printing, paper money, the compass"},
+
+  {"id":"kamakura-shogunate","name":"Kamakura Shogunate","start":1185,"end":1333,"region":"AS",
+   "weight":[[1185,3],[1281,4],[1333,2]],
+   "from":["heian-japan"],"to":["ashikaga-shogunate"],
+   "note":"first warrior government of Japan; repelled two Mongol invasions"},
+
+  {"id":"delhi-sultanate","name":"Delhi Sultanate","start":1206,"end":1526,"region":"AS",
+   "weight":[[1206,4],[1330,7],[1400,3],[1500,3],[1526,2]],
+   "from":[],"to":["mughal-empire"],
+   "note":"established lasting Muslim rule in India and shielded the subcontinent from Mongol conquest"},
+
+  {"id":"mongol-empire","name":"Mongol Empire","start":1206,"end":1368,"region":"AS",
+   "weight":[[1206,3],[1240,8],[1279,10],[1300,9],[1368,3]],
+   "from":["kievan-rus","abbasid-caliphate"],"to":["yuan-dynasty","timurid-empire","muscovy"],
+   "note":"largest contiguous land empire in history, briefly making Eurasia a single connected space"},
+
+  {"id":"yuan-dynasty","name":"Yuan Dynasty","start":1271,"end":1368,"region":"AS",
+   "weight":[[1271,8],[1300,9],[1350,5],[1368,3]],
+   "from":["mongol-empire","song-dynasty"],"to":["ming-dynasty"],
+   "note":"first foreign dynasty to rule all China; Marco Polo's Cathay"},
+
+  {"id":"majapahit","name":"Majapahit","start":1293,"end":1527,"region":"AS",
+   "weight":[[1293,3],[1365,5],[1450,3],[1527,1]],
+   "from":["srivijaya"],"to":[],
+   "note":"Java-based maritime empire claimed today as the ancestor of the Indonesian archipelago state"},
+
+  {"id":"ashikaga-shogunate","name":"Ashikaga Shogunate","start":1336,"end":1573,"region":"AS",
+   "weight":[[1336,3],[1400,4],[1467,2],[1573,2]],
+   "from":["kamakura-shogunate"],"to":["tokugawa-shogunate"],
+   "note":"weak centre that produced Zen aesthetics, Noh and tea ceremony before dissolving into civil war"},
+
+  {"id":"ming-dynasty","name":"Ming Dynasty","start":1368,"end":1644,"region":"AS",
+   "weight":[[1368,7],[1420,9],[1550,7],[1600,7],[1644,3]],
+   "from":["yuan-dynasty"],"to":["qing-dynasty"],
+   "note":"restored native rule, sent Zheng He's treasure fleets to Africa, then turned inward"},
+
+  {"id":"timurid-empire","name":"Timurid Empire","start":1370,"end":1507,"region":"AS",
+   "weight":[[1370,4],[1405,7],[1450,4],[1507,2]],
+   "from":["mongol-empire"],"to":["mughal-empire","safavid-persia"],
+   "note":"Timur's brutal Central Asian empire, whose Samarkand and Herat courts led the Islamic world in science and art"},
+
+  {"id":"joseon","name":"Joseon","start":1392,"end":1910,"region":"AS",
+   "weight":[[1392,3],[1450,4],[1600,2],[1750,3],[1910,2]],
+   "from":["goryeo"],"to":["empire-of-japan"],
+   "note":"five centuries of Confucian Korean rule; created the hangul alphabet, ended by Japanese annexation"},
+
+  {"id":"mughal-empire","name":"Mughal Empire","start":1526,"end":1857,"region":"AS",
+   "weight":[[1526,4],[1600,8],[1700,9],[1750,5],[1800,2],[1857,1]],
+   "from":["delhi-sultanate","timurid-empire"],"to":["british-raj"],
+   "note":"at its height held a quarter of world GDP and built the Taj Mahal; hollowed out by the East India Company"},
+
+  {"id":"tokugawa-shogunate","name":"Tokugawa Shogunate","start":1603,"end":1868,"region":"AS",
+   "weight":[[1603,4],[1700,5],[1800,5],[1868,4]],
+   "from":["ashikaga-shogunate"],"to":["empire-of-japan"],
+   "note":"two and a half centuries of enforced peace and near-total isolation, ended by American gunboats"},
+
+  {"id":"qing-dynasty","name":"Qing Dynasty","start":1644,"end":1912,"region":"AS",
+   "weight":[[1644,6],[1750,9],[1820,8],[1900,4],[1912,2]],
+   "from":["ming-dynasty"],"to":["republic-of-china"],
+   "note":"Manchu conquerors who doubled China's territory and ruled a third of humanity before collapsing under Western pressure"},
+
+  {"id":"british-raj","name":"British Raj","start":1858,"end":1947,"region":"AS",
+   "weight":[[1858,7],[1900,8],[1930,7],[1947,6]],
+   "from":["mughal-empire","british-empire"],"to":["republic-of-india","pakistan"],
+   "note":"the jewel of the British Empire, whose partition created the two states of modern South Asia"},
+
+  {"id":"empire-of-japan","name":"Empire of Japan","start":1868,"end":1947,"region":"AS",
+   "weight":[[1868,3],[1905,6],[1937,7],[1942,8],[1945,2],[1947,2]],
+   "from":["tokugawa-shogunate","joseon"],"to":["japan"],
+   "note":"first non-Western industrial great power; its imperial expansion ended in total defeat in 1945"},
+
+  {"id":"republic-of-china","name":"Republic of China","start":1912,"end":2026,"region":"AS",
+   "weight":[[1912,3],[1928,5],[1945,6],[1950,2],[2026,2]],
+   "from":["qing-dynasty"],"to":["peoples-republic-of-china"],
+   "note":"ended 2,100 years of imperial rule; after 1949 survives on Taiwan"},
+
+  {"id":"japan","name":"Japan","start":1947,"end":2026,"region":"AS",
+   "weight":[[1947,2],[1970,5],[1990,7],[2026,6]],
+   "from":["empire-of-japan"],"to":[],
+   "note":"post-war pacifist constitution and an economic miracle that made it the world's second-largest economy"},
+
+  {"id":"republic-of-india","name":"Republic of India","start":1947,"end":2026,"region":"AS",
+   "weight":[[1947,5],[1980,5],[2010,7],[2026,8]],
+   "from":["british-raj"],"to":[],
+   "note":"the world's most populous country and largest democracy"},
+
+  {"id":"pakistan","name":"Pakistan","start":1947,"end":2026,"region":"AS",
+   "weight":[[1947,3],[1971,2],[2000,3],[2026,3]],
+   "from":["british-raj"],"to":[],
+   "note":"created as a Muslim homeland at partition; lost its eastern wing as Bangladesh in 1971"},
+
+  {"id":"peoples-republic-of-china","name":"People's Republic of China","start":1949,"end":2026,"region":"AS",
+   "weight":[[1949,5],[1976,6],[2000,7],[2026,9]],
+   "from":["republic-of-china"],"to":[],
+   "note":"lifted hundreds of millions out of poverty to become the second superpower of the 21st century"}
+]}

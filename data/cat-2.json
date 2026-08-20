@@ -1,0 +1,316 @@
+{
+  "assignments": [
+    {
+      "t": "Egypt unified under one crown",
+      "cat": "power",
+      "type": "moment",
+      "flag": true
+    },
+    {
+      "t": "Great Pyramid built",
+      "cat": "art",
+      "type": "moment",
+      "flag": false
+    },
+    {
+      "t": "Hammurabi writes his law code",
+      "cat": "society",
+      "type": "moment",
+      "flag": false
+    },
+    {
+      "t": "Battle of Kadesh (first recorded treaty)",
+      "cat": "war",
+      "type": "moment",
+      "flag": false
+    },
+    {
+      "t": "Babylon destroys Jerusalem's temple",
+      "cat": "belief",
+      "type": "moment",
+      "flag": false
+    },
+    {
+      "t": "Cyrus founds the Persian Empire",
+      "cat": "power",
+      "type": "moment",
+      "flag": true
+    },
+    {
+      "t": "Alexander takes Egypt",
+      "cat": "war",
+      "type": "moment",
+      "flag": false
+    },
+    {
+      "t": "Cleopatra dies — Egypt goes Roman",
+      "cat": "power",
+      "type": "moment",
+      "flag": false
+    },
+    {
+      "t": "Crucifixion of Jesus",
+      "cat": "belief",
+      "type": "moment",
+      "flag": false
+    },
+    {
+      "t": "The Hijra — Islam begins",
+      "cat": "belief",
+      "type": "moment",
+      "flag": false
+    },
+    {
+      "t": "Arab conquests: Spain to Persia",
+      "cat": "war",
+      "type": "episode",
+      "flag": false
+    },
+    {
+      "t": "Baghdad founded — Islamic golden age",
+      "cat": "sci",
+      "type": "moment",
+      "flag": false
+    },
+    {
+      "t": "Saladin rules Egypt & Syria",
+      "cat": "power",
+      "type": "moment",
+      "flag": false
+    },
+    {
+      "t": "Mongols sack Baghdad",
+      "cat": "war",
+      "type": "moment",
+      "flag": false
+    },
+    {
+      "t": "Mansa Musa's golden hajj",
+      "cat": "society",
+      "type": "moment",
+      "flag": false
+    },
+    {
+      "t": "Ottomans take Egypt & the caliphate",
+      "cat": "power",
+      "type": "moment",
+      "flag": false
+    },
+    {
+      "t": "Dutch found Cape Colony",
+      "cat": "power",
+      "type": "moment",
+      "flag": true
+    },
+    {
+      "t": "Napoleon invades Egypt",
+      "cat": "war",
+      "type": "moment",
+      "flag": false
+    },
+    {
+      "t": "Suez Canal opens",
+      "cat": "society",
+      "type": "moment",
+      "flag": false
+    },
+    {
+      "t": "Berlin Conference carves up Africa",
+      "cat": "power",
+      "type": "moment",
+      "flag": false
+    },
+    {
+      "t": "State of Israel founded",
+      "cat": "power",
+      "type": "moment",
+      "flag": true
+    },
+    {
+      "t": "Year of Africa — 17 nations born",
+      "cat": "power",
+      "type": "moment",
+      "flag": false
+    },
+    {
+      "t": "Mandela elected president",
+      "cat": "power",
+      "type": "moment",
+      "flag": false
+    },
+    {
+      "t": "Indus Valley civilization",
+      "cat": "power",
+      "type": "zone",
+      "flag": true
+    },
+    {
+      "t": "Shang dynasty — Chinese writing",
+      "cat": "power",
+      "type": "zone",
+      "flag": true
+    },
+    {
+      "t": "Buddha born",
+      "cat": "belief",
+      "type": "moment",
+      "flag": false
+    },
+    {
+      "t": "Confucius born",
+      "cat": "belief",
+      "type": "moment",
+      "flag": false
+    },
+    {
+      "t": "Maurya Empire unites India",
+      "cat": "power",
+      "type": "zone",
+      "flag": true
+    },
+    {
+      "t": "Ashoka turns to Buddhism",
+      "cat": "belief",
+      "type": "moment",
+      "flag": false
+    },
+    {
+      "t": "Qin unifies China",
+      "cat": "power",
+      "type": "moment",
+      "flag": true
+    },
+    {
+      "t": "Han dynasty",
+      "cat": "power",
+      "type": "zone",
+      "flag": true
+    },
+    {
+      "t": "Gupta golden age of India",
+      "cat": "power",
+      "type": "zone",
+      "flag": true
+    },
+    {
+      "t": "Tang dynasty — cosmopolitan China",
+      "cat": "power",
+      "type": "zone",
+      "flag": true
+    },
+    {
+      "t": "Song dynasty — paper money, gunpowder",
+      "cat": "power",
+      "type": "zone",
+      "flag": true
+    },
+    {
+      "t": "First shogunate in Japan",
+      "cat": "power",
+      "type": "moment",
+      "flag": true
+    },
+    {
+      "t": "Genghis Khan unites the Mongols",
+      "cat": "power",
+      "type": "moment",
+      "flag": true
+    },
+    {
+      "t": "Mongols rule all of China",
+      "cat": "power",
+      "type": "moment",
+      "flag": true
+    },
+    {
+      "t": "Ming dynasty founded",
+      "cat": "power",
+      "type": "moment",
+      "flag": true
+    },
+    {
+      "t": "Zheng He's treasure fleets",
+      "cat": "society",
+      "type": "episode",
+      "flag": false
+    },
+    {
+      "t": "Mughal Empire founded",
+      "cat": "power",
+      "type": "moment",
+      "flag": true
+    },
+    {
+      "t": "East India Company chartered",
+      "cat": "society",
+      "type": "moment",
+      "flag": false
+    },
+    {
+      "t": "Tokugawa shogunate — Japan closes",
+      "cat": "power",
+      "type": "moment",
+      "flag": true
+    },
+    {
+      "t": "Qing dynasty takes China",
+      "cat": "power",
+      "type": "moment",
+      "flag": true
+    },
+    {
+      "t": "Plassey: British rule in India begins",
+      "cat": "power",
+      "type": "moment",
+      "flag": false
+    },
+    {
+      "t": "Opium War humiliates China",
+      "cat": "war",
+      "type": "episode",
+      "flag": false
+    },
+    {
+      "t": "Perry forces Japan open",
+      "cat": "power",
+      "type": "moment",
+      "flag": false
+    },
+    {
+      "t": "Meiji Restoration — Japan sprints",
+      "cat": "power",
+      "type": "moment",
+      "flag": false
+    },
+    {
+      "t": "Last emperor: Qing falls",
+      "cat": "power",
+      "type": "moment",
+      "flag": false
+    },
+    {
+      "t": "India independent, partitioned",
+      "cat": "power",
+      "type": "moment",
+      "flag": true
+    },
+    {
+      "t": "People's Republic of China",
+      "cat": "power",
+      "type": "moment",
+      "flag": true
+    },
+    {
+      "t": "Deng opens China",
+      "cat": "society",
+      "type": "moment",
+      "flag": false
+    },
+    {
+      "t": "India liberalizes",
+      "cat": "society",
+      "type": "moment",
+      "flag": false
+    }
+  ]
+}

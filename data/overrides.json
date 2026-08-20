@@ -1,0 +1,32 @@
+{"_note":"Applied after the four classifier agents, from the taxonomy review of 19.8.2026. 'recat' moves events into the new 'reach' category (movement across the map: exploration, migration, colonisation, trade routes, first contact) — the review found this cluster scattered across nature/power/society by four independent classifiers. Independence events stay 'power': that is regime change, not movement. 'eras' exercises the 'era' shape, which the review noted was correct but unexercised and already hacked around via the CAPSULES structure.",
+
+"rename":{
+  "French Revolution begins":"French Revolution"
+},
+
+"retype":{
+  "French Revolution":"episode"
+},
+
+"recat":{
+  "Out of Africa migration":"reach",
+  "First peoples reach the Americas":"reach",
+  "Columbus reaches the Americas":"reach",
+  "Vikings land in Newfoundland":"reach",
+  "Zheng He's treasure fleets":"reach",
+  "Jamestown — English America begins":"reach",
+  "Mayflower lands":"reach",
+  "Dutch found Cape Colony":"reach",
+  "Berlin Conference carves up Africa":"reach",
+  "Suez Canal opens":"reach",
+  "Perry forces Japan open":"reach"
+},
+
+"eras":[
+  {"name":"Bronze Age","start":-3300,"end":-1200,"band":"CO","cat":"society","imp":2,"tags":"bronze metallurgy era"},
+  {"name":"The Silk Road","start":-130,"end":1450,"band":"AS","cat":"reach","imp":2,"tags":"trade route china rome exchange era"},
+  {"name":"The Renaissance","start":1350,"end":1600,"band":"EU","cat":"art","imp":2,"tags":"renaissance italy art humanism era"},
+  {"name":"Age of Discovery","start":1418,"end":1650,"band":"EU","cat":"reach","imp":2,"tags":"exploration sea portugal spain era"},
+  {"name":"Industrial Revolution","start":1760,"end":1840,"band":"EU","cat":"sci","imp":2,"tags":"industry steam factory era"},
+  {"name":"The Cold War","start":1947,"end":1991,"band":"EU","cat":"power","imp":2,"tags":"cold-war usa ussr communism era"}
+]}

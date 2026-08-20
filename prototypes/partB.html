@@ -1,0 +1,1201 @@
+
+</script>
+<script>
+"use strict";
+// ---------- data plumbing (datasets.js is optional; everything degrades gracefully) ----------
+const CAT_MAP   = (typeof CATMAP  !== 'undefined') ? CATMAP  : {};
+const POLITIES  = (typeof POLIS   !== 'undefined') ? POLIS   : [];
+const BELIEFS   = (typeof BELIEF  !== 'undefined') ? BELIEF  : {systems:[]};
+const POPS      = (typeof POPDATA !== 'undefined') ? POPDATA : null;
+const PLACES    = (typeof PLACEMAP!== 'undefined') ? PLACEMAP: {};
+
+// ---------- shared helpers ----------
+const $=s=>document.querySelector(s);
+const tokens=()=>{const cs=getComputedStyle(document.documentElement);const g=n=>cs.getPropertyValue(n).trim();
+  return {bg:g('--bg'),panel:g('--panel'),panel2:g('--panel2'),line:g('--line'),ink:g('--ink'),ink2:g('--ink2'),ink3:g('--ink3'),
+  accent:g('--accent'),accent2:g('--accent2'),sea:g('--sea'),stroke:g('--stroke'),
+  s:[g('--s1'),g('--s2'),g('--s3'),g('--s4'),g('--s5'),g('--s6'),g('--s7'),g('--s8')]};};
+// astronomical year 0 is 1 BCE — never print "0 BCE"
+const fmtY=y=>{y=Math.round(y); return y<0? (Math.abs(y)+" BCE") : (y===0? "1 BCE" : ""+y);};
+const fmtBig=y=>{const a=2026-y; if(a>=1e9) return (a/1e9).toFixed(1).replace(/\.0$/,"")+" billion yrs ago";
+  if(a>=1e6) return (a/1e6).toFixed(0)+" million yrs ago"; if(a>=20000) return Math.round(a/1000)+",000 yrs ago"; return fmtY(y);};
+const clamp=(v,a,b)=>Math.max(a,Math.min(b,v));
+const reduceMotion=matchMedia('(prefers-reduced-motion: reduce)').matches;
+const tip=$('#tip');
+function showTip(x,y,html){tip.innerHTML=html;tip.style.display='block';
+  const r=tip.getBoundingClientRect();
+  tip.style.left=clamp(x+14,8,innerWidth-r.width-8)+'px';
+  tip.style.top=clamp(y+14,8,innerHeight-r.height-8)+'px';}
+function hideTip(){tip.style.display='none';}
+function fitCanvas(cv,h){
+  const cw=cv.clientWidth||cv.parentElement.clientWidth; if(!cw)return null;
+  const dpr=devicePixelRatio||1;
+  if(cv.width!==Math.round(cw*dpr)||cv.height!==Math.round(h*dpr)){
+    cv.width=Math.round(cw*dpr);cv.height=Math.round(h*dpr);cv.style.height=h+'px';}
+  const ctx=cv.getContext('2d');ctx.setTransform(dpr,0,0,dpr,0,0);
+  return {cw,ch:h,ctx};
+}
+// year pill drawn at the cursor — "what year am I hovering on"
+function yearPill(ctx,T,x,y,text,accent){
+  ctx.font='600 12px ui-monospace,Menlo,monospace';
+  const w=ctx.measureText(text).width+14;
+  ctx.fillStyle=accent||T.accent; ctx.beginPath(); ctx.roundRect(x-w/2,y,w,20,10); ctx.fill();
+  ctx.fillStyle=T.bg; ctx.textAlign='center'; ctx.fillText(text,x,y+14); ctx.textAlign='left';
+}
+
+// ---------- the visual grammar ----------
+// si indexes the validated categorical palette. 'reach' was added after a review found
+// exploration/migration/colonisation scattered across nature/power/society by four
+// independent classifiers — for an atlas, movement across the map is the native verb.
+const CATS=[
+  {id:'power',  name:'Power & states', si:0},
+  {id:'war',    name:'War & conflict', si:7},
+  {id:'belief', name:'Ideas & belief', si:6},
+  {id:'sci',    name:'Science & tech', si:2},
+  {id:'art',    name:'Art & culture',  si:4},
+  {id:'nature', name:'Nature & catastrophe', si:5},
+  {id:'society',name:'Society & economy', si:3},
+  {id:'reach',  name:'Exploration & movement', si:1}];
+const CATBY={}; CATS.forEach(c=>CATBY[c.id]=c);
+const catColor=(id,T)=>{const c=CATBY[id]; return c?T.s[c.si]:T.ink2;};
+const TYPES=[
+  {id:'moment', name:'moment'},{id:'episode',name:'episode'},{id:'life',name:'a life'},
+  {id:'zone',name:'territory'},{id:'era',name:'era'}];
+// fallback classifier so the lab works even before the curated map is merged in
+function guessCat(ev){
+  const t=(ev[5]+' '+ev[2]).toLowerCase();
+  if(/war|battle|conquest|siege|invade|invasion|armada|crusade|revolt/.test(t))return 'war';
+  if(/religio|christian|islam|buddh|philosoph|reformation|schism|communism|enlighten/.test(t))return 'belief';
+  if(/science|physics|math|astronom|medicine|technolog|invention|computing|printing|space|internet|dna|electricity/.test(t))return 'sci';
+  if(/music|opera|art|literature|jazz|rock|symphon|mozart|beethoven/.test(t))return 'art';
+  if(/cosmos|life|extinction|plague|pandemic|volcano|earth|human|climate/.test(t))return 'nature';
+  if(/exploration|migration|colony|colonialism|voyage|route/.test(t))return 'reach';
+  if(/trade|economy|slavery|university|law|gold|money|independence/.test(t))return 'society';
+  return 'power';
+}
+// lifespans live in their own dataset so partA's EVENTS array stays hand-editable
+if(typeof LIVES!=='undefined') for(const L of LIVES) EVENTS.push(L.slice());
+for(const ev of EVENTS){
+  const m=CAT_MAP[ev[2]];
+  ev[6]=m?m[0]:guessCat(ev);
+  ev[7]=m?m[1]:(ev[1]?'episode':'moment');
+  const p=PLACES[ev[2]];
+  ev[8]=p||null;                     // [lat, lon, place, scope]
+}
+
+// ---------- tabs ----------
+const tabs=document.querySelectorAll('nav.tabs button');
+tabs.forEach(b=>b.addEventListener('click',()=>{
+  tabs.forEach(x=>x.classList.toggle('on',x===b));
+  document.querySelectorAll('section.tab').forEach(s=>s.classList.toggle('on',s.id==='tab-'+b.dataset.tab));
+  const t=b.dataset.tab;
+  if(t==='map')WorldMap.render(); if(t==='zoom')TL.render(); if(t==='flow')Flow.render();
+  if(t==='cube')Cube.render(); if(t==='sketch'){Braid.render();Horizon.render();Carto.render();}
+}));
+function gotoTab(name){const b=document.querySelector(`nav.tabs button[data-tab=${name}]`); if(b)b.click();}
+
+// ---------- world geometry ----------
+const YEARS=Object.keys(WORLDS).map(Number).sort((a,b)=>a-b);
+const GEO={};
+for(const y of YEARS){
+  GEO[y]=WORLDS[y].map(f=>{
+    const rings=f[2].map(d=>{
+      const out=new Float64Array(d.length);
+      let x=d[0],yv=d[1]; out[0]=x/10; out[1]=yv/10;
+      for(let i=2;i<d.length;i+=2){x+=d[i];yv+=d[i+1];out[i]=x/10;out[i+1]=yv/10;}
+      return out;});
+    let x0=1e9,x1=-1e9,y0=1e9,y1=-1e9,lc=null,lcArea=-1;
+    for(const r of rings){
+      let a0=1e9,a1=-1e9,b0=1e9,b1=-1e9;
+      for(let i=0;i<r.length;i+=2){const x=r[i],y2=r[i+1];
+        if(x<a0)a0=x;if(x>a1)a1=x;if(y2<b0)b0=y2;if(y2>b1)b1=y2;}
+      if(a0<x0)x0=a0;if(a1>x1)x1=a1;if(b0<y0)y0=b0;if(b1>y1)y1=b1;
+      const ra=(a1-a0)*(b1-b0);
+      if(ra>lcArea){lcArea=ra;lc=[(a0+a1)/2,(b0+b1)/2];}
+    }
+    return {name:f[0],sov:f[1]===0?f[0]:f[1],rings,bb:[x0,y0,x1,y1],lc,lw:lcArea?Math.sqrt(lcArea):0,area:(x1-x0)*(y1-y0)};
+  });
+}
+function pip(lon,lat,f){
+  if(lon<f.bb[0]||lon>f.bb[2]||lat<f.bb[1]||lat>f.bb[3]) return false;
+  let inside=false;
+  for(const r of f.rings){
+    const n=r.length/2;
+    for(let i=0,j=n-1;i<n;j=i++){
+      const xi=r[2*i],yi=r[2*i+1],xj=r[2*j],yj=r[2*j+1];
+      if(((yi>lat)!==(yj>lat)) && (lon < (xj-xi)*(lat-yi)/(yj-yi)+xi)) inside=!inside;
+    }
+  }
+  return inside;
+}
+function featureAt(year,lon,lat){
+  let best=null;
+  for(const f of GEO[year]) if(pip(lon,lat,f)) if(!best||f.area<best.area) best=f;
+  return best;
+}
+const FAMOUS=[
+[/brit|england|united kingdom/i,'#D585A0'],[/france|french/i,'#5E8FCC'],[/spain|castil|aragon/i,'#D9A441'],
+[/portug/i,'#6FA96B'],[/ottoman|turkey/i,'#C25B4E'],[/russia|soviet|ussr|muscovy/i,'#4F9E8C'],
+[/qing|ming|song|china|chinese|yuan|han |^han$|tang/i,'#D9C25A'],[/mongol/i,'#D98B4A'],
+[/roman|rome/i,'#B05A78'],[/byzant/i,'#8E6FB8'],[/habsburg|austria/i,'#C9B45C'],
+[/united states|usa/i,'#5FA3A8'],[/caliphate|umayyad|abbasid|arab/i,'#4E8F5E'],
+[/persia|achaemenid|safavid|iran/i,'#67A0B8'],[/egypt/i,'#C9A45C'],[/netherlands|dutch/i,'#D98B60'],
+[/denmark|norway|sweden/i,'#7C9BC4'],[/prussia|germany|german/i,'#8FA0A8'],[/japan/i,'#D57F7F'],
+[/mughal|maurya|gupta|india/i,'#B88FC4']];
+const sovCache={};
+function sovColor(s){
+  if(sovCache[s]) return sovCache[s];
+  let c=null;
+  for(const [re,col] of FAMOUS) if(re.test(s)){c=col;break;}
+  if(!c){let h=0;for(let i=0;i<s.length;i++)h=(h*31+s.charCodeAt(i))>>>0;
+    c=`hsl(${h%360} ${34+h%18}% ${52+((h>>4)%14)}%)`;}
+  return sovCache[s]=c;
+}
+
+// ================= ① MAP =================
+const WorldMap={
+  cv:$('#mapCanvas'),ix:11,k:1,tx:0,ty:0,playing:null,
+  MW:1000,MH:403,
+  px(lon){return (lon+180)/360*this.MW;},
+  py(lat){return (85-lat)/145*this.MH;},
+  ilon(x){return x/this.MW*360-180;},
+  ilat(y){return 85-y/this.MH*145;},
+  paths:{},
+  buildPaths(y){
+    if(this.paths[y]) return this.paths[y];
+    return this.paths[y]=GEO[y].map(f=>{
+      const p=new Path2D();
+      for(const r of f.rings){
+        p.moveTo(this.px(r[0]),this.py(r[1]));
+        for(let i=2;i<r.length;i+=2)p.lineTo(this.px(r[i]),this.py(r[i+1]));
+        p.closePath();
+      }
+      return {f,p};
+    });
+  },
+  year(){return YEARS[this.ix];},
+  size(){
+    const cw=this.cv.clientWidth||this.cv.parentElement.clientWidth; if(!cw) return null;
+    const ch=Math.round(cw*this.MH/this.MW);
+    const d=fitCanvas(this.cv,ch); if(!d)return null;
+    return {cw:d.cw,ch,ctx:d.ctx,s0:d.cw/this.MW};
+  },
+  render(){
+    const dim=this.size(); if(!dim) return;
+    const {cw,ch,ctx,s0}=dim; const T=tokens(); const y=this.year();
+    ctx.fillStyle=T.sea; ctx.fillRect(0,0,cw,ch);
+    ctx.save();
+    ctx.translate(this.tx,this.ty); ctx.scale(this.k*s0,this.k*s0);
+    ctx.lineWidth=0.6/(this.k*s0); ctx.strokeStyle=T.line; ctx.globalAlpha=.5;
+    ctx.beginPath();
+    for(let lon=-180;lon<=180;lon+=30){ctx.moveTo(this.px(lon),0);ctx.lineTo(this.px(lon),this.MH);}
+    for(let lat=-60;lat<=85;lat+=30){ctx.moveTo(0,this.py(lat));ctx.lineTo(this.MW,this.py(lat));}
+    ctx.stroke(); ctx.globalAlpha=1;
+    const paths=this.buildPaths(y);
+    ctx.lineWidth=0.7/(this.k*s0);
+    for(const {f,p} of paths){
+      ctx.fillStyle=sovColor(f.sov); ctx.globalAlpha=.82;
+      ctx.fill(p,'evenodd'); ctx.globalAlpha=.9; ctx.strokeStyle=T.stroke; ctx.stroke(p);
+    }
+    ctx.globalAlpha=1;
+    const scale=this.k*s0;
+    const labeled=[...paths].sort((a,b)=>b.f.area-a.f.area).slice(0,60);
+    ctx.font=`600 ${11/scale}px -apple-system,system-ui,sans-serif`;
+    ctx.textAlign='center';
+    let drawn=0;
+    for(const {f} of labeled){
+      const wpx=f.lw/360*this.MW*scale*1.6;
+      if(wpx<52||!f.lc||f.name==='?') continue;
+      const cx=this.px(f.lc[0]), cy=this.py(f.lc[1]);
+      ctx.lineWidth=3/scale; ctx.strokeStyle=T.bg; ctx.globalAlpha=.55; ctx.strokeText(f.name,cx,cy);
+      ctx.globalAlpha=.95; ctx.fillStyle=T.ink; ctx.fillText(f.name,cx,cy);
+      if(++drawn>=(14+this.k*10)) break;
+    }
+    ctx.restore(); ctx.textAlign='left';
+    $('#yearLabel').textContent=fmtY(y);
+    $('#yearSlider').value=this.ix;
+    $('#yearSlider').setAttribute('aria-valuetext',fmtY(y));
+    $('#capsule').innerHTML=`<b>The world in ${fmtY(y)}.</b> ${CAPSULES[String(y)]||''}`;
+  },
+  screenToLonLat(sx,sy){
+    const dim=this.size(); const s0=dim.s0;
+    const mx=(sx-this.tx)/(this.k*s0), my=(sy-this.ty)/(this.k*s0);
+    return [this.ilon(mx),this.ilat(my)];
+  },
+  init(){
+    const cv=this.cv;
+    $('#yearSlider').addEventListener('input',e=>{this.ix=+e.target.value;this.render();});
+    $('#btn1776').addEventListener('click',()=>{this.stop();this.ix=YEARS.indexOf(1783);this.render();});
+    $('#btnReset').addEventListener('click',()=>{this.k=1;this.tx=0;this.ty=0;this.render();});
+    $('#btnPlay').addEventListener('click',()=>{ this.playing?this.stop():this.play(); });
+    cv.addEventListener('wheel',e=>{e.preventDefault();
+      const f=Math.pow(1.0015,-e.deltaY); const nk=clamp(this.k*f,1,9);
+      const r=cv.getBoundingClientRect(), sx=e.clientX-r.left, sy=e.clientY-r.top;
+      this.tx=sx-(sx-this.tx)*(nk/this.k); this.ty=sy-(sy-this.ty)*(nk/this.k);
+      this.k=nk; if(this.k===1){this.tx=0;this.ty=0;} this.clampPan(); this.render();
+    },{passive:false});
+    let drag=null;
+    cv.addEventListener('pointerdown',e=>{drag={x:e.clientX,y:e.clientY,tx:this.tx,ty:this.ty,moved:false};cv.setPointerCapture(e.pointerId);});
+    cv.addEventListener('pointermove',e=>{
+      if(drag){
+        const dx=e.clientX-drag.x,dy=e.clientY-drag.y;
+        if(Math.abs(dx)+Math.abs(dy)>3)drag.moved=true;
+        this.tx=drag.tx+dx;this.ty=drag.ty+dy;this.clampPan();this.render();
+      } else {
+        const r=cv.getBoundingClientRect();
+        const [lon,lat]=this.screenToLonLat(e.clientX-r.left,e.clientY-r.top);
+        const f=(lon>=-180&&lon<=180&&lat>=-60&&lat<=85)?featureAt(this.year(),lon,lat):null;
+        if(f) showTip(e.clientX,e.clientY,`<div class=t>${f.name}</div>${f.sov!==f.name?`<div class=m>part of <b>${f.sov}</b></div>`:''}<div class=m>${fmtY(this.year())} · click to drill core sample</div>`);
+        else hideTip();
+      }
+    });
+    cv.addEventListener('pointerup',e=>{
+      const wasDrag=drag&&drag.moved; drag=null;
+      if(wasDrag) return;
+      const r=cv.getBoundingClientRect();
+      const [lon,lat]=this.screenToLonLat(e.clientX-r.left,e.clientY-r.top);
+      if(lon<-180||lon>180||lat<-60||lat>85) return;
+      const f=featureAt(this.year(),lon,lat);
+      Core.drill(lon,lat,f?f.name:`${lat.toFixed(1)}, ${lon.toFixed(1)}`);
+      gotoTab('core');
+    });
+    cv.addEventListener('pointerleave',hideTip);
+  },
+  clampPan(){
+    const dim=this.size(); if(!dim)return; const w=dim.cw*this.k,h=dim.ch*this.k;
+    this.tx=clamp(this.tx,dim.cw-w,0); this.ty=clamp(this.ty,dim.ch-h,0);
+  },
+  play(){ $('#btnPlay').textContent='⏸ Pause';
+    this.playing=setInterval(()=>{this.ix=(this.ix+1)%YEARS.length;this.render();},1400);},
+  stop(){ $('#btnPlay').textContent='▶ Play'; clearInterval(this.playing); this.playing=null;}
+};
+
+// ================= ② ZOOMABLE TIMELINE =================
+const TL={
+  cv:$('#zoomCanvas'), d0:-3000,d1:2026, log:false,
+  lens:{MU:false,SC:false,MZ:true}, q:'', hoverX:null, off:new Set(),
+  THR:{1:Infinity,2:40000,3:2400,4:650,5:170},
+  bands(){ const b=[['CO','Deep time',34,null],['EU','Europe',86,0],['ME','MidEast & Africa',86,1],['AS','Asia',86,2],['AM','Americas',86,3]];
+    if(this.lens.MU)b.push(['MU','Music',88,4]); if(this.lens.SC)b.push(['SC','Science & ideas',88,5]); if(this.lens.MZ)b.push(['MZ','Mozart',88,6]);
+    return b;},
+  span(){return this.d1-this.d0;},
+  LMAX:10.2,
+  x(y,G,Wp){ if(!this.log) return G+(y-this.d0)/this.span()*Wp;
+    const ya=Math.max(2026.5-y,0.6); return G+(1-Math.log10(ya)/this.LMAX)*Wp;},
+  ix(x,G,Wp){ if(!this.log) return this.d0+(x-G)/Wp*this.span();
+    return 2026.5-Math.pow(10,(1-(x-G)/Wp)*this.LMAX);},
+  levelFor(S){ if(S<=this.THR[5])return 5; if(S<=this.THR[4])return 4; if(S<=this.THR[3])return 3; if(S<=this.THR[2])return 2; return 1;},
+  alphaFor(lvl,S,isLens){
+    const t=this.THR[lvl]*(isLens?2.5:1); if(!isFinite(t))return 1;
+    if(S<=t)return 1; if(S<=t*1.6)return 1-(S-t)/(t*.6); return 0;},
+  size(){
+    const H=this.bands().reduce((a,b)=>a+b[2],0)+34;
+    const d=fitCanvas(this.cv,H); return d?{cw:d.cw,H,ctx:d.ctx}:null;
+  },
+  boxes:[],
+  render(){
+    const dim=this.size(); if(!dim)return;
+    const {cw,H,ctx}=dim; const T=tokens();
+    ctx.fillStyle=T.panel; ctx.fillRect(0,0,cw,H);
+    const G=118, Wp=cw-G-10;
+    const bands=this.bands(); this.boxes=[];
+    const q=this.q.toLowerCase();
+    let hitCount=0;
+    if(!this.log){
+      const eras=[[-800,476,'Antiquity'],[476,1453,'Middle Ages'],[1453,1789,'Early Modern'],[1789,2026,'Modern']];
+      ctx.textAlign='left'; ctx.font='10px -apple-system,system-ui,sans-serif';
+      for(const [a,b,n] of eras){
+        const xa=clamp(this.x(a,G,Wp),G,cw-10), xb=clamp(this.x(b,G,Wp),G,cw-10);
+        if(xb-xa<4)continue;
+        ctx.fillStyle=T.accent; ctx.globalAlpha=.055; ctx.fillRect(xa,0,xb-xa,H-30);
+        if(xb-xa>70){ctx.globalAlpha=.75;ctx.fillStyle=T.ink3;ctx.fillText(n,xa+5,12);}
+        ctx.globalAlpha=1;
+      }
+    }
+    ctx.strokeStyle=T.line;ctx.lineWidth=1;
+    ctx.font='11px ui-monospace,Menlo,monospace'; ctx.fillStyle=T.ink2; ctx.textAlign='center';
+    if(!this.log){
+      const steps=[2000,1000,500,200,100,50,20,10,5,2,1];
+      const step=steps.find(s=>this.span()/s<=14)||1;
+      const start=Math.ceil(this.d0/step)*step;
+      ctx.beginPath();
+      for(let y=start;y<=this.d1;y+=step){
+        const x=this.x(y,G,Wp);
+        ctx.moveTo(x,0);ctx.lineTo(x,H-30);
+        ctx.fillText(fmtY(y),x,H-10);
+      }
+      ctx.globalAlpha=.35;ctx.stroke();ctx.globalAlpha=1;
+    } else {
+      const labs=[[1e10,'10 Gya'],[1e9,'1 Gya'],[1e8,'100 Mya'],[1e7,'10 Mya'],[1e6,'1 Mya'],[1e5,'100 kya'],[1e4,'10 kya'],[1e3,'1,000 ya'],[100,'100 ya'],[10,'10 ya']];
+      ctx.beginPath();
+      for(const [ya,lab] of labs){
+        const x=this.x(2026.5-ya,G,Wp);
+        if(x<G)continue;
+        ctx.moveTo(x,0);ctx.lineTo(x,H-30);ctx.fillText(lab,x,H-10);
+      }
+      ctx.globalAlpha=.35;ctx.stroke();ctx.globalAlpha=1;
+    }
+    const xn=this.x(2026,G,Wp);
+    if(xn>=G&&xn<=cw){ctx.strokeStyle=T.accent2;ctx.setLineDash([4,4]);ctx.beginPath();ctx.moveTo(xn,0);ctx.lineTo(xn,H-30);ctx.stroke();ctx.setLineDash([]);}
+    let yTop=0;
+    const baseL=this.log?2:this.levelFor(this.span());
+    for(const [key,label,bh,si] of bands){
+      ctx.strokeStyle=T.line;ctx.globalAlpha=.8;ctx.beginPath();ctx.moveTo(0,yTop+bh);ctx.lineTo(cw,yTop+bh);ctx.stroke();ctx.globalAlpha=1;
+      ctx.fillStyle=si===null?T.accent:T.s[si];ctx.beginPath();ctx.arc(10,yTop+13,4,0,7);ctx.fill();
+      ctx.fillStyle=T.ink2;ctx.font='600 10.5px -apple-system,system-ui,sans-serif';ctx.textAlign='left';
+      ctx.fillText(label.toUpperCase(),20,yTop+17);
+      const isLens=['MU','SC','MZ'].includes(key);
+      const evs=EVENTS.filter(e=>e[3]===key&&!this.off.has(e[6])).sort((a,b)=>a[0]-b[0]);
+      const laneH=17, maxLanes=Math.max(1,Math.floor((bh-24)/laneH));
+      const laneEnd=new Array(maxLanes).fill(-1e18);
+      ctx.font='11.5px -apple-system,system-ui,sans-serif';
+      for(const ev of evs){
+        const [y0,y1,title,,lvl]=ev; const cat=ev[6], typ=ev[7];
+        let a=this.log ? (key==='CO'?1:(lvl<=2?1:0)) : this.alphaFor(lvl,this.span(),isLens);
+        if(a<=0.02)continue;
+        const x0=this.x(y0,G,Wp); const xe=y1?this.x(y1,G,Wp):x0;
+        if(xe<G-40||x0>cw)continue;
+        const isMatch=q&&((title.toLowerCase().includes(q))||ev[5].includes(q));
+        if(q){ if(isMatch){hitCount++;} else a*=.12; }
+        const col=catColor(cat,T);
+        const labelW=ctx.measureText(title).width;
+        let lane=laneEnd.findIndex(le=>le<x0-4), noLabel=false;
+        if(lane<0){lane=0;let m=1e18;laneEnd.forEach((le,i)=>{if(le<m){m=le;lane=i;}});
+          if(laneEnd[lane]>=x0-4) noLabel=true;}
+        const prevEnd=laneEnd[lane];
+        const rightX=(y1?Math.max(xe,x0):x0)+7;
+        let mode=noLabel?'none':'right';
+        if(mode==='right'&&rightX+labelW>=cw-4)
+          mode=(x0-9-labelW>Math.max(G,prevEnd+4))?'left':'none';
+        laneEnd[lane]=Math.max(prevEnd,Math.max(xe,x0)+8+(mode==='right'?labelW:0));
+        const yy=yTop+26+lane*laneH;
+        ctx.globalAlpha=a; ctx.fillStyle=col; ctx.strokeStyle=col;
+        const w=Math.max(xe-x0,6);
+        if(typ==='era'){                                   // translucent swath
+          ctx.globalAlpha=a*.22; ctx.fillRect(x0,yTop+22,w,bh-26);
+          ctx.globalAlpha=a*.9; ctx.fillRect(x0,yy-1,w,2);
+        } else if(typ==='zone'){                            // thick tapered ribbon
+          const th=Math.max(5,12-lvl*1.2);
+          ctx.beginPath();
+          ctx.moveTo(x0,yy); ctx.lineTo(x0+Math.min(9,w*.28),yy-th/2);
+          ctx.lineTo(x0+w-Math.min(9,w*.28),yy-th/2); ctx.lineTo(x0+w,yy);
+          ctx.lineTo(x0+w-Math.min(9,w*.28),yy+th/2); ctx.lineTo(x0+Math.min(9,w*.28),yy+th/2);
+          ctx.closePath(); ctx.fill();
+        } else if(typ==='life'){                            // capsule with birth dot + death cap
+          ctx.globalAlpha=a*.55; ctx.beginPath(); ctx.roundRect(x0,yy-3.5,w,7,3.5); ctx.fill();
+          ctx.globalAlpha=a; ctx.beginPath(); ctx.arc(x0,yy,3.4,0,7); ctx.fill();
+          ctx.lineWidth=2; ctx.beginPath(); ctx.moveTo(x0+w,yy-5); ctx.lineTo(x0+w,yy+5); ctx.stroke();
+        } else if(y1||typ==='episode'){                     // bar
+          ctx.beginPath(); ctx.roundRect(x0,yy-4,w,8,4); ctx.fill();
+        } else {                                            // moment — a quiet point
+          ctx.beginPath(); ctx.arc(x0,yy,3.2,0,7); ctx.fill();
+        }
+        if(isMatch){ctx.strokeStyle=T.accent2;ctx.lineWidth=1.6;ctx.beginPath();ctx.arc(x0,yy,7,0,7);ctx.stroke();}
+        ctx.fillStyle=T.ink;
+        if(a>0.25){
+          if(mode==='right') ctx.fillText(title,rightX,yy+4);
+          else if(mode==='left') ctx.fillText(title,x0-9-labelW,yy+4);
+        }
+        ctx.globalAlpha=1;
+        this.boxes.push({x:(mode==='left'?x0-11-labelW:x0-8),y:yy-9,w:(y1?xe-x0:0)+16+(mode==='none'?4:labelW),h:18,ev,band:label});
+      }
+      yTop+=bh;
+    }
+    // hover crosshair + year readout
+    if(this.hoverX!==null&&this.hoverX>G&&this.hoverX<cw){
+      const yr=this.ix(this.hoverX,G,Wp);
+      ctx.strokeStyle=T.accent;ctx.globalAlpha=.55;ctx.lineWidth=1;
+      ctx.beginPath();ctx.moveTo(this.hoverX,0);ctx.lineTo(this.hoverX,H-30);ctx.stroke();
+      ctx.globalAlpha=1;
+      yearPill(ctx,T,this.hoverX,H-26,this.log?fmtBig(yr):fmtY(yr));
+    }
+    $('#zoomReadout').textContent=this.log?'log scale · Big Bang → now':
+      `showing importance ≤ ${baseL} of 5 · span ${Math.round(this.span()).toLocaleString()} yrs`;
+    $('#searchCnt').textContent=q?`${hitCount} hits`:'';
+  },
+  animTo(a,b){
+    if(reduceMotion){this.d0=a;this.d1=b;this.render();return;}
+    const A0=this.d0,B0=this.d1,t0=performance.now();
+    const step=t=>{const p=clamp((t-t0)/650,0,1),e=p<.5?4*p*p*p:1-Math.pow(-2*p+2,3)/2;
+      this.d0=A0+(a-A0)*e; this.d1=B0+(b-B0)*e; this.render();
+      if(p<1)requestAnimationFrame(step);};
+    requestAnimationFrame(step);
+  },
+  init(){
+    const cv=this.cv;
+    // his own life events, plus the music row so his lifespan sits beside Bach's and Beethoven's
+    $('#btnMozart').addEventListener('click',()=>{this.log=false;this.lens.MZ=true;this.lens.MU=true;
+      this.syncChips();this.animTo(1735,1835);});
+    $('#btn1776z').addEventListener('click',()=>{this.log=false;this.animTo(1746,1806);});
+    $('#btnDeep').addEventListener('click',()=>{this.log=!this.log;this.render();});
+    $('#btnResetZ').addEventListener('click',()=>{this.log=false;this.animTo(-3000,2026);});
+    $('#searchBox').addEventListener('input',e=>{this.q=e.target.value.trim();this.render();});
+    document.querySelectorAll('#lensRow .chip').forEach(ch=>ch.addEventListener('click',()=>{
+      const k=ch.dataset.lens; this.lens[k]=!this.lens[k]; ch.classList.toggle('on',this.lens[k]); this.render();}));
+    // category filter chips
+    const row=$('#catRow');
+    for(const c of CATS){
+      const b=document.createElement('button'); b.className='chip on'; b.dataset.cat=c.id;
+      b.innerHTML=`<span class="dot" style="background:var(--s${c.si+1})"></span>${c.name}`;
+      b.addEventListener('click',()=>{
+        if(this.off.has(c.id)){this.off.delete(c.id);b.classList.add('on');}
+        else {this.off.add(c.id);b.classList.remove('on');}
+        this.render();});
+      row.appendChild(b);
+    }
+    buildGrammarLegend();
+    cv.addEventListener('wheel',e=>{e.preventDefault(); if(this.log)return;
+      const r=cv.getBoundingClientRect(); const G=118,Wp=cv.clientWidth-G-10;
+      const yc=this.ix(e.clientX-r.left,G,Wp);
+      const f=Math.pow(1.0018,e.deltaY); let s=clamp(this.span()*f,8,80000);
+      const frac=(yc-this.d0)/this.span();
+      this.d0=yc-frac*s; this.d1=this.d0+s; this.render();
+    },{passive:false});
+    let drag=null;
+    cv.addEventListener('pointerdown',e=>{if(!this.log){drag={x:e.clientX,d0:this.d0,d1:this.d1,moved:false};cv.setPointerCapture(e.pointerId);}});
+    cv.addEventListener('pointermove',e=>{
+      const r=cv.getBoundingClientRect(),mx=e.clientX-r.left,my=e.clientY-r.top;
+      this.hoverX=mx;
+      if(drag){const G=118,Wp=cv.clientWidth-G-10;
+        const dy=(e.clientX-drag.x)/Wp*(drag.d1-drag.d0);
+        if(Math.abs(e.clientX-drag.x)>3)drag.moved=true;
+        this.d0=drag.d0-dy;this.d1=drag.d1-dy;this.render();return;}
+      const b=this.boxes.findLast(b=>mx>=b.x&&mx<=b.x+b.w&&my>=b.y&&my<=b.y+b.h);
+      this.render();
+      if(b){const [y0,y1,t,,lvl,tags]=b.ev; const cat=CATBY[b.ev[6]], typ=b.ev[7], pl=b.ev[8];
+        showTip(e.clientX,e.clientY,`<div class=t>${t}</div><div class=m>${fmtBig(y0)}${y1?' – '+fmtY(y1):''} · ${b.band}</div>`+
+          `<div class=m>${cat?cat.name:''} · ${typ}${pl?' · '+pl[2]:''}</div>`+
+          `<div class=m>importance ${'●'.repeat(6-lvl)}${'○'.repeat(lvl-1)} (${lvl}) · click → Wikipedia</div>`);
+        cv.style.cursor='pointer';
+      } else {hideTip();cv.style.cursor='crosshair';}
+    });
+    cv.addEventListener('pointerup',e=>{
+      const wasDrag=drag&&drag.moved; drag=null; if(wasDrag)return;
+      const r=cv.getBoundingClientRect(),mx=e.clientX-r.left,my=e.clientY-r.top;
+      const b=this.boxes.findLast(b=>mx>=b.x&&mx<=b.x+b.w&&my>=b.y&&my<=b.y+b.h);
+      if(b){const t=b.ev[2].split(/ — | \(|·/)[0];
+        window.open('https://en.wikipedia.org/wiki/Special:Search?search='+encodeURIComponent(t),'_blank');}
+    });
+    cv.addEventListener('pointerleave',()=>{hideTip();this.hoverX=null;this.render();});
+    this.syncChips();
+  },
+  syncChips(){document.querySelectorAll('#lensRow .chip').forEach(ch=>ch.classList.toggle('on',this.lens[ch.dataset.lens]));}
+};
+function buildGrammarLegend(){
+  const row=$('#grammarRow'); if(!row)return;
+  const g=(svg,label)=>`<span class="g"><svg width="30" height="14" viewBox="0 0 30 14">${svg}</svg>${label}</span>`;
+  const c='var(--ink2)';
+  row.innerHTML=`<span class="note" style="font-weight:600">Shape =</span>`+
+    g(`<circle cx="15" cy="7" r="3.2" fill="${c}"/>`,'moment')+
+    g(`<rect x="3" y="3" width="24" height="8" rx="4" fill="${c}"/>`,'episode')+
+    g(`<rect x="4" y="4" width="22" height="7" rx="3.5" fill="${c}" opacity=".55"/><circle cx="4" cy="7.5" r="3.2" fill="${c}"/><rect x="25" y="2.5" width="2" height="10" fill="${c}"/>`,'a life')+
+    g(`<path d="M2 7 L7 2.5 L23 2.5 L28 7 L23 11.5 L7 11.5 Z" fill="${c}"/>`,'territory')+
+    g(`<rect x="2" y="1" width="26" height="12" fill="${c}" opacity=".22"/><rect x="2" y="6" width="26" height="2" fill="${c}"/>`,'era')+
+    `<span class="note" style="font-weight:600;margin-left:6px">Color = domain</span>`;
+}
+
+// ================= FLOW ENGINE (empires + braided rivers) =================
+// Lineage-ordered stacked ribbons: children sit next to their parent, so a split
+// renders as a fork. Thickness = weight. This is the Histomap mechanic.
+function flowLayout(items,W,H,d0,d1,mode){
+  const set=new Map(items.map(i=>[i.id,i]));
+  const kids=new Map(), pars=new Map();
+  for(const it of items){kids.set(it.id,[]);pars.set(it.id,[]);}
+  for(const it of items){
+    for(const t of (it.to||[])) if(set.has(t)&&t!==it.id) kids.get(it.id).push(t);
+    for(const f of (it.from||[])) if(set.has(f)&&f!==it.id) pars.get(it.id).push(f);
+  }
+  const REG=['EU','ME','AS','AM','AF'];
+  const roots=items.filter(i=>pars.get(i.id).length===0)
+    .sort((a,b)=>{const ra=REG.indexOf(a.region),rb=REG.indexOf(b.region);
+      return (ra<0?9:ra)-(rb<0?9:rb) || a.start-b.start;});
+  const order=new Map(); let n=0;
+  const visit=id=>{ if(order.has(id))return; order.set(id,n++);
+    for(const k of kids.get(id).slice().sort((a,b)=>set.get(a).start-set.get(b).start)) visit(k); };
+  roots.forEach(r=>visit(r.id));
+  items.slice().sort((a,b)=>a.start-b.start).forEach(i=>visit(i.id));
+  const ord=[...items].sort((a,b)=>order.get(a.id)-order.get(b.id));
+  const wAt=(p,y)=>{
+    if(y<p.start||y>p.end)return 0;
+    const Wt=p.weight;
+    if(!Wt||!Wt.length)return 1;
+    if(y<=Wt[0][0])return Wt[0][1];
+    if(y>=Wt[Wt.length-1][0])return Wt[Wt.length-1][1];
+    for(let i=1;i<Wt.length;i++){ if(y<=Wt[i][0]){
+      const [ya,wa]=Wt[i-1],[yb,wb]=Wt[i]; const t=(y-ya)/((yb-ya)||1); return wa+(wb-wa)*t; } }
+    return 0;};
+  const STEP=Math.max(2,(d1-d0)/Math.max(W,1)*2);
+  const cols=[]; let maxTotal=0;
+  for(let y=d0;y<=d1;y+=STEP){
+    const act=[];let tot=0;
+    for(const p of ord){const w=wAt(p,y); if(w>0.001){act.push([p,w]);tot+=w;}}
+    if(tot>maxTotal)maxTotal=tot;
+    cols.push({y,act,tot});
+  }
+  const paths=new Map();
+  for(const c of cols){
+    const scale=mode==='norm'?(c.tot>0?H/c.tot:0):(maxTotal>0?H*0.94/maxTotal:0);
+    let acc=mode==='norm'?0:(H-c.tot*scale)/2;
+    for(const [p,w] of c.act){
+      const h=w*scale;
+      let a=paths.get(p.id); if(!a){a={p,top:[],bot:[]};paths.set(p.id,a);}
+      a.top.push([c.y,acc]); a.bot.push([c.y,acc+h]);
+      acc+=h;
+    }
+  }
+  return {paths,cols,order,kids,pars,set,maxTotal};
+}
+// great traditions / ideological trunks → a stable hue each, matched against stream ids
+const TRUNKS=[
+  [/christian|catholic|orthodox|protestant|luther|calvin|anglic|methodis|baptist|pentecost|mormon|anabapt|chalcedon/,268],
+  [/islam|sunni|shia|sufi|wahhab/,145],
+  [/buddh|theravada|mahayana|vajrayana|zen/,38],
+  [/hindu|vedic|jain|sikh|sramana/,12],
+  [/jud(a|e)|hebrew|israelite/,205],
+  [/chinese|confucian|dao|tao|shinto/,325],
+  [/zoroastr|manich|persia/,186],
+  [/secular|nonreligious|atheis|humanis/,240],
+  [/folk|indigenous|animism|shaman|pagan|norse|celtic|slavic|near-eastern|greco-roman/,58],
+  [/marx|commun|social|labour/,355],
+  [/liberal|enlightenment|classical-econom|neoliberal/,212],
+  [/conservat|reaction|monarch/,28],
+  [/fasci|nazi|authoritarian/,275],
+  [/anarch/,0],
+  [/national|populis/,300],
+  [/environment|green|ecolog/,132]];
+function Ribbons(cfg){
+  return {
+    cv:$(cfg.canvas), items:[], lay:null, d0:cfg.d0, d1:cfg.d1, mode:cfg.mode||'norm',
+    hover:null, hoverX:null, q:'', off:new Set(), H:cfg.height||560, colorBy:cfg.colorBy||'region',
+    hues:{EU:210,ME:35,AS:52,AM:150,AF:0},
+    colorOf(p,T){
+      if(this.colorBy==='region'){
+        const h=this.hues[p.region]!==undefined?this.hues[p.region]:280;
+        let s=0;for(let i=0;i<p.id.length;i++)s=(s*31+p.id.charCodeAt(i))>>>0;
+        return `hsl(${(h+(s%26)-13+360)%360} ${38+s%20}% ${46+((s>>3)%18)}%)`;
+      }
+      // Hue = the great tradition a stream belongs to, found by walking up the ancestry to the
+      // first recognised trunk. Family-head alone is too coarse: Christianity, Islam and
+      // Zoroastrianism all descend from Near Eastern polytheism and would share one colour.
+      const chain=[p.id]; let q=p.id, guard=0;
+      while(this.lay&&this.lay.pars.get(q)&&this.lay.pars.get(q).length&&guard++<40){
+        q=this.lay.pars.get(q)[0]; chain.push(q);}
+      for(let d=0;d<chain.length;d++){
+        for(const [re,hue] of TRUNKS) if(re.test(chain[d]))
+          return `hsl(${hue} ${44-Math.min(d,4)*3}% ${36+Math.min(d,5)*7}%)`;
+      }
+      const fam=chain[chain.length-1];
+      let s=0;for(let i=0;i<fam.length;i++)s=(s*31+fam.charCodeAt(i))>>>0;
+      return `hsl(${(s*47)%360} 30% ${44+Math.min(chain.length,5)*5}%)`;
+    },
+    kin(id){
+      const out=new Set([id]); if(!this.lay)return out;
+      const up=[id],dn=[id];
+      while(up.length){const c=up.pop(); for(const p of (this.lay.pars.get(c)||[])) if(!out.has(p)){out.add(p);up.push(p);} }
+      while(dn.length){const c=dn.pop(); for(const k of (this.lay.kids.get(c)||[])) if(!out.has(k)){out.add(k);dn.push(k);} }
+      return out;
+    },
+    render(){
+      const d=fitCanvas(this.cv,this.H); if(!d)return;
+      const {cw,ctx}=d; const T=tokens(); const H=this.H;
+      ctx.fillStyle=T.panel; ctx.fillRect(0,0,cw,H);
+      const G=10, Wp=cw-G-10, TOP=26, BOT=H-30, PH=BOT-TOP;
+      const vis=this.items.filter(i=>!this.off.has(i.region));
+      if(!vis.length){ctx.fillStyle=T.ink3;ctx.font='13px -apple-system,system-ui,sans-serif';
+        ctx.fillText('No data loaded for this view.',G+10,H/2);return;}
+      this.lay=flowLayout(vis,Wp,PH,this.d0,this.d1,this.mode);
+      const X=y=>G+(y-this.d0)/(this.d1-this.d0)*Wp;
+      const q=this.q.toLowerCase();
+      const kin=this.hover?this.kin(this.hover):null;
+      this.bands=[];
+      for(const [id,a] of this.lay.paths){
+        if(a.top.length<2)continue;
+        const p=a.p, col=this.colorOf(p,T);
+        const dim=(kin&&!kin.has(id))||(q&&!p.name.toLowerCase().includes(q));
+        ctx.globalAlpha=dim?0.13:(kin&&kin.has(id)?0.98:0.86);
+        ctx.beginPath();
+        ctx.moveTo(X(a.top[0][0]),TOP+a.top[0][1]);
+        for(let i=1;i<a.top.length;i++)ctx.lineTo(X(a.top[i][0]),TOP+a.top[i][1]);
+        for(let i=a.bot.length-1;i>=0;i--)ctx.lineTo(X(a.bot[i][0]),TOP+a.bot[i][1]);
+        ctx.closePath(); ctx.fillStyle=col; ctx.fill();
+        if(kin&&kin.has(id)){ctx.strokeStyle=T.ink;ctx.lineWidth=1.1;ctx.globalAlpha=.5;ctx.stroke();}
+        // label inside the ribbon at its thickest point
+        let bi=0,bt=0;
+        for(let i=0;i<a.top.length;i++){const t=a.bot[i][1]-a.top[i][1]; if(t>bt){bt=t;bi=i;}}
+        const bx=X(a.top[bi][0]), by=TOP+(a.top[bi][1]+a.bot[bi][1])/2;
+        const x0=X(a.top[0][0]), x1=X(a.top[a.top.length-1][0]);
+        if(bt>=11&&x1-x0>44&&!dim){
+          ctx.globalAlpha=1; ctx.font=`600 ${clamp(bt*0.55,10,13)}px -apple-system,system-ui,sans-serif`;
+          const nm=p.name; const tw=ctx.measureText(nm).width;
+          if(tw<x1-x0-8){
+            ctx.textAlign='center'; ctx.fillStyle='rgba(0,0,0,.34)';
+            ctx.fillText(nm,clamp(bx,x0+tw/2+4,x1-tw/2-4)+0.7,by+4.4);
+            ctx.fillStyle='#fff'; ctx.fillText(nm,clamp(bx,x0+tw/2+4,x1-tw/2-4),by+3.8);
+            ctx.textAlign='left';
+          }
+        }
+        this.bands.push({id,a,p,col});
+        ctx.globalAlpha=1;
+      }
+      // lineage links across gaps (conquests, revivals)
+      ctx.setLineDash([3,3]); ctx.lineWidth=1.2;
+      for(const b of this.bands){
+        for(const k of (this.lay.kids.get(b.id)||[])){
+          const kb=this.lay.paths.get(k); if(!kb||!kb.top.length)continue;
+          const ax=X(b.a.top[b.a.top.length-1][0]), ay=TOP+(b.a.top[b.a.top.length-1][1]+b.a.bot[b.a.bot.length-1][1])/2;
+          const bx=X(kb.top[0][0]), by=TOP+(kb.top[0][1]+kb.bot[0][1])/2;
+          if(Math.abs(bx-ax)<3&&Math.abs(by-ay)<26)continue;
+          ctx.globalAlpha=(kin&&(kin.has(b.id)&&kin.has(k)))?.75:.16;
+          ctx.strokeStyle=T.ink2; ctx.beginPath(); ctx.moveTo(ax,ay);
+          ctx.bezierCurveTo((ax+bx)/2,ay,(ax+bx)/2,by,bx,by); ctx.stroke();
+        }
+      }
+      ctx.setLineDash([]); ctx.globalAlpha=1;
+      // axis
+      ctx.strokeStyle=T.line;ctx.font='11px ui-monospace,Menlo,monospace';ctx.fillStyle=T.ink2;ctx.textAlign='center';
+      const span=this.d1-this.d0;
+      const steps=[2000,1000,500,250,100,50,25,10,5];
+      const step=steps.find(s=>span/s>=6)||5;
+      ctx.beginPath();
+      for(let y=Math.ceil(this.d0/step)*step;y<=this.d1;y+=step){
+        const x=X(y); ctx.moveTo(x,TOP-6);ctx.lineTo(x,BOT+4); ctx.fillText(fmtY(y),x,BOT+20);
+      }
+      ctx.globalAlpha=.3;ctx.stroke();ctx.globalAlpha=1;ctx.textAlign='left';
+      if(this.hoverX!==null&&this.hoverX>G&&this.hoverX<cw){
+        const yr=this.d0+(this.hoverX-G)/Wp*span;
+        ctx.strokeStyle=T.accent;ctx.globalAlpha=.5;ctx.beginPath();
+        ctx.moveTo(this.hoverX,TOP-6);ctx.lineTo(this.hoverX,BOT+2);ctx.stroke();ctx.globalAlpha=1;
+        yearPill(ctx,T,this.hoverX,2,fmtY(yr));
+      }
+      if(cfg.onRender)cfg.onRender(this);
+    },
+    at(mx,my){
+      const G=10,Wp=this.cv.clientWidth-G-10,TOP=26;
+      if(!this.bands)return null;
+      for(const b of this.bands){
+        const a=b.a; const n=a.top.length;
+        const x0=G+(a.top[0][0]-this.d0)/(this.d1-this.d0)*Wp;
+        const x1=G+(a.top[n-1][0]-this.d0)/(this.d1-this.d0)*Wp;
+        if(mx<x0-2||mx>x1+2)continue;
+        const t=clamp(Math.round((mx-x0)/Math.max(x1-x0,1)*(n-1)),0,n-1);
+        if(my>=TOP+a.top[t][1]-1&&my<=TOP+a.bot[t][1]+1)return b;
+      }
+      return null;
+    },
+    init(){
+      const cv=this.cv;
+      cv.addEventListener('pointermove',e=>{
+        const r=cv.getBoundingClientRect(),mx=e.clientX-r.left,my=e.clientY-r.top;
+        this.hoverX=mx;
+        const b=this.at(mx,my);
+        const id=b?b.id:null;
+        this.hover=id; this.render();
+        if(b){const p=b.p;
+          const par=(this.lay.pars.get(p.id)||[]).map(i=>this.lay.set.get(i).name);
+          const kid=(this.lay.kids.get(p.id)||[]).map(i=>this.lay.set.get(i).name);
+          showTip(e.clientX,e.clientY,`<div class=t>${p.name}</div><div class=m>${fmtY(p.start)} – ${fmtY(p.end)}${p.region?' · '+p.region:''}</div>`+
+            (p.note?`<div class=m>${p.note}</div>`:'')+
+            (par.length?`<div class=m>← from ${par.join(', ')}</div>`:'')+
+            (kid.length?`<div class=m>→ becomes ${kid.join(', ')}</div>`:''));
+          cv.style.cursor='pointer';
+        } else {hideTip();cv.style.cursor='crosshair';}
+      });
+      cv.addEventListener('pointerleave',()=>{hideTip();this.hover=null;this.hoverX=null;this.render();});
+      cv.addEventListener('wheel',e=>{e.preventDefault();
+        const r=cv.getBoundingClientRect(); const G=10,Wp=cv.clientWidth-G-10;
+        const yc=this.d0+(e.clientX-r.left-G)/Wp*(this.d1-this.d0);
+        const f=Math.pow(1.0018,e.deltaY); const s=clamp((this.d1-this.d0)*f,60,16000);
+        const frac=(yc-this.d0)/(this.d1-this.d0);
+        this.d0=yc-frac*s; this.d1=this.d0+s; this.render();
+      },{passive:false});
+      let drag=null;
+      cv.addEventListener('pointerdown',e=>{drag={x:e.clientX,d0:this.d0,d1:this.d1};cv.setPointerCapture(e.pointerId);});
+      cv.addEventListener('pointerup',()=>{drag=null;});
+      cv.addEventListener('pointermove',e=>{
+        if(!drag)return;
+        const G=10,Wp=cv.clientWidth-G-10;
+        const dy=(e.clientX-drag.x)/Wp*(drag.d1-drag.d0);
+        this.d0=drag.d0-dy;this.d1=drag.d1-dy;this.render();
+      });
+    },
+    animTo(a,b){
+      if(reduceMotion){this.d0=a;this.d1=b;this.render();return;}
+      const A=this.d0,B=this.d1,t0=performance.now();
+      const step=t=>{const p=clamp((t-t0)/620,0,1),e=p<.5?4*p*p*p:1-Math.pow(-2*p+2,3)/2;
+        this.d0=A+(a-A)*e;this.d1=B+(b-B)*e;this.render(); if(p<1)requestAnimationFrame(step);};
+      requestAnimationFrame(step);
+    }
+  };
+}
+
+// ================= ③ FLOW OF EMPIRES =================
+const Flow=Ribbons({canvas:'#flowCanvas',d0:-1200,d1:2026,height:600,mode:'norm',colorBy:'region',
+  onRender(r){
+    const n=r.items.length;
+    $('#flowCap').innerHTML=`<b>${n} polities, ${r.mode==='norm'?'share of world weight':'absolute weight'}.</b> `+
+      `Thickness is an editorial estimate of scale and influence (10 = the dominant power on Earth of its era, 1 = a small local culture) — an argument, not a measurement. `+
+      `Dashed curves are lineage links that jump across the stack: a conquest, a partition, a revival.`;
+  }});
+Flow.items=POLITIES;
+const REGIONNAMES={EU:'Europe',ME:'MidEast & Africa',AS:'Asia',AM:'Americas & Oceania',AF:'Africa'};
+function initFlow(){
+  Flow.init();
+  const row=$('#flowRegionRow');
+  const regs=[...new Set(POLITIES.map(p=>p.region))].filter(Boolean);
+  for(const rg of regs){
+    const b=document.createElement('button');b.className='chip on';
+    b.innerHTML=`<span class="dot" style="background:hsl(${Flow.hues[rg]!==undefined?Flow.hues[rg]:280} 45% 52%)"></span>${REGIONNAMES[rg]||rg}`;
+    b.addEventListener('click',()=>{
+      if(Flow.off.has(rg)){Flow.off.delete(rg);b.classList.add('on');}else{Flow.off.add(rg);b.classList.remove('on');}
+      Flow.render();});
+    row.appendChild(b);
+  }
+  $('#flowRome').addEventListener('click',()=>{Flow.q='';$('#flowSearch').value='';Flow.animTo(-300,900);});
+  $('#flowSplit').addEventListener('click',()=>Flow.animTo(180,820));
+  $('#flowAll').addEventListener('click',()=>Flow.animTo(-1200,2026));
+  $('#flowMode').addEventListener('click',e=>{
+    Flow.mode=Flow.mode==='norm'?'abs':'norm';
+    e.target.textContent=Flow.mode==='norm'?'Absolute scale':'Share of world';
+    Flow.render();});
+  $('#flowSearch').addEventListener('input',e=>{
+    Flow.q=e.target.value.trim(); Flow.render();
+    const n=Flow.q?POLITIES.filter(p=>p.name.toLowerCase().includes(Flow.q.toLowerCase())).length:0;
+    $('#flowCnt').textContent=Flow.q?`${n} hits`:'';});
+}
+
+// ================= ④ SPACE-TIME CUBE =================
+const Cube={
+  cv:$('#cubeCanvas'), az:-0.62, el:0.52, zoom:1, spin:null, fast:false,
+  sov:'Roman Empire', showEvents:true, showLand:true, H:600, simp:null,
+  years(){return YEARS;},
+  simplify(){
+    if(this.simp)return this.simp;
+    const out={};
+    for(const y of YEARS){
+      out[y]=GEO[y].filter(f=>f.area>7).map(f=>{
+        const rings=f.rings.filter(r=>r.length>=16).map(r=>{
+          const n=r.length/2, keep=Math.max(1,Math.ceil(n/24)), pts=[];
+          for(let i=0;i<n;i+=keep)pts.push(r[2*i],r[2*i+1]);
+          pts.push(r[0],r[1]);
+          return pts;});
+        return {sov:f.sov,name:f.name,rings:rings.filter(r=>r.length>=8),lc:f.lc};
+      }).filter(f=>f.rings.length);
+    }
+    return this.simp=out;
+  },
+  zOf(year){
+    const Y=YEARS;
+    if(year<=Y[0])return 0; if(year>=Y[Y.length-1])return 1;
+    for(let i=1;i<Y.length;i++) if(year<=Y[i]){
+      return (i-1+(year-Y[i-1])/(Y[i]-Y[i-1]))/(Y.length-1);}
+    return 1;
+  },
+  proj(lon,lat,z,S,cx,cy){
+    const X=lon/180, Y=lat/90*0.52, Z=(z-0.5)*1.15;
+    const ca=Math.cos(this.az),sa=Math.sin(this.az);
+    const rx=X*ca-Y*sa, ry=X*sa+Y*ca;
+    const se=Math.sin(this.el),ce=Math.cos(this.el);
+    return [cx+rx*S, cy-(ry*se+Z*ce)*S];
+  },
+  render(){
+    const d=fitCanvas(this.cv,this.H); if(!d)return;
+    const {cw,ctx}=d; const T=tokens(); const H=this.H;
+    ctx.fillStyle=T.panel; ctx.fillRect(0,0,cw,H);
+    const S=Math.min(cw,H)*0.42*this.zoom, cx=cw/2, cy=H/2;
+    const SIM=this.simplify();
+    const Y=YEARS, n=Y.length;
+    // box wireframe (back edges first)
+    const corners=[[-180,-60],[180,-60],[180,85],[-180,85]];
+    ctx.lineWidth=1; ctx.strokeStyle=T.line; ctx.globalAlpha=.5;
+    for(const zz of [0,1]){
+      ctx.beginPath();
+      corners.forEach((c,i)=>{const p=this.proj(c[0],c[1],zz,S,cx,cy); i?ctx.lineTo(p[0],p[1]):ctx.moveTo(p[0],p[1]);});
+      ctx.closePath(); ctx.stroke();
+    }
+    ctx.beginPath();
+    for(const c of corners){const a=this.proj(c[0],c[1],0,S,cx,cy),b=this.proj(c[0],c[1],1,S,cx,cy);
+      ctx.moveTo(a[0],a[1]);ctx.lineTo(b[0],b[1]);}
+    ctx.stroke(); ctx.globalAlpha=1;
+    // slices, oldest first
+    const stepSlice=this.fast?2:1;
+    const traced=[];
+    for(let i=0;i<n;i+=stepSlice){
+      const yr=Y[i], z=i/(n-1);
+      const feats=SIM[yr];
+      if(this.showLand){
+        ctx.globalAlpha=.19; ctx.fillStyle=T.ink3;
+        for(const f of feats){
+          ctx.beginPath();
+          for(const r of f.rings){
+            for(let k=0;k<r.length;k+=2){const p=this.proj(r[k],r[k+1],z,S,cx,cy);
+              k?ctx.lineTo(p[0],p[1]):ctx.moveTo(p[0],p[1]);}
+            ctx.closePath();
+          }
+          ctx.fill();
+        }
+      }
+      // traced sovereign
+      const mine=feats.filter(f=>f.sov===this.sov);
+      if(mine.length){
+        ctx.globalAlpha=.85; ctx.fillStyle=T.accent; ctx.strokeStyle=T.accent2; ctx.lineWidth=1.8;
+        let sx=0,sy=0,cnt=0;
+        for(const f of mine){
+          ctx.beginPath();
+          for(const r of f.rings){
+            for(let k=0;k<r.length;k+=2){const p=this.proj(r[k],r[k+1],z,S,cx,cy);
+              k?ctx.lineTo(p[0],p[1]):ctx.moveTo(p[0],p[1]);}
+            ctx.closePath();
+          }
+          ctx.fill(); ctx.stroke();
+          if(f.lc){const p=this.proj(f.lc[0],f.lc[1],z,S,cx,cy);sx+=p[0];sy+=p[1];cnt++;}
+        }
+        if(cnt)traced.push([sx/cnt,sy/cnt,yr]);
+        ctx.globalAlpha=1;
+      }
+      // year label on the left rear edge
+      if(!this.fast){
+        const p=this.proj(-180,85,z,S,cx,cy);
+        ctx.fillStyle=T.ink3; ctx.font='10px ui-monospace,Menlo,monospace'; ctx.textAlign='right';
+        ctx.fillText(fmtY(yr),p[0]-6,p[1]+3); ctx.textAlign='left';
+      }
+    }
+    // the world line of the traced empire
+    if(traced.length>1){
+      ctx.strokeStyle=T.accent2; ctx.lineWidth=2; ctx.globalAlpha=.85;
+      ctx.beginPath(); traced.forEach((p,i)=>i?ctx.lineTo(p[0],p[1]):ctx.moveTo(p[0],p[1])); ctx.stroke();
+      ctx.globalAlpha=1;
+    }
+    // events floating in the block
+    if(this.showEvents&&!this.fast){
+      for(const ev of EVENTS){
+        const pl=ev[8]; if(!pl)continue; if(ev[0]<-3000||ev[0]>2026)continue; if(ev[4]>3)continue;
+        const col=catColor(ev[6],T);
+        const p=this.proj(pl[1],pl[0],this.zOf(ev[0]),S,cx,cy);
+        if(ev[7]==='life'&&ev[1]){
+          // a human life is literally a world line through the block: birth to death
+          const q=this.proj(pl[1],pl[0],this.zOf(ev[1]),S,cx,cy);
+          ctx.strokeStyle=col; ctx.globalAlpha=.8; ctx.lineWidth=2;
+          ctx.beginPath(); ctx.moveTo(p[0],p[1]); ctx.lineTo(q[0],q[1]); ctx.stroke();
+          ctx.fillStyle=col; ctx.globalAlpha=.95;
+          ctx.beginPath(); ctx.arc(p[0],p[1],2.8,0,7); ctx.fill();
+          continue;
+        }
+        ctx.fillStyle=col; ctx.globalAlpha=pl[3]==='region'?.5:.9;
+        ctx.beginPath(); ctx.arc(p[0],p[1],ev[4]<=2?3.4:2.2,0,7); ctx.fill();
+      }
+      ctx.globalAlpha=1;
+    }
+    $('#cubeCap').innerHTML=`<b>Reading the block:</b> each sheet is a world map at one date, oldest at the bottom — `+
+      `<b style="color:var(--accent)">${this.sov}</b> is lit through every sheet it occupies, and the line threads its centre of gravity through time. `+
+      `Dots are events at their real coordinates; a horizontal cut through here is tab ①, a vertical drill is tab ⑤.`;
+  },
+  init(){
+    const cv=this.cv;
+    const sovs={},spanOf={};
+    for(const y of YEARS){
+      const here=new Set();
+      for(const f of GEO[y]) if(f.sov&&f.sov!=='?'){sovs[f.sov]=(sovs[f.sov]||0)+f.area;here.add(f.sov);}
+      for(const s of here) spanOf[s]=(spanOf[s]||0)+1;
+    }
+    const list=Object.entries(sovs).sort((a,b)=>b[1]-a[1]).slice(0,70).map(e=>e[0]).sort();
+    const sel=$('#cubeSov');
+    for(const s of list){const o=document.createElement('option');o.value=s;
+      o.textContent=`${s} — ${spanOf[s]||0} of ${YEARS.length} sheets`;sel.appendChild(o);}
+    // default to a recognisable empire that threads many sheets — the clearest column in the block
+    const WANT=[/^Ottoman/,/^Russian Empire/,/^Roman Empire/,/^France$/,/^Qing/,/^Spain$/,/^Persia/];
+    let pref=null;
+    for(const re of WANT){const hit=list.find(s=>re.test(s)); if(hit&&(spanOf[hit]||0)>=3){pref=hit;break;}}
+    if(!pref) pref=list.slice()
+      .filter(s=>!/hunter|gatherer|aboriginal|tribes|peoples|nomads|cultures/i.test(s))
+      .sort((a,b)=>(spanOf[b]||0)-(spanOf[a]||0)||sovs[b]-sovs[a])[0]||list[0];
+    sel.value=pref; this.sov=pref;
+    sel.addEventListener('change',()=>{this.sov=sel.value;this.render();});
+    $('#cubeEvents').addEventListener('change',e=>{this.showEvents=e.target.checked;this.render();});
+    $('#cubeLand').addEventListener('change',e=>{this.showLand=e.target.checked;this.render();});
+    $('#cubeTop').addEventListener('click',()=>{this.el=1.45;this.render();});
+    $('#cubeSide').addEventListener('click',()=>{this.el=0.10;this.render();});
+    $('#cubeIso').addEventListener('click',()=>{this.az=-0.62;this.el=0.52;this.zoom=1;this.render();});
+    $('#cubeSpin').addEventListener('click',e=>{
+      if(this.spin){cancelAnimationFrame(this.spin);this.spin=null;e.target.textContent='▶ Spin';return;}
+      e.target.textContent='⏸ Stop';
+      const loop=()=>{this.az+=0.006;this.render();this.spin=requestAnimationFrame(loop);};
+      this.spin=requestAnimationFrame(loop);
+    });
+    cv.addEventListener('wheel',e=>{e.preventDefault();
+      this.zoom=clamp(this.zoom*Math.pow(1.0015,-e.deltaY),0.5,4);this.render();},{passive:false});
+    let drag=null;
+    cv.addEventListener('pointerdown',e=>{drag={x:e.clientX,y:e.clientY,az:this.az,el:this.el};
+      this.fast=true;cv.setPointerCapture(e.pointerId);});
+    cv.addEventListener('pointermove',e=>{
+      if(!drag)return;
+      this.az=drag.az+(e.clientX-drag.x)*0.008;
+      this.el=clamp(drag.el-(e.clientY-drag.y)*0.006,0.06,1.5);
+      this.render();});
+    const end=()=>{if(drag){drag=null;this.fast=false;this.render();}};
+    cv.addEventListener('pointerup',end); cv.addEventListener('pointerleave',end);
+  }
+};
+
+// ================= ⑤ CORE SAMPLE =================
+const Core={
+  PRESETS:[['Prague',14.42,50.09],['Philadelphia',-75.16,39.95],['Rome',12.5,41.9],['Istanbul',28.97,41.01],
+    ['Jerusalem',35.22,31.78],['Cairo',31.24,30.05],['Beijing',116.4,39.9],['Mexico City',-99.13,19.43]],
+  init(){
+    const row=$('#corePresets');
+    for(const [n,lon,lat] of this.PRESETS){
+      const b=document.createElement('button');b.className='chip';b.textContent=n;
+      b.addEventListener('click',()=>this.drill(lon,lat,n));row.appendChild(b);
+    }
+    this.drill(14.42,50.09,'Prague');
+  },
+  drill(lon,lat,label){
+    $('#coreWhere').innerHTML=`<b>Drilling at ${label}</b> (${lat.toFixed(2)}°, ${lon.toFixed(2)}°) — newest layer on top, dig down into the past.`;
+    const box=$('#strata');box.innerHTML='';
+    const rows=[];
+    for(const y of YEARS) rows.push({y,f:featureAt(y,lon,lat)});
+    rows.reverse();
+    for(let i=0;i<rows.length;i++){
+      const {y,f}=rows[i];
+      const until=i===0?'now':fmtY(rows[i-1].y);
+      const div=document.createElement('div');div.className='stratum';
+      const name=f?(f.name==='?'?'(unnamed in source atlas)':f.name):'— beyond the mapped world —';
+      const sov=f&&f.sov!==f.name?`<span class="of">part of ${f.sov}</span>`:'';
+      const col=f?sovColor(f.sov):'transparent';
+      div.innerHTML=`<div class="era mono">${fmtY(y)} → ${until}</div><div class="sw" style="background:${col}"></div><div class="who"><b>${name}</b> ${sov}</div>`;
+      box.appendChild(div);
+    }
+  }
+};
+
+// ================= ⑥a BRAIDED RIVERS =================
+const Braid=Ribbons({canvas:'#braidCanvas',d0:-1000,d1:2026,height:440,mode:'norm',colorBy:'root'});
+function initBraid(){
+  Braid.init();
+  const pick=id=>{
+    const sys=(BELIEFS.systems||[]).find(s=>s.id===id);
+    Braid.items=sys?sys.streams:[];
+    Braid.d0=id==='ideology'?1650:-1000; Braid.d1=2026;
+    $('#braidNote').textContent=sys?`${sys.label} · ${sys.streams.length} streams`:'no data';
+    document.querySelectorAll('[data-braid]').forEach(b=>b.classList.toggle('hero',b.dataset.braid===id));
+    Braid.render();
+  };
+  document.querySelectorAll('[data-braid]').forEach(b=>b.addEventListener('click',()=>pick(b.dataset.braid)));
+  pick('religion');
+}
+
+// ================= ⑥b INFORMATION HORIZON =================
+const Horizon={
+  cv:$('#hzCanvas'), H:420, city:null, year:1776,
+  CITIES:[['Prague',50.09,14.42],['Philadelphia',39.95,-75.16],['London',51.51,-0.13],['Vienna',48.21,16.37],
+    ['Rome',41.90,12.50],['Beijing',39.90,116.40],['Delhi',28.61,77.21],['Cairo',30.05,31.24],['Lima',-12.05,-77.04]],
+  // Calibrated against known cases: news of the Declaration (4 Jul 1776) was printed in
+  // London on 17 Aug — ~5,900 km in 44 days, so ~130 km/day for an important dispatch in 1776.
+  speed(y){ // km/day that news actually travelled, as one global average over all routes
+    if(y<-500)return 25; if(y<500)return 40; if(y<1500)return 30; if(y<1750)return 60;
+    if(y<1830)return 110; if(y<1860)return 300; if(y<1900)return 4000; return 1e6;},
+  speedLabel(y){
+    if(y<1830)return 'horse, ship and foot'; if(y<1860)return 'railway and optical semaphore';
+    if(y<1900)return 'electric telegraph'; return 'near-instant';},
+  dist(a,b,c,d){ // great circle km
+    const R=6371,r=Math.PI/180;
+    const dLat=(c-a)*r,dLon=(d-b)*r;
+    const h=Math.sin(dLat/2)**2+Math.cos(a*r)*Math.cos(c*r)*Math.sin(dLon/2)**2;
+    return 2*R*Math.asin(Math.min(1,Math.sqrt(h)));},
+  nearestYear(y){let best=YEARS[0];for(const Y of YEARS)if(Math.abs(Y-y)<Math.abs(best-y))best=Y;return best;},
+  render(){
+    const d=fitCanvas(this.cv,this.H); if(!d)return;
+    const {cw,ctx}=d; const T=tokens(); const H=this.H;
+    const c=this.city||this.CITIES[0];
+    ctx.fillStyle=T.sea; ctx.fillRect(0,0,cw,H);
+    const MW=cw, MH=H;
+    const px=lon=>(lon+180)/360*MW, py=lat=>(85-lat)/145*MH;
+    const snap=this.nearestYear(this.year);
+    ctx.globalAlpha=.30; ctx.fillStyle=T.ink2;
+    for(const f of GEO[snap]){
+      if(f.area<3)continue;
+      ctx.beginPath();
+      for(const r of f.rings){
+        for(let i=0;i<r.length;i+=2){const X=px(r[i]),Y=py(r[i+1]); i?ctx.lineTo(X,Y):ctx.moveTo(X,Y);}
+        ctx.closePath();
+      }
+      ctx.fill();
+    }
+    ctx.globalAlpha=1;
+    const sp=this.speed(this.year);
+    const rings=[[7,'1 week'],[30,'1 month'],[182,'6 months']];
+    const cxp=px(c[2]), cyp=py(c[1]);
+    ctx.textAlign='center';
+    for(const [days,lab] of rings){
+      const km=sp*days; const degLat=km/111;
+      if(degLat>210)continue;
+      const degLon=Math.min(degLat/Math.max(Math.cos(c[1]*Math.PI/180),0.25),180);
+      ctx.strokeStyle=T.accent; ctx.globalAlpha=.5; ctx.setLineDash([4,4]); ctx.lineWidth=1.2;
+      ctx.beginPath(); ctx.ellipse(cxp,cyp,degLon/360*MW,degLat/145*MH,0,0,7); ctx.stroke();
+      ctx.setLineDash([]);
+      ctx.globalAlpha=.85; ctx.fillStyle=T.accent; ctx.font='10.5px -apple-system,system-ui,sans-serif';
+      ctx.fillText(lab,cxp,cyp-degLat/145*MH-4);
+      ctx.globalAlpha=1;
+    }
+    // the city itself
+    ctx.fillStyle=T.accent2; ctx.beginPath(); ctx.arc(cxp,cyp,5,0,7); ctx.fill();
+    ctx.strokeStyle=T.accent2; ctx.lineWidth=1.5; ctx.globalAlpha=.6;
+    ctx.beginPath(); ctx.arc(cxp,cyp,9,0,7); ctx.stroke(); ctx.globalAlpha=1;
+    ctx.fillStyle=T.ink; ctx.font='600 12px -apple-system,system-ui,sans-serif';
+    ctx.fillText(c[0],cxp,cyp+22);
+    ctx.textAlign='left';
+    // news in flight
+    const feed=[];
+    for(const ev of EVENTS){
+      const pl=ev[8]; if(!pl)continue;
+      const y=ev[0]; if(y>this.year||y<this.year-12)continue;
+      const km=this.dist(c[1],c[2],pl[0],pl[1]);
+      const days=km/sp;
+      const arrive=y+days/365;
+      feed.push({ev,km,days,arrive,known:arrive<=this.year,place:pl[2]});
+      const p=[px(pl[1]),py(pl[0])];
+      ctx.strokeStyle=arrive<=this.year?T.ink3:T.accent2;
+      ctx.globalAlpha=arrive<=this.year?.28:.7; ctx.lineWidth=1;
+      ctx.beginPath();ctx.moveTo(cxp,cyp);ctx.lineTo(p[0],p[1]);ctx.stroke();
+      ctx.globalAlpha=1; ctx.fillStyle=catColor(ev[6],T);
+      ctx.beginPath();ctx.arc(p[0],p[1],3,0,7);ctx.fill();
+    }
+    feed.sort((a,b)=>b.arrive-a.arrive);
+    $('#hzFeed').innerHTML=feed.length?feed.map(f=>{
+      const lag=f.days<1.5?'same day':(f.days<45?`${Math.round(f.days)} days`:`${(f.days/30.4).toFixed(1)} months`);
+      return `<div class="newsitem ${f.known?'known':''}">
+        <div class="h">${f.ev[2]}</div>
+        <div class="d">${fmtY(f.ev[0])} · ${f.place} · ${Math.round(f.km).toLocaleString()} km</div>
+        <div class="lag">${f.known?`news took ${lag} — already known here`:`STILL IN TRANSIT · ${lag} away`}</div></div>`;
+    }).join(''):'<div class="note">No located events in the twelve years before this date.</div>';
+    $('#hzSpeed').textContent=`news moves ~${sp>=1e6?'instantly':Math.round(sp)+' km/day'} · ${this.speedLabel(this.year)}`;
+    $('#hzCap').innerHTML=`<b>Standing in ${c[0]} in ${fmtY(this.year)}.</b> Rings show how far word had spread after a week, a month, six months. `+
+      `Everything in orange on the right had already happened — but had not reached you yet.`;
+  },
+  init(){
+    const sel=$('#hzCity');
+    this.CITIES.forEach((c,i)=>{const o=document.createElement('option');o.value=i;o.textContent=c[0];sel.appendChild(o);});
+    this.city=this.CITIES[0];
+    sel.addEventListener('change',()=>{this.city=this.CITIES[+sel.value];this.render();});
+    $('#hzYear').addEventListener('input',e=>{const v=+e.target.value; if(v>-3000&&v<2027){this.year=v;this.render();}});
+    document.querySelectorAll('[data-hz]').forEach(b=>b.addEventListener('click',()=>{
+      this.year=+b.dataset.hz; $('#hzYear').value=this.year; this.render();}));
+  }
+};
+
+// ================= ⑥c BREATHING CARTOGRAM =================
+const Carto={
+  cv:$('#cartoCanvas'), H:440, ix:10, playing:null, t:0,
+  slices(){return POPS?POPS.slices:[];},
+  render(){
+    const d=fitCanvas(this.cv,this.H); if(!d)return;
+    const {cw,ctx}=d; const T=tokens(); const H=this.H;
+    ctx.fillStyle=T.sea; ctx.fillRect(0,0,cw,H);
+    const S=this.slices();
+    if(!POPS||!S.length){ctx.fillStyle=T.ink3;ctx.font='13px -apple-system,system-ui,sans-serif';
+      ctx.fillText('Population data not loaded.',20,H/2);return;}
+    const px=lon=>(lon+180)/360*cw, py=lat=>(85-lat)/145*H;
+    ctx.globalAlpha=.2; ctx.fillStyle=T.ink2;
+    for(const f of GEO[1994]){
+      if(f.area<6)continue;
+      ctx.beginPath();
+      for(const r of f.rings){for(let i=0;i<r.length;i+=2){const X=px(r[i]),Y=py(r[i+1]);i?ctx.lineTo(X,Y):ctx.moveTo(X,Y);}ctx.closePath();}
+      ctx.fill();
+    }
+    ctx.globalAlpha=1;
+    const i0=clamp(Math.floor(this.ix),0,S.length-1), i1=clamp(i0+1,0,S.length-1);
+    const f=this.ix-i0;
+    const yr=S[i0].year+(S[i1].year-S[i0].year)*f;
+    let total=0;
+    const circles=POPS.regions.map((rg,k)=>{
+      const a=S[i0].pop[rg.id]||0, b=S[i1].pop[rg.id]||0;
+      const p=a+(b-a)*f; total+=p;
+      return {rg,p,si:k%8};
+    }).sort((a,b)=>b.p-a.p);
+    const K=Math.min(cw,H)*0.052;
+    for(const c of circles){
+      const r=Math.sqrt(c.p)*K/Math.sqrt(60);
+      const X=px(c.rg.lon), Y=py(c.rg.lat);
+      ctx.globalAlpha=.72; ctx.fillStyle=T.s[c.si];
+      ctx.beginPath(); ctx.arc(X,Y,Math.max(r,2),0,7); ctx.fill();
+      ctx.globalAlpha=.95; ctx.strokeStyle=T.panel; ctx.lineWidth=1.4; ctx.stroke();
+      if(r>17){
+        ctx.fillStyle='#fff'; ctx.textAlign='center';
+        ctx.font=`600 ${clamp(r*0.28,9,14)}px -apple-system,system-ui,sans-serif`;
+        ctx.fillText(c.rg.name,X,Y-1);
+        ctx.font=`${clamp(r*0.24,8,12)}px ui-monospace,Menlo,monospace`;
+        ctx.fillText(c.p>=1?Math.round(c.p)+'M':c.p.toFixed(1)+'M',X,Y+clamp(r*0.3,10,15));
+        ctx.textAlign='left';
+      }
+      ctx.globalAlpha=1;
+    }
+    $('#cartoYear').textContent=fmtY(yr);
+    $('#cartoSlider').value=this.ix;
+    const top=circles[0];
+    $('#cartoCap').innerHTML=`<b>World population ≈ ${total>=1000?(total/1000).toFixed(2)+' billion':Math.round(total)+' million'} in ${fmtY(yr)}.</b> `+
+      `Largest region: ${top.rg.name} (${Math.round(top.p)}M, ${Math.round(top.p/total*100)}% of humanity). `+
+      `Estimates after McEvedy &amp; Jones, Biraben and the UN — error bars before 1500 are wide, and the Americas figure for 1500 is itself a scholarly argument.`;
+  },
+  init(){
+    $('#cartoSlider').addEventListener('input',e=>{this.stop();this.ix=+e.target.value;this.render();});
+    $('#cartoPlay').addEventListener('click',()=>this.playing?this.stop():this.play());
+  },
+  play(){
+    const S=this.slices(); if(!S.length)return;
+    $('#cartoPlay').textContent='⏸ Pause';
+    if(this.ix>=S.length-1)this.ix=0;
+    const step=()=>{
+      this.ix+=reduceMotion?1:0.035;
+      if(this.ix>=S.length-1){this.ix=S.length-1;this.render();this.stop();return;}
+      this.render(); this.playing=requestAnimationFrame(step);
+    };
+    this.playing=requestAnimationFrame(step);
+  },
+  stop(){$('#cartoPlay').textContent='▶ Play'; if(this.playing)cancelAnimationFrame(this.playing); this.playing=null;}
+};
+
+// ================= ⑦ CONCEPT GALLERY =================
+const CONCEPTS=[
+ {n:'Zoomable LOD timeline',by:'your core vision',v:'built',tab:'zoom',d:'Time behaves like a map: zoom reveals less-important events. Now carrying the full visual grammar — shape for kind, colour for domain.',s:[8,10,9,7,5]},
+ {n:'Chrono-globe (map + time dial)',by:'new',v:'built',tab:'map',d:'Fix a moment, see the whole world. The literal “Google Earth of history” — kills the 1776 problem dead.',s:[10,7,8,9,5]},
+ {n:'Flow of empires (Histomap)',by:'your take',v:'built',tab:'flow',d:'Ribbons whose thickness is weight in the world, forking along real lineage: Rome splits into West and East, the Ottomans swallow Byzantium.',s:[6,9,8,8,4]},
+ {n:'Space-time cube (3D)',by:'your take',v:'built',tab:'cube',d:'Lat × lon × time as one solid block. The map is a horizontal cut, the core sample a vertical drill. The master mental model, now literally rotatable.',s:[7,6,4,9,7]},
+ {n:'Core sample drill',by:'new',v:'built',tab:'core',d:'Fix a place, see every moment — strata of sovereigns under your feet. The dual query of the chrono-globe.',s:[8,8,9,7,8]},
+ {n:'Braided rivers of ideas',by:'your Notion note',v:'built',tab:'sketch',d:'Beliefs as streams that fork at schisms: 1054, 1517, 632. The same engine as the empire flow — because a schism and a partition are the same shape of event.',s:[5,7,5,8,7]},
+ {n:'Information horizon',by:'new',v:'built',tab:'sketch',d:'Not what happened — what a person standing here could possibly have known yet. News at the speed of a horse, then a ship, then a wire.',s:[8,4,3,9,9]},
+ {n:'Breathing cartogram',by:'new',v:'built',tab:'sketch',d:'Area = people, not land. Asia holds two thirds of humanity for four millennia; the Americas collapse after 1492.',s:[6,4,5,7,6]},
+ {n:'Vector-space slicing',by:'your take',v:'engine',d:'Embed every (place, moment, topic) into latent space; “slicing” = semantic search, similarity, auto-generated lenses. Not a view — the engine under search and topic rows.',s:[4,6,3,6,8]},
+ {n:'First-person street view',by:'new',v:'north star',d:'Stand in Philadelphia, July 1776, and look around. The endgame fantasy — parked deliberately, not forgotten.',s:[10,2,1,10,6]}];
+const SK={
+ 'Zoomable LOD timeline':'<line x1="8" y1="43" x2="252" y2="43" stroke="var(--ink3)"/><circle cx="40" cy="43" r="5" fill="var(--s1)"/><rect x="118" y="38" width="34" height="10" rx="5" fill="var(--s8)"/><circle cx="215" cy="43" r="5" fill="var(--s7)"/><circle cx="85" cy="43" r="2.5" fill="var(--s3)" opacity=".55"/><circle cx="172" cy="43" r="2.5" fill="var(--s5)" opacity=".55"/><rect x="150" y="14" width="80" height="58" rx="6" fill="none" stroke="var(--accent)" stroke-dasharray="4 3"/><text x="190" y="10" text-anchor="middle" font-size="9" fill="var(--accent)">zoom = more detail</text>',
+ 'Chrono-globe (map + time dial)':'<circle cx="70" cy="43" r="30" fill="var(--s3)" opacity=".35"/><path d="M48 35 Q60 22 88 30 Q95 45 78 58 Q55 60 48 35Z" fill="var(--s3)" opacity=".8"/><line x1="120" y1="66" x2="240" y2="66" stroke="var(--ink3)"/><circle cx="196" cy="66" r="6" fill="var(--accent)"/><text x="196" y="52" text-anchor="middle" font-size="10" fill="var(--accent)">1776</text>',
+ 'Flow of empires (Histomap)':'<path d="M10 30 C60 30 70 26 120 26 L120 54 C70 54 60 50 10 50 Z" fill="var(--s1)" opacity=".85"/><path d="M120 26 C170 26 200 16 250 16 L250 34 C200 34 170 38 120 40 Z" fill="var(--s5)" opacity=".85"/><path d="M120 40 C170 42 200 50 250 50 L250 70 C200 70 170 58 120 54 Z" fill="var(--s7)" opacity=".85"/><text x="60" y="45" font-size="9" fill="#fff">Rome</text><text x="196" y="28" font-size="8" fill="#fff">West</text><text x="196" y="64" font-size="8" fill="#fff">East</text>',
+ 'Space-time cube (3D)':'<path d="M60 30 L150 30 L185 55 L95 55 Z" fill="none" stroke="var(--ink3)"/><path d="M60 30 L60 72 L95 97 L95 55" fill="none" stroke="var(--ink3)"/><path d="M150 30 L150 72 L185 97 L185 55 M60 72 L150 72 M95 97 L185 97" fill="none" stroke="var(--ink3)"/><path d="M78 40 L120 40 L138 50 L96 50Z" fill="var(--accent)" opacity=".6"/><text x="205" y="45" font-size="9" fill="var(--ink3)">slice = a year</text>',
+ 'Core sample drill':'<rect x="110" y="10" width="40" height="13" fill="var(--s3)"/><rect x="110" y="23" width="40" height="13" fill="var(--s5)"/><rect x="110" y="36" width="40" height="13" fill="var(--s4)"/><rect x="110" y="49" width="40" height="13" fill="var(--s7)"/><rect x="110" y="62" width="40" height="13" fill="var(--s2)"/><text x="165" y="20" font-size="9" fill="var(--ink3)">now</text><text x="165" y="72" font-size="9" fill="var(--ink3)">deep past</text>',
+ 'Braided rivers of ideas':'<path d="M15 25 C80 25 90 45 130 45 C180 45 190 25 245 25" fill="none" stroke="var(--s5)" stroke-width="5" opacity=".8"/><path d="M15 45 C70 45 90 25 130 25 C175 25 195 60 245 60" fill="none" stroke="var(--s7)" stroke-width="5" opacity=".8"/><path d="M15 65 C90 65 160 65 245 42" fill="none" stroke="var(--s3)" stroke-width="5" opacity=".8"/>',
+ 'Information horizon':'<circle cx="70" cy="45" r="5" fill="var(--accent)"/><circle cx="70" cy="45" r="18" fill="none" stroke="var(--accent)" opacity=".6"/><circle cx="70" cy="45" r="34" fill="none" stroke="var(--accent)" opacity=".35"/><circle cx="70" cy="45" r="50" fill="none" stroke="var(--accent)" opacity=".18"/><text x="150" y="40" font-size="9" fill="var(--ink3)">news = weeks away</text><text x="150" y="54" font-size="9" fill="var(--ink3)">what did they know?</text>',
+ 'Breathing cartogram':'<ellipse cx="70" cy="45" rx="22" ry="16" fill="var(--s4)" opacity=".7"/><ellipse cx="150" cy="42" rx="45" ry="28" fill="var(--s2)" opacity=".7"/><ellipse cx="220" cy="50" rx="16" ry="11" fill="var(--s1)" opacity=".7"/><text x="150" y="46" text-anchor="middle" font-size="9" fill="var(--bg)">area = people</text>',
+ 'Vector-space slicing':'<circle cx="50" cy="30" r="3" fill="var(--s1)"/><circle cx="62" cy="40" r="3" fill="var(--s1)"/><circle cx="45" cy="48" r="3" fill="var(--s1)"/><circle cx="150" cy="28" r="3" fill="var(--s2)"/><circle cx="163" cy="38" r="3" fill="var(--s2)"/><circle cx="145" cy="45" r="3" fill="var(--s2)"/><circle cx="210" cy="60" r="3" fill="var(--s3)"/><circle cx="222" cy="52" r="3" fill="var(--s3)"/><line x1="100" y1="10" x2="120" y2="80" stroke="var(--accent)" stroke-dasharray="4 3"/>',
+ 'First-person street view':'<path d="M10 80 L110 40 L150 40 L250 80Z" fill="var(--ink3)" opacity=".3"/><rect x="70" y="28" width="24" height="34" fill="var(--s2)" opacity=".7"/><rect x="160" y="24" width="30" height="38" fill="var(--s1)" opacity=".7"/><path d="M120 62 L130 34 L140 62" fill="var(--accent)" opacity=".8"/><circle cx="215" cy="18" r="8" fill="var(--s4)" opacity=".8"/>'};
+function buildGallery(){
+  const g=$('#gallery');
+  const VN={built:'Built — this page',next:'Build next',engine:'Engine, not a view','north star':'North star'};
+  g.innerHTML=CONCEPTS.map(c=>{
+    const cls=c.v==='built'?'built':(c.v==='next'?'next':'');
+    const [p,z,f,w,n]=c.s;
+    return `<div class="card concept" ${c.tab?`data-goto="${c.tab}" style="cursor:pointer"`:''}>
+      <h3><span>${c.n}</span><span class="verdict ${cls}">${VN[c.v]}</span></h3>
+      <svg viewBox="0 0 260 90" role="img" aria-label="sketch">${SK[c.n]||''}</svg>
+      <p><i>${c.by}.</i> ${c.d}</p>
+      <div class="scores"><span>1776-pain <b>${p}</b></span><span>zoom-fit <b>${z}</b></span><span>feasible <b>${f}</b></span><span>wow <b>${w}</b></span><span>novel <b>${n}</b></span></div>
+    </div>`;}).join('');
+  g.querySelectorAll('[data-goto]').forEach(el=>el.addEventListener('click',()=>gotoTab(el.dataset.goto)));
+}
+
+// ---------- boot ----------
+WorldMap.init(); TL.init(); initFlow(); Cube.init(); Core.init(); initBraid(); Horizon.init(); Carto.init(); buildGallery();
+WorldMap.render();
+addEventListener('resize',()=>{WorldMap.render();TL.render();Flow.render();Cube.render();Braid.render();Horizon.render();Carto.render();});
+const rerender=()=>{WorldMap.render();TL.render();Flow.render();Cube.render();Braid.render();Horizon.render();Carto.render();};
+matchMedia('(prefers-color-scheme: dark)').addEventListener('change',rerender);
+new MutationObserver(rerender).observe(document.documentElement,{attributes:true,attributeFilter:['data-theme']});
+</script>

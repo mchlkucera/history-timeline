@@ -1,0 +1,1039 @@
+<meta charset="utf-8">
+<title>Timeline — vertical</title>
+<style>
+:root{
+  color-scheme: light;
+  --bg:#F2ECDC; --panel:#EAE2CD; --panel2:#E2D9BF; --line:#CBBF9F;
+  --ink:#2A2B26; --ink2:#6B675A; --ink3:#8F8A78;
+  --accent:#8A6D2F; --accent2:#A5494A;
+  --sea:#D7DFD9; --land:#E5DCC2; --stroke:rgba(42,43,38,.38);
+  --s1:#2a78d6; --s2:#eb6834; --s3:#1baf7a; --s4:#eda100; --s5:#e87ba4; --s6:#008300; --s7:#4a3aa7; --s8:#e34948;
+  --shadow:0 1px 2px rgba(42,43,38,.08), 0 6px 24px rgba(42,43,38,.07);
+}
+@media (prefers-color-scheme: dark){
+  :root:not([data-theme="light"]){
+    color-scheme: dark;
+    --bg:#0E141F; --panel:#151E2C; --panel2:#1B2636; --line:#2A3648;
+    --ink:#E6E1CF; --ink2:#9AA0A8; --ink3:#6C7480;
+    --accent:#C9A45C; --accent2:#D98B7A;
+    --sea:#0B1622; --land:#22303F; --stroke:rgba(230,225,207,.30);
+    --s1:#3987e5; --s2:#d95926; --s3:#199e70; --s4:#c98500; --s5:#d55181; --s6:#008300; --s7:#9085e9; --s8:#e66767;
+    --shadow:0 1px 2px rgba(0,0,0,.4), 0 8px 30px rgba(0,0,0,.35);
+  }
+}
+:root[data-theme="dark"]{
+  color-scheme: dark;
+  --bg:#0E141F; --panel:#151E2C; --panel2:#1B2636; --line:#2A3648;
+  --ink:#E6E1CF; --ink2:#9AA0A8; --ink3:#6C7480;
+  --accent:#C9A45C; --accent2:#D98B7A;
+  --sea:#0B1622; --land:#22303F; --stroke:rgba(230,225,207,.30);
+  --s1:#3987e5; --s2:#d95926; --s3:#199e70; --s4:#c98500; --s5:#d55181; --s6:#008300; --s7:#9085e9; --s8:#e66767;
+  --shadow:0 1px 2px rgba(0,0,0,.4), 0 8px 30px rgba(0,0,0,.35);
+}
+*{box-sizing:border-box}
+body{margin:0;background:var(--bg);color:var(--ink);
+  font:15px/1.5 -apple-system,BlinkMacSystemFont,"Segoe UI",system-ui,sans-serif;}
+.serif{font-family:"Iowan Old Style",Palatino,"Palatino Linotype",Georgia,serif}
+.mono{font-family:ui-monospace,"SF Mono",Menlo,Consolas,monospace;font-variant-numeric:tabular-nums}
+.wrap{max-width:1240px;margin:0 auto;padding:0 20px 60px}
+header.mast{padding:26px 0 10px;display:flex;flex-wrap:wrap;align-items:baseline;gap:10px 18px;border-bottom:1px solid var(--line)}
+.mast h1{font-family:"Iowan Old Style",Palatino,Georgia,serif;font-size:30px;font-weight:600;margin:0;letter-spacing:.2px}
+.mast h1 .tl{color:var(--accent)}
+.mast .sub{color:var(--ink2);font-size:14px}
+nav.tabs{display:flex;gap:4px;flex-wrap:wrap;margin:14px 0 18px}
+nav.tabs button{appearance:none;border:1px solid var(--line);background:var(--panel);color:var(--ink2);
+  padding:7px 14px;border-radius:999px;font-size:13.5px;cursor:pointer;font-weight:500}
+nav.tabs button:hover{color:var(--ink)}
+nav.tabs button.on{background:var(--accent);border-color:var(--accent);color:var(--bg);font-weight:600}
+nav.tabs button:focus-visible,.chip:focus-visible,button:focus-visible,input:focus-visible,select:focus-visible{outline:2px solid var(--accent);outline-offset:2px}
+section.tab{display:none}
+section.tab.on{display:block}
+.card{background:var(--panel);border:1px solid var(--line);border-radius:12px;box-shadow:var(--shadow)}
+.controls{display:flex;flex-wrap:wrap;align-items:center;gap:10px;padding:12px 14px}
+.controls .grow{flex:1 1 240px}
+input[type=range]{width:100%;accent-color:var(--accent)}
+.yearbig{font-family:"Iowan Old Style",Palatino,Georgia,serif;font-size:34px;font-weight:600;min-width:150px;text-align:right;font-variant-numeric:tabular-nums}
+.btn{appearance:none;border:1px solid var(--line);background:var(--panel2);color:var(--ink);padding:7px 12px;border-radius:8px;font-size:13px;cursor:pointer;font-weight:500}
+.btn:hover{border-color:var(--accent);color:var(--accent)}
+.btn.hero{background:var(--accent);border-color:var(--accent);color:var(--bg);font-weight:650}
+.btn.hero:hover{filter:brightness(1.08);color:var(--bg)}
+.chip{appearance:none;border:1px solid var(--line);background:transparent;color:var(--ink2);padding:5px 11px;border-radius:999px;font-size:12.5px;cursor:pointer}
+.chip.on{color:var(--ink);border-color:currentColor}
+.chip .dot{display:inline-block;width:8px;height:8px;border-radius:50%;margin-right:6px;vertical-align:1px}
+select{background:var(--panel2);border:1px solid var(--line);color:var(--ink);border-radius:8px;padding:6px 10px;font-size:13px}
+canvas.instrument{display:block;width:100%;border-radius:0 0 12px 12px;cursor:crosshair;touch-action:none}
+canvas.mid{border-radius:0}
+.caption{padding:12px 16px;border-top:1px solid var(--line);color:var(--ink2);font-size:13.5px}
+.caption b{color:var(--ink)}
+.tooltip{position:fixed;pointer-events:none;background:var(--panel);border:1px solid var(--line);border-radius:8px;
+  padding:8px 11px;font-size:13px;box-shadow:var(--shadow);z-index:50;display:none;max-width:300px}
+.tooltip .t{font-weight:650}
+.tooltip .m{color:var(--ink2);font-size:12px}
+.note{color:var(--ink3);font-size:12.5px}
+input[type=text],input[type=number]{background:var(--panel2);border:1px solid var(--line);color:var(--ink);
+  border-radius:8px;padding:7px 11px;font-size:13.5px}
+p.lede{margin:0 0 14px;color:var(--ink2);max-width:70ch}
+p.lede b,p.lede i{color:var(--ink)}
+.strata{display:flex;flex-direction:column;gap:0;padding:6px 0}
+.stratum{display:grid;grid-template-columns:118px 16px 1fr;gap:12px;align-items:center;padding:8px 16px;border-bottom:1px dashed var(--line)}
+.stratum:last-child{border-bottom:none}
+.stratum .era{color:var(--ink2);font-size:12.5px;text-align:right}
+.stratum .sw{width:16px;height:16px;border-radius:4px;border:1px solid var(--stroke)}
+.stratum .who b{font-size:14.5px}
+.stratum .who .of{color:var(--ink2);font-size:12.5px}
+.presetrow{display:flex;flex-wrap:wrap;gap:8px;padding:12px 14px}
+.gallery{display:grid;grid-template-columns:repeat(auto-fit,minmax(270px,1fr));gap:14px;margin-top:14px}
+.concept{padding:14px 16px;display:flex;flex-direction:column;gap:8px}
+.concept h3{margin:0;font-size:15px;display:flex;justify-content:space-between;align-items:center;gap:8px}
+.concept .verdict{font-size:10.5px;letter-spacing:.06em;text-transform:uppercase;padding:3px 8px;border-radius:999px;border:1px solid var(--line);color:var(--ink2);white-space:nowrap}
+.concept .verdict.built{background:var(--accent);border-color:var(--accent);color:var(--bg)}
+.concept .verdict.next{color:var(--accent);border-color:var(--accent)}
+.concept p{margin:0;color:var(--ink2);font-size:13px}
+.concept svg{width:100%;height:86px;border-radius:8px;background:var(--panel2)}
+.scores{display:flex;gap:6px;flex-wrap:wrap}
+.scores span{font-size:11px;color:var(--ink2);border:1px solid var(--line);border-radius:6px;padding:2px 7px}
+.scores b{color:var(--ink)}
+footer{margin-top:36px;color:var(--ink3);font-size:12px;border-top:1px solid var(--line);padding-top:14px}
+a{color:var(--accent)}
+.searchwrap{position:relative}
+.searchwrap .cnt{position:absolute;right:10px;top:50%;transform:translateY(-50%);font-size:11.5px;color:var(--ink3)}
+.grammar{display:flex;flex-wrap:wrap;gap:6px 18px;padding:10px 16px;border-top:1px solid var(--line);align-items:center}
+.grammar .g{display:flex;align-items:center;gap:7px;font-size:12px;color:var(--ink2)}
+.grammar svg{overflow:visible}
+h2.sk{font-family:"Iowan Old Style",Palatino,Georgia,serif;font-weight:600;font-size:19px;margin:26px 0 4px}
+h2.sk:first-of-type{margin-top:4px}
+.two{display:grid;grid-template-columns:1fr 320px;gap:0}
+@media (max-width:860px){ .two{grid-template-columns:1fr} }
+.newsfeed{border-left:1px solid var(--line);padding:12px 14px;max-height:520px;overflow-y:auto}
+.newsitem{padding:8px 0;border-bottom:1px dashed var(--line)}
+.newsitem:last-child{border-bottom:none}
+.newsitem .h{font-size:13.5px;font-weight:600}
+.newsitem .d{font-size:12px;color:var(--ink2)}
+.newsitem .lag{font-size:11.5px;color:var(--accent);font-weight:600}
+.newsitem.known .lag{color:var(--ink3);font-weight:400}
+@media (prefers-reduced-motion: reduce){ *{transition:none!important;animation:none!important} }
+</style>
+<style>
+/* vertical-only additions. Everything above is partA.html's stylesheet, verbatim. */
+.wrap{max-width:min(1760px,97vw)}
+canvas.instrument{cursor:grab}
+canvas.instrument:active{cursor:grabbing}
+.controls .sep{width:1px;height:22px;background:var(--line)}
+.hint{color:var(--ink3);font-size:12px}
+.grammar svg{overflow:visible}
+</style>
+
+<div class="wrap">
+<header class="mast">
+  <h1><span class="tl">Timeline</span> · vertical</h1>
+  <span class="sub serif">The zoomable timeline, rotated. Time runs <i>down</i>, past at top; bands become columns.</span>
+</header>
+
+<p class="lede" style="margin-top:14px">Identical engine to the horizontal view — same level-of-detail thresholds, same five shapes, same eight domain colours, same lenses and filters. Two things change. <b>A label no longer has to fit inside the time it describes:</b> every mark gets its own full line of text beside it. And <b>the columns are no longer squeezed into the window</b> — each one takes the width its labels actually need, so the whole surface is usually wider than what you can see. Drag it like a map: up and down through time, left and right across the world.</p>
+
+<div class="card">
+  <div class="controls">
+    <button class="btn hero" id="btnMozart">Mozart’s world</button>
+    <button class="btn" id="btn1776z">1776 in context</button>
+    <button class="btn" id="btnDeep">🜨 Deep time (log)</button>
+    <button class="btn" id="btnResetZ">Reset</button>
+    <span class="sep"></span>
+    <span class="hint">drag ↕ time · ↔ columns</span>
+    <div class="grow searchwrap">
+      <input type="text" id="searchBox" placeholder="Search a thread… (try: revolution, Prague, plague, music)" style="width:100%">
+      <span class="cnt" id="searchCnt"></span>
+    </div>
+  </div>
+  <div class="controls" style="padding-top:0" id="lensRow">
+    <span class="note">Lenses:</span>
+    <button class="chip" data-lens="MU"><span class="dot" style="background:var(--s5)"></span>Music</button>
+    <button class="chip" data-lens="SC"><span class="dot" style="background:var(--s6)"></span>Science &amp; ideas</button>
+    <button class="chip on" data-lens="MZ"><span class="dot" style="background:var(--s7)"></span>Mozart’s life</button>
+    <span class="note" style="margin-left:auto" id="zoomReadout"></span>
+  </div>
+  <div class="controls" style="padding-top:0" id="catRow"><span class="note">Categories:</span></div>
+  <canvas id="vertCanvas" class="instrument mid" height="760"></canvas>
+  <div class="grammar" id="grammarRow"></div>
+  <div class="caption"><b>Scroll to zoom time. Drag anywhere to travel — vertically through the years, horizontally across the columns, in the same gesture.</b> The strip under the plot is the whole surface in miniature: the bright frame is the part you can see, and you can drag it too. Columns fade out at an edge when there is more that way; the chip in the corner names the next one — click it to bring it in. Shape = what kind of thing (a moment, a stretch of time, a life, a territory, an era). Color = which domain it belongs to. Click any event to open it on Wikipedia. Faint hairlines mean a label had to step aside to stay legible — the mark is always at the true year.</div>
+</div>
+<p class="note" style="margin-top:8px">Vertical transposition of instrument ② in <span class="mono">prototypes/partB.html</span>. Data, thresholds, palette and grammar are pulled straight from the prototype at build time.</p>
+</div>
+<div class="tooltip" id="tip"></div>
+<script>
+// ===== DATA — extracted verbatim, do not hand-edit. Re-run build.sh to refresh. =====
+// ---- EVENTS: [start, end|0, title, band, level, tags] — importance drives the level-of-detail zoom
+// bands: CO cosmos · EU Europe · ME MidEast&Africa · AS Asia · AM Americas · MU music · SC science&ideas · MZ Mozart
+const EVENTS=[
+[-13.8e9,0,"Big Bang","CO",1,"cosmos"],
+[-4.54e9,0,"Earth forms","CO",1,"cosmos earth"],
+[-3.8e9,0,"First life","CO",1,"life"],
+[-2.4e9,0,"Oxygen fills the air","CO",2,"life"],
+[-541e6,0,"Cambrian explosion","CO",1,"life"],
+[-252e6,0,"Great Dying (worst extinction)","CO",2,"extinction"],
+[-66e6,0,"Dinosaurs wiped out","CO",1,"extinction"],
+[-300000,0,"Homo sapiens appears","CO",1,"human"],
+[-70000,0,"Out of Africa migration","CO",2,"human migration"],
+[-10000,0,"Farming begins","CO",1,"agriculture revolution"],
+[-3200,0,"Writing invented (Sumer)","CO",1,"writing"],
+[-2500,0,"Stonehenge raised","EU",4,"britain megalith"],
+[-1600,-1100,"Mycenaean Greece","EU",4,"greece bronze"],
+[-776,0,"First Olympic games","EU",4,"greece sport"],
+[-753,0,"Rome founded (legend)","EU",3,"rome"],
+[-508,0,"Athenian democracy","EU",3,"greece democracy"],
+[-490,0,"Battle of Marathon","EU",4,"greece persia war"],
+[-431,-404,"Peloponnesian War","EU",4,"greece war"],
+[-334,-323,"Alexander conquers the East","EU",2,"greece macedonia conquest"],
+[-264,-146,"Punic Wars: Rome vs Carthage","EU",3,"rome carthage war"],
+[-44,0,"Caesar assassinated","EU",3,"rome"],
+[79,0,"Vesuvius buries Pompeii","EU",4,"rome volcano"],
+[117,0,"Roman Empire at maximum","EU",3,"rome peak"],
+[313,0,"Christianity legalized","EU",3,"rome christianity religion"],
+[476,0,"Western Rome falls","EU",2,"rome fall"],
+[793,0,"Viking age begins (Lindisfarne)","EU",3,"viking raid"],
+[800,0,"Charlemagne crowned emperor","EU",3,"franks empire"],
+[1054,0,"Great Schism east/west","EU",4,"christianity schism"],
+[1066,0,"Norman conquest of England","EU",3,"england war"],
+[1095,0,"First Crusade launched","EU",3,"crusade religion war"],
+[1215,0,"Magna Carta","EU",3,"england law rights"],
+[1347,1351,"Black Death kills a third of Europe","EU",2,"plague pandemic"],
+[1348,0,"Charles University founded in Prague","EU",5,"prague czech university"],
+[1415,0,"Jan Hus burned at Konstanz","EU",4,"czech religion reformation"],
+[1453,0,"Constantinople falls to Ottomans","EU",3,"byzantium ottoman war"],
+[1492,0,"Columbus reaches the Americas","EU",2,"exploration spain"],
+[1517,0,"Luther's 95 theses — Reformation","EU",3,"religion reformation"],
+[1588,0,"Spanish Armada defeated","EU",4,"spain england war"],
+[1618,1648,"Thirty Years' War","EU",3,"war religion germany"],
+[1618,0,"Defenestration of Prague","EU",4,"prague czech war"],
+[1642,1651,"English Civil War","EU",4,"england war"],
+[1683,0,"Ottomans turned back at Vienna","EU",4,"ottoman austria war"],
+[1707,0,"Great Britain formed","EU",4,"britain union"],
+[1756,1763,"Seven Years' War — first world war","EU",3,"war britain france prussia"],
+[1789,1799,"French Revolution","EU",2,"france revolution"],
+[1793,0,"Terror: Louis XVI guillotined","EU",4,"france revolution"],
+[1804,0,"Napoleon crowns himself","EU",3,"france napoleon empire"],
+[1812,0,"Napoleon freezes in Russia","EU",4,"france russia war napoleon"],
+[1815,0,"Waterloo — Napoleon done","EU",3,"france napoleon war"],
+[1848,0,"Revolutions sweep Europe","EU",3,"revolution liberalism nationalism"],
+[1871,0,"Germany unified","EU",3,"germany empire"],
+[1914,1918,"World War I","EU",2,"war"],
+[1917,0,"Russian Revolution","EU",3,"russia revolution communism"],
+[1922,0,"USSR founded","EU",4,"russia communism"],
+[1933,0,"Hitler takes power","EU",3,"germany nazism"],
+[1939,1945,"World War II","EU",2,"war"],
+[1945,0,"Iron Curtain descends","EU",3,"cold-war communism"],
+[1957,0,"Treaty of Rome — EEC born","EU",4,"europe union"],
+[1968,0,"Prague Spring crushed","EU",4,"czech communism prague"],
+[1989,0,"Berlin Wall falls · Velvet Revolution","EU",3,"communism revolution czech prague"],
+[1993,0,"EU founded · Czechoslovakia splits","EU",4,"europe union czech"],
+[2022,0,"Russia invades Ukraine","EU",4,"russia ukraine war"],
+[-3100,0,"Egypt unified under one crown","ME",2,"egypt"],
+[-2560,0,"Great Pyramid built","ME",2,"egypt pyramid"],
+[-1792,0,"Hammurabi writes his law code","ME",3,"babylon law"],
+[-1274,0,"Battle of Kadesh (first recorded treaty)","ME",4,"egypt hittite war"],
+[-586,0,"Babylon destroys Jerusalem's temple","ME",4,"judea babylon religion"],
+[-550,0,"Cyrus founds the Persian Empire","ME",2,"persia empire"],
+[-332,0,"Alexander takes Egypt","ME",4,"egypt greece"],
+[-30,0,"Cleopatra dies — Egypt goes Roman","ME",3,"egypt rome"],
+[30,0,"Crucifixion of Jesus","ME",2,"christianity religion"],
+[622,0,"The Hijra — Islam begins","ME",2,"islam religion"],
+[632,750,"Arab conquests: Spain to Persia","ME",3,"islam conquest"],
+[762,0,"Baghdad founded — Islamic golden age","ME",3,"islam baghdad science"],
+[1171,0,"Saladin rules Egypt & Syria","ME",4,"islam crusade"],
+[1258,0,"Mongols sack Baghdad","ME",3,"mongol islam"],
+[1324,0,"Mansa Musa's golden hajj","ME",4,"mali africa gold"],
+[1517,0,"Ottomans take Egypt & the caliphate","ME",4,"ottoman egypt"],
+[1652,0,"Dutch found Cape Colony","ME",4,"africa colonialism"],
+[1798,0,"Napoleon invades Egypt","ME",4,"egypt france napoleon"],
+[1869,0,"Suez Canal opens","ME",3,"egypt trade"],
+[1884,0,"Berlin Conference carves up Africa","ME",3,"africa colonialism"],
+[1948,0,"State of Israel founded","ME",3,"israel"],
+[1960,0,"Year of Africa — 17 nations born","ME",3,"africa independence"],
+[1994,0,"Mandela elected president","ME",3,"africa south-africa"],
+[-2600,-1900,"Indus Valley civilization","AS",3,"india bronze"],
+[-1600,-1046,"Shang dynasty — Chinese writing","AS",3,"china bronze writing"],
+[-563,0,"Buddha born","AS",2,"india buddhism religion"],
+[-551,0,"Confucius born","AS",3,"china philosophy"],
+[-321,-185,"Maurya Empire unites India","AS",3,"india empire"],
+[-268,0,"Ashoka turns to Buddhism","AS",3,"india buddhism"],
+[-221,0,"Qin unifies China","AS",2,"china empire"],
+[-206,220,"Han dynasty","AS",3,"china empire"],
+[320,550,"Gupta golden age of India","AS",3,"india science"],
+[618,907,"Tang dynasty — cosmopolitan China","AS",3,"china"],
+[960,1279,"Song dynasty — paper money, gunpowder","AS",4,"china invention"],
+[1192,0,"First shogunate in Japan","AS",4,"japan samurai"],
+[1206,0,"Genghis Khan unites the Mongols","AS",2,"mongol empire conquest"],
+[1279,0,"Mongols rule all of China","AS",3,"mongol china"],
+[1368,0,"Ming dynasty founded","AS",3,"china"],
+[1405,1433,"Zheng He's treasure fleets","AS",3,"china exploration"],
+[1526,0,"Mughal Empire founded","AS",3,"india empire islam"],
+[1600,0,"East India Company chartered","AS",3,"britain india trade"],
+[1603,0,"Tokugawa shogunate — Japan closes","AS",4,"japan"],
+[1644,0,"Qing dynasty takes China","AS",3,"china manchu"],
+[1757,0,"Plassey: British rule in India begins","AS",3,"britain india colonialism"],
+[1839,1842,"Opium War humiliates China","AS",3,"china britain war"],
+[1853,0,"Perry forces Japan open","AS",3,"japan usa"],
+[1868,0,"Meiji Restoration — Japan sprints","AS",3,"japan modernization"],
+[1912,0,"Last emperor: Qing falls","AS",3,"china revolution"],
+[1947,0,"India independent, partitioned","AS",2,"india independence"],
+[1949,0,"People's Republic of China","AS",3,"china communism"],
+[1978,0,"Deng opens China","AS",3,"china reform"],
+[1991,0,"India liberalizes","AS",4,"india economy"],
+[-15000,0,"First peoples reach the Americas","AM",2,"migration"],
+[-1500,-400,"Olmec — first American civilization","AM",3,"mexico olmec"],
+[250,900,"Maya classic period","AM",3,"maya mexico"],
+[1000,0,"Vikings land in Newfoundland","AM",4,"viking exploration"],
+[1325,0,"Tenochtitlan founded","AM",4,"aztec mexico"],
+[1438,1533,"Inca Empire","AM",3,"inca peru"],
+[1519,1521,"Cortés destroys the Aztecs","AM",3,"spain aztec conquest"],
+[1532,0,"Pizarro seizes the Inca","AM",3,"spain inca conquest"],
+[1607,0,"Jamestown — English America begins","AM",4,"usa colony"],
+[1619,0,"First enslaved Africans in Virginia","AM",4,"usa slavery"],
+[1620,0,"Mayflower lands","AM",4,"usa colony"],
+[1776,0,"Declaration of Independence","AM",2,"usa revolution independence"],
+[1783,0,"Treaty of Paris: USA recognized","AM",4,"usa britain"],
+[1787,0,"US Constitution written","AM",3,"usa law"],
+[1791,1804,"Haitian Revolution","AM",3,"haiti slavery revolution"],
+[1810,1826,"Bolívar & Latin American independence","AM",3,"latin-america independence revolution"],
+[1861,1865,"US Civil War","AM",3,"usa war slavery"],
+[1865,0,"Slavery abolished in the US","AM",3,"usa slavery"],
+[1867,0,"Canada confederates","AM",4,"canada"],
+[1929,0,"Wall Street crash — Great Depression","AM",3,"usa economy"],
+[1945,0,"UN founded · US superpower era","AM",3,"usa un"],
+[1959,0,"Cuban Revolution","AM",4,"cuba communism revolution"],
+[1962,0,"Cuban Missile Crisis","AM",4,"usa ussr cold-war"],
+[1969,0,"Apollo 11: humans on the Moon","AM",2,"usa space"],
+[2001,0,"September 11 attacks","AM",3,"usa terrorism"],
+[2008,0,"Global financial crisis","AM",4,"usa economy"],
+[600,0,"Gregorian chant codified","MU",4,"music church medieval"],
+[1030,0,"Guido invents staff notation","MU",4,"music notation"],
+[1607,0,"Opera born (Monteverdi's Orfeo)","MU",4,"music opera baroque"],
+[1685,0,"Bach & Handel born","MU",3,"music baroque bach"],
+[1723,0,"Vivaldi's Four Seasons","MU",5,"music baroque"],
+[1750,0,"Bach dies — Baroque ends","MU",4,"music baroque bach"],
+[1756,0,"Mozart born","MU",3,"music classical mozart"],
+[1770,0,"Beethoven born","MU",4,"music beethoven"],
+[1791,0,"Mozart dies at 35","MU",4,"music mozart"],
+[1804,0,"Eroica — Romanticism opens","MU",4,"music beethoven romanticism"],
+[1824,0,"Beethoven's Ninth","MU",4,"music beethoven"],
+[1841,0,"Dvořák born","MU",5,"music czech dvorak"],
+[1874,0,"Smetana begins Má vlast","MU",5,"music czech smetana prague"],
+[1877,0,"Recorded sound (phonograph)","MU",4,"music technology"],
+[1913,0,"Rite of Spring riot","MU",4,"music stravinsky modernism"],
+[1925,0,"Jazz age roars","MU",4,"music jazz"],
+[1954,0,"Rock'n'roll breaks out","MU",4,"music rock"],
+[1963,0,"Beatlemania","MU",4,"music rock beatles"],
+[1973,0,"Hip-hop born in the Bronx","MU",4,"music hip-hop"],
+[1981,0,"MTV: video kills the radio star","MU",5,"music tv"],
+[-585,0,"Thales predicts an eclipse","SC",4,"science greece"],
+[-387,0,"Plato founds the Academy","SC",3,"philosophy greece plato"],
+[-300,0,"Euclid's Elements","SC",4,"math greece"],
+[-250,0,"Archimedes at work","SC",4,"science greece"],
+[105,0,"Paper invented in China","SC",3,"china invention paper"],
+[150,0,"Ptolemy maps the cosmos (wrongly)","SC",4,"astronomy"],
+[820,0,"Al-Khwarizmi writes the algebra book","SC",3,"math islam algorithm"],
+[868,0,"First printed book (Diamond Sutra)","SC",4,"china printing"],
+[1088,0,"First university (Bologna)","SC",4,"university education"],
+[1439,0,"Gutenberg's printing press","SC",2,"printing revolution information"],
+[1543,0,"Copernicus: Earth moves","SC",2,"astronomy revolution science"],
+[1609,0,"Galileo points a telescope up","SC",3,"astronomy galileo science"],
+[1687,0,"Newton's Principia","SC",2,"physics newton science"],
+[1751,0,"The Encyclopédie — Enlightenment engine","SC",4,"enlightenment france philosophy"],
+[1776,0,"Watt's steam engine goes commercial","SC",3,"industrial-revolution steam technology"],
+[1776,0,"Adam Smith's Wealth of Nations","SC",4,"economics enlightenment"],
+[1796,0,"First vaccine (smallpox)","SC",3,"medicine vaccine"],
+[1831,0,"Faraday: electricity from motion","SC",4,"physics electricity"],
+[1859,0,"Darwin's Origin of Species","SC",2,"biology evolution science"],
+[1867,0,"Marx's Das Kapital","SC",4,"communism economics philosophy"],
+[1869,0,"Mendeleev's periodic table","SC",4,"chemistry"],
+[1876,0,"Telephone","SC",4,"technology communication"],
+[1879,0,"Electric light bulb","SC",4,"technology electricity"],
+[1885,0,"First automobile","SC",4,"technology car"],
+[1903,0,"First powered flight","SC",3,"technology flight usa"],
+[1905,0,"Einstein's miracle year","SC",3,"physics einstein relativity"],
+[1928,0,"Penicillin discovered","SC",3,"medicine antibiotics"],
+[1936,0,"Turing defines computation","SC",4,"computing turing"],
+[1945,0,"Atomic bomb","SC",2,"physics war nuclear"],
+[1947,0,"Transistor invented","SC",3,"computing electronics"],
+[1953,0,"DNA structure solved","SC",3,"biology dna"],
+[1957,0,"Sputnik — space age","SC",3,"space ussr"],
+[1969,0,"ARPANET: internet's first packet","SC",4,"internet computing"],
+[1989,0,"World Wide Web proposed","SC",2,"internet web information"],
+[2007,0,"iPhone","SC",3,"technology mobile"],
+[2022,0,"AI goes mainstream (ChatGPT)","SC",3,"ai computing"],
+[1756,0,"Born in Salzburg, Jan 27","MZ",3,"mozart salzburg"],
+[1761,0,"First compositions, age 5","MZ",4,"mozart prodigy"],
+[1763,1766,"Grand tour: Munich, Paris, London","MZ",4,"mozart tour prodigy"],
+[1770,0,"Transcribes the Vatican's secret Miserere from memory, age 14","MZ",5,"mozart rome"],
+[1770,1773,"Three Italian journeys","MZ",5,"mozart italy"],
+[1778,0,"Job-hunting in Paris; his mother dies there","MZ",4,"mozart paris"],
+[1781,0,"Quits Salzburg, goes freelance in Vienna","MZ",4,"mozart vienna"],
+[1782,0,"Marries Constanze · Abduction premieres","MZ",5,"mozart vienna opera"],
+[1784,0,"Joins the Freemasons","MZ",5,"mozart freemason"],
+[1786,0,"The Marriage of Figaro","MZ",4,"mozart opera figaro"],
+[1787,0,"Don Giovanni premieres in Prague — 'my Praguers understand me'","MZ",4,"mozart opera prague"],
+[1788,0,"Last three symphonies in six weeks","MZ",5,"mozart symphony"],
+[1791,0,"Magic Flute · unfinished Requiem · dies Dec 5","MZ",4,"mozart death requiem"]
+];
+const LIVES=[[-551,-479,"Confucius","AS",2,"china philosophy confucius"],[-563,-483,"The Buddha","AS",2,"india buddhism religion"],[-428,-348,"Plato","EU",2,"greece philosophy plato"],[-384,-322,"Aristotle","EU",2,"greece philosophy aristotle science"],[-356,-323,"Alexander the Great","EU",2,"macedonia greece conquest empire"],[-100,-44,"Julius Caesar","EU",2,"rome empire"],[-69,-30,"Cleopatra","ME",3,"egypt rome ptolemaic"],[748,814,"Charlemagne","EU",3,"franks empire christianity"],[1162,1227,"Genghis Khan","AS",2,"mongol empire conquest"],[1372,1415,"Jan Hus","EU",4,"czech religion reformation prague"],[1452,1519,"Leonardo da Vinci","EU",2,"italy renaissance art science"],[1473,1543,"Nicolaus Copernicus","EU",2,"astronomy revolution science poland"],[1475,1564,"Michelangelo","EU",3,"italy renaissance art sculpture"],[1483,1546,"Martin Luther","EU",2,"religion reformation germany"],[1564,1616,"William Shakespeare","EU",2,"england literature theatre"],[1564,1642,"Galileo Galilei","EU",2,"astronomy galileo science italy"],[1592,1670,"Jan Amos Komenský (Comenius)","EU",4,"czech education philosophy"],[1643,1727,"Isaac Newton","EU",2,"physics newton science england"],[1685,1750,"Johann Sebastian Bach","MU",3,"music baroque bach germany"],[1756,1791,"Wolfgang Amadeus Mozart","MU",2,"music classical mozart salzburg vienna"],[1770,1827,"Ludwig van Beethoven","MU",3,"music beethoven romanticism germany"],[1769,1821,"Napoleon Bonaparte","EU",2,"france napoleon empire war"],[1809,1882,"Charles Darwin","EU",2,"biology evolution science england"],[1809,1865,"Abraham Lincoln","AM",3,"usa slavery war"],[1818,1883,"Karl Marx","EU",2,"communism economics philosophy germany"],[1824,1884,"Bedřich Smetana","MU",5,"music czech smetana prague"],[1841,1904,"Antonín Dvořák","MU",5,"music czech dvorak prague"],[1867,1934,"Marie Curie","EU",3,"physics chemistry radioactivity poland france"],[1869,1948,"Mahatma Gandhi","AS",2,"india independence nonviolence"],[1874,1965,"Winston Churchill","EU",3,"britain war"],[1879,1955,"Albert Einstein","SC",2,"physics einstein relativity germany"],[1883,1924,"Franz Kafka","EU",4,"literature prague czech"],[1912,1954,"Alan Turing","SC",3,"computing turing britain"],[-3300,-1200,"Bronze Age","CO",2,"bronze metallurgy era"],[-130,1450,"The Silk Road","AS",2,"trade route china rome exchange era"],[1350,1600,"The Renaissance","EU",2,"renaissance italy art humanism era"],[1418,1650,"Age of Discovery","EU",2,"exploration sea portugal spain era"],[1760,1840,"Industrial Revolution","EU",2,"industry steam factory era"],[1947,1991,"The Cold War","EU",2,"cold-war usa ussr communism era"]];
+const CATMAP={"Big Bang":["nature","moment"],"Earth forms":["nature","moment"],"First life":["nature","moment"],"Oxygen fills the air":["nature","moment"],"Cambrian explosion":["nature","moment"],"Great Dying (worst extinction)":["nature","moment"],"Dinosaurs wiped out":["nature","moment"],"Homo sapiens appears":["nature","moment"],"Out of Africa migration":["reach","moment"],"Farming begins":["society","moment"],"Writing invented (Sumer)":["sci","moment"],"Stonehenge raised":["art","moment"],"Mycenaean Greece":["power","zone"],"First Olympic games":["art","moment"],"Rome founded (legend)":["power","moment"],"Athenian democracy":["power","moment"],"Battle of Marathon":["war","moment"],"Peloponnesian War":["war","episode"],"Alexander conquers the East":["war","episode"],"Punic Wars: Rome vs Carthage":["war","episode"],"Caesar assassinated":["power","moment"],"Vesuvius buries Pompeii":["nature","moment"],"Roman Empire at maximum":["power","moment"],"Christianity legalized":["belief","moment"],"Western Rome falls":["power","moment"],"Viking age begins (Lindisfarne)":["war","moment"],"Charlemagne crowned emperor":["power","moment"],"Great Schism east/west":["belief","moment"],"Norman conquest of England":["war","moment"],"First Crusade launched":["war","moment"],"Magna Carta":["power","moment"],"Black Death kills a third of Europe":["nature","episode"],"Charles University founded in Prague":["society","moment"],"Jan Hus burned at Konstanz":["belief","moment"],"Constantinople falls to Ottomans":["war","moment"],"Columbus reaches the Americas":["reach","moment"],"Luther's 95 theses — Reformation":["belief","moment"],"Spanish Armada defeated":["war","moment"],"Thirty Years' War":["war","episode"],"Defenestration of Prague":["power","moment"],"English Civil War":["war","episode"],"Ottomans turned back at Vienna":["war","moment"],"Great Britain formed":["power","moment"],"Seven Years' War — first world war":["war","episode"],"French Revolution":["power","episode"],"Terror: Louis XVI guillotined":["power","moment"],"Napoleon crowns himself":["power","moment"],"Napoleon freezes in Russia":["war","moment"],"Waterloo — Napoleon done":["war","moment"],"Revolutions sweep Europe":["power","moment"],"Germany unified":["power","moment"],"World War I":["war","episode"],"Russian Revolution":["power","moment"],"USSR founded":["power","moment"],"Hitler takes power":["power","moment"],"World War II":["war","episode"],"Iron Curtain descends":["power","moment"],"Treaty of Rome — EEC born":["power","moment"],"Prague Spring crushed":["power","moment"],"Berlin Wall falls · Velvet Revolution":["power","moment"],"EU founded · Czechoslovakia splits":["power","moment"],"Russia invades Ukraine":["war","moment"],"Egypt unified under one crown":["power","moment"],"Great Pyramid built":["art","moment"],"Hammurabi writes his law code":["society","moment"],"Battle of Kadesh (first recorded treaty)":["war","moment"],"Babylon destroys Jerusalem's temple":["belief","moment"],"Cyrus founds the Persian Empire":["power","moment"],"Alexander takes Egypt":["war","moment"],"Cleopatra dies — Egypt goes Roman":["power","moment"],"Crucifixion of Jesus":["belief","moment"],"The Hijra — Islam begins":["belief","moment"],"Arab conquests: Spain to Persia":["war","episode"],"Baghdad founded — Islamic golden age":["sci","moment"],"Saladin rules Egypt & Syria":["power","moment"],"Mongols sack Baghdad":["war","moment"],"Mansa Musa's golden hajj":["society","moment"],"Ottomans take Egypt & the caliphate":["power","moment"],"Dutch found Cape Colony":["reach","moment"],"Napoleon invades Egypt":["war","moment"],"Suez Canal opens":["reach","moment"],"Berlin Conference carves up Africa":["reach","moment"],"State of Israel founded":["power","moment"],"Year of Africa — 17 nations born":["power","moment"],"Mandela elected president":["power","moment"],"Indus Valley civilization":["power","zone"],"Shang dynasty — Chinese writing":["power","zone"],"Buddha born":["belief","moment"],"Confucius born":["belief","moment"],"Maurya Empire unites India":["power","zone"],"Ashoka turns to Buddhism":["belief","moment"],"Qin unifies China":["power","moment"],"Han dynasty":["power","zone"],"Gupta golden age of India":["power","zone"],"Tang dynasty — cosmopolitan China":["power","zone"],"Song dynasty — paper money, gunpowder":["power","zone"],"First shogunate in Japan":["power","moment"],"Genghis Khan unites the Mongols":["power","moment"],"Mongols rule all of China":["power","moment"],"Ming dynasty founded":["power","moment"],"Zheng He's treasure fleets":["reach","episode"],"Mughal Empire founded":["power","moment"],"East India Company chartered":["society","moment"],"Tokugawa shogunate — Japan closes":["power","moment"],"Qing dynasty takes China":["power","moment"],"Plassey: British rule in India begins":["power","moment"],"Opium War humiliates China":["war","episode"],"Perry forces Japan open":["reach","moment"],"Meiji Restoration — Japan sprints":["power","moment"],"Last emperor: Qing falls":["power","moment"],"India independent, partitioned":["power","moment"],"People's Republic of China":["power","moment"],"Deng opens China":["society","moment"],"India liberalizes":["society","moment"],"First peoples reach the Americas":["reach","moment"],"Olmec — first American civilization":["power","zone"],"Maya classic period":["power","zone"],"Vikings land in Newfoundland":["reach","moment"],"Tenochtitlan founded":["power","moment"],"Inca Empire":["power","zone"],"Cortés destroys the Aztecs":["war","episode"],"Pizarro seizes the Inca":["war","moment"],"Jamestown — English America begins":["reach","moment"],"First enslaved Africans in Virginia":["society","moment"],"Mayflower lands":["reach","moment"],"Declaration of Independence":["power","moment"],"Treaty of Paris: USA recognized":["power","moment"],"US Constitution written":["power","moment"],"Haitian Revolution":["power","episode"],"Bolívar & Latin American independence":["power","episode"],"US Civil War":["war","episode"],"Slavery abolished in the US":["society","moment"],"Canada confederates":["power","moment"],"Wall Street crash — Great Depression":["society","moment"],"UN founded · US superpower era":["power","moment"],"Cuban Revolution":["power","moment"],"Cuban Missile Crisis":["power","moment"],"Apollo 11: humans on the Moon":["sci","moment"],"September 11 attacks":["war","moment"],"Global financial crisis":["society","moment"],"Gregorian chant codified":["art","moment"],"Guido invents staff notation":["art","moment"],"Opera born (Monteverdi's Orfeo)":["art","moment"],"Bach & Handel born":["art","moment"],"Vivaldi's Four Seasons":["art","moment"],"Bach dies — Baroque ends":["art","moment"],"Mozart born":["art","moment"],"Beethoven born":["art","moment"],"Mozart dies at 35":["art","moment"],"Eroica — Romanticism opens":["art","moment"],"Beethoven's Ninth":["art","moment"],"Dvořák born":["art","moment"],"Smetana begins Má vlast":["art","moment"],"Recorded sound (phonograph)":["sci","moment"],"Rite of Spring riot":["art","moment"],"Jazz age roars":["art","moment"],"Rock'n'roll breaks out":["art","moment"],"Beatlemania":["art","moment"],"Hip-hop born in the Bronx":["art","moment"],"MTV: video kills the radio star":["art","moment"],"Thales predicts an eclipse":["sci","moment"],"Plato founds the Academy":["belief","moment"],"Euclid's Elements":["sci","moment"],"Archimedes at work":["sci","moment"],"Paper invented in China":["sci","moment"],"Ptolemy maps the cosmos (wrongly)":["sci","moment"],"Al-Khwarizmi writes the algebra book":["sci","moment"],"First printed book (Diamond Sutra)":["sci","moment"],"First university (Bologna)":["society","moment"],"Gutenberg's printing press":["sci","moment"],"Copernicus: Earth moves":["sci","moment"],"Galileo points a telescope up":["sci","moment"],"Newton's Principia":["sci","moment"],"The Encyclopédie — Enlightenment engine":["belief","moment"],"Watt's steam engine goes commercial":["sci","moment"],"Adam Smith's Wealth of Nations":["belief","moment"],"First vaccine (smallpox)":["sci","moment"],"Faraday: electricity from motion":["sci","moment"],"Darwin's Origin of Species":["sci","moment"],"Marx's Das Kapital":["belief","moment"],"Mendeleev's periodic table":["sci","moment"],"Telephone":["sci","moment"],"Electric light bulb":["sci","moment"],"First automobile":["sci","moment"],"First powered flight":["sci","moment"],"Einstein's miracle year":["sci","moment"],"Penicillin discovered":["sci","moment"],"Turing defines computation":["sci","moment"],"Atomic bomb":["sci","moment"],"Transistor invented":["sci","moment"],"DNA structure solved":["sci","moment"],"Sputnik — space age":["sci","moment"],"ARPANET: internet's first packet":["sci","moment"],"World Wide Web proposed":["sci","moment"],"iPhone":["sci","moment"],"AI goes mainstream (ChatGPT)":["sci","moment"],"Born in Salzburg, Jan 27":["art","moment"],"First compositions, age 5":["art","moment"],"Grand tour: Munich, Paris, London":["art","episode"],"Transcribes the Vatican's secret Miserere from memory, age 14":["art","moment"],"Three Italian journeys":["art","episode"],"Job-hunting in Paris; his mother dies there":["art","moment"],"Quits Salzburg, goes freelance in Vienna":["art","moment"],"Marries Constanze · Abduction premieres":["art","moment"],"Joins the Freemasons":["belief","moment"],"The Marriage of Figaro":["art","moment"],"Don Giovanni premieres in Prague — 'my Praguers understand me'":["art","moment"],"Last three symphonies in six weeks":["art","moment"],"Magic Flute · unfinished Requiem · dies Dec 5":["art","moment"],"Bronze Age":["society","era"],"The Silk Road":["reach","era"],"The Renaissance":["art","era"],"Age of Discovery":["reach","era"],"Industrial Revolution":["sci","era"],"The Cold War":["power","era"],"Confucius":["belief","life"],"The Buddha":["belief","life"],"Plato":["belief","life"],"Aristotle":["belief","life"],"Alexander the Great":["power","life"],"Julius Caesar":["power","life"],"Cleopatra":["power","life"],"Charlemagne":["power","life"],"Genghis Khan":["power","life"],"Jan Hus":["belief","life"],"Leonardo da Vinci":["art","life"],"Nicolaus Copernicus":["sci","life"],"Michelangelo":["art","life"],"Martin Luther":["belief","life"],"William Shakespeare":["art","life"],"Galileo Galilei":["sci","life"],"Jan Amos Komenský (Comenius)":["society","life"],"Isaac Newton":["sci","life"],"Johann Sebastian Bach":["art","life"],"Wolfgang Amadeus Mozart":["art","life"],"Ludwig van Beethoven":["art","life"],"Napoleon Bonaparte":["power","life"],"Charles Darwin":["sci","life"],"Abraham Lincoln":["power","life"],"Karl Marx":["belief","life"],"Bedřich Smetana":["art","life"],"Antonín Dvořák":["art","life"],"Marie Curie":["sci","life"],"Mahatma Gandhi":["power","life"],"Winston Churchill":["power","life"],"Albert Einstein":["sci","life"],"Franz Kafka":["art","life"],"Alan Turing":["sci","life"]};
+const PLACEMAP={"Homo sapiens appears":[5.4,36.0,"East Africa","region"],"Out of Africa migration":[12.6,43.4,"Horn of Africa","region"],"Farming begins":[36.5,40.0,"Fertile Crescent","region"],"Writing invented (Sumer)":[31.32,45.64,"Uruk, Sumer","point"],"Stonehenge raised":[51.18,-1.83,"Stonehenge","point"],"Mycenaean Greece":[37.73,22.76,"Mycenae, Greece","region"],"First Olympic games":[37.64,21.63,"Olympia","point"],"Rome founded (legend)":[41.9,12.5,"Rome","point"],"Athenian democracy":[37.98,23.73,"Athens","point"],"Battle of Marathon":[38.15,23.96,"Marathon, Greece","point"],"Peloponnesian War":[37.9,22.9,"Greece & the Aegean","region"],"Alexander conquers the East":[32.54,44.42,"Greece to the Indus","region"],"Punic Wars: Rome vs Carthage":[37.5,11.5,"Rome & Carthage","region"],"Caesar assassinated":[41.89,12.48,"Rome","point"],"Vesuvius buries Pompeii":[40.75,14.49,"Pompeii","point"],"Roman Empire at maximum":[41.9,12.5,"Roman Empire","region"],"Christianity legalized":[45.46,9.19,"Milan","point"],"Western Rome falls":[41.9,12.5,"Rome","point"],"Viking age begins (Lindisfarne)":[55.68,-1.8,"Lindisfarne","point"],"Charlemagne crowned emperor":[41.9,12.45,"Rome","point"],"Great Schism east/west":[41.01,28.98,"Constantinople","point"],"Norman conquest of England":[50.91,0.49,"Hastings","point"],"First Crusade launched":[45.78,3.08,"Clermont","point"],"Magna Carta":[51.44,-0.57,"Runnymede","point"],"Black Death kills a third of Europe":[48.0,12.0,"Central Europe","region"],"Charles University founded in Prague":[50.09,14.42,"Prague","point"],"Jan Hus burned at Konstanz":[47.66,9.18,"Konstanz","point"],"Constantinople falls to Ottomans":[41.01,28.98,"Constantinople","point"],"Columbus reaches the Americas":[24.05,-74.5,"Bahamas","point"],"Luther's 95 theses — Reformation":[51.87,12.65,"Wittenberg","point"],"Spanish Armada defeated":[50.6,0.5,"English Channel","region"],"Thirty Years' War":[50.0,11.0,"Germany","region"],"Defenestration of Prague":[50.09,14.4,"Prague Castle","point"],"English Civil War":[52.5,-1.5,"England","region"],"Ottomans turned back at Vienna":[48.21,16.37,"Vienna","point"],"Great Britain formed":[51.51,-0.13,"London","point"],"Seven Years' War — first world war":[51.0,13.0,"Central Europe","region"],"French Revolution":[48.86,2.35,"Paris","point"],"Terror: Louis XVI guillotined":[48.87,2.32,"Paris","point"],"Napoleon crowns himself":[48.85,2.35,"Paris","point"],"Napoleon freezes in Russia":[55.0,35.0,"Russia","region"],"Waterloo — Napoleon done":[50.68,4.41,"Waterloo","point"],"Revolutions sweep Europe":[48.0,12.0,"Europe","region"],"Germany unified":[52.52,13.4,"Berlin","point"],"World War I":[49.0,8.0,"Europe","region"],"Russian Revolution":[59.94,30.31,"Petrograd","point"],"USSR founded":[55.75,37.62,"Moscow","point"],"Hitler takes power":[52.52,13.4,"Berlin","point"],"World War II":[50.0,15.0,"Europe","region"],"Iron Curtain descends":[48.5,15.5,"Central Europe","region"],"Treaty of Rome — EEC born":[41.89,12.48,"Rome","point"],"Prague Spring crushed":[50.09,14.42,"Prague","point"],"Berlin Wall falls · Velvet Revolution":[52.52,13.38,"Berlin","point"],"EU founded · Czechoslovakia splits":[50.85,5.69,"Maastricht","point"],"Russia invades Ukraine":[49.0,32.0,"Ukraine","region"],"Egypt unified under one crown":[29.85,31.25,"Memphis, Egypt","point"],"Great Pyramid built":[29.98,31.13,"Giza","point"],"Hammurabi writes his law code":[32.54,44.42,"Babylon","point"],"Battle of Kadesh (first recorded treaty)":[34.57,36.52,"Kadesh, Syria","point"],"Babylon destroys Jerusalem's temple":[31.78,35.23,"Jerusalem","point"],"Cyrus founds the Persian Empire":[30.19,53.17,"Pasargadae","point"],"Alexander takes Egypt":[31.2,29.92,"Alexandria","point"],"Cleopatra dies — Egypt goes Roman":[31.2,29.92,"Alexandria","point"],"Crucifixion of Jesus":[31.78,35.23,"Jerusalem","point"],"The Hijra — Islam begins":[24.47,39.61,"Medina","point"],"Arab conquests: Spain to Persia":[33.51,36.29,"Damascus","region"],"Baghdad founded — Islamic golden age":[33.32,44.36,"Baghdad","point"],"Saladin rules Egypt & Syria":[30.04,31.24,"Cairo","region"],"Mongols sack Baghdad":[33.32,44.36,"Baghdad","point"],"Mansa Musa's golden hajj":[16.77,-3.01,"Mali","region"],"Ottomans take Egypt & the caliphate":[30.04,31.24,"Cairo","point"],"Dutch found Cape Colony":[-33.92,18.42,"Cape Town","point"],"Napoleon invades Egypt":[30.04,31.24,"Cairo","region"],"Suez Canal opens":[30.6,32.34,"Suez Canal","point"],"Berlin Conference carves up Africa":[52.52,13.38,"Berlin","point"],"State of Israel founded":[32.08,34.78,"Tel Aviv","point"],"Year of Africa — 17 nations born":[2.0,20.0,"Africa","region"],"Mandela elected president":[-25.75,28.19,"Pretoria","point"],"Indus Valley civilization":[27.33,68.14,"Indus Valley","region"],"Shang dynasty — Chinese writing":[36.1,114.35,"Anyang","region"],"Buddha born":[27.47,83.28,"Lumbini","point"],"Confucius born":[35.6,116.99,"Qufu","point"],"Maurya Empire unites India":[25.61,85.14,"Pataliputra","region"],"Ashoka turns to Buddhism":[25.61,85.14,"Pataliputra","point"],"Qin unifies China":[34.34,108.71,"Xianyang","point"],"Han dynasty":[34.27,108.95,"Chang'an","region"],"Gupta golden age of India":[25.61,85.14,"Pataliputra","region"],"Tang dynasty — cosmopolitan China":[34.27,108.95,"Chang'an","region"],"Song dynasty — paper money, gunpowder":[34.8,114.31,"Kaifeng","region"],"First shogunate in Japan":[35.32,139.55,"Kamakura","point"],"Genghis Khan unites the Mongols":[47.9,107.0,"Mongolia","region"],"Mongols rule all of China":[39.9,116.4,"Khanbaliq (Beijing)","region"],"Ming dynasty founded":[32.06,118.8,"Nanjing","point"],"Zheng He's treasure fleets":[5.0,82.0,"Indian Ocean","region"],"Mughal Empire founded":[28.61,77.21,"Delhi","region"],"East India Company chartered":[51.51,-0.09,"London","point"],"Tokugawa shogunate — Japan closes":[35.68,139.69,"Edo (Tokyo)","point"],"Qing dynasty takes China":[39.9,116.4,"Beijing","region"],"Plassey: British rule in India begins":[23.8,88.25,"Plassey, Bengal","point"],"Opium War humiliates China":[23.13,113.26,"Canton (Guangzhou)","region"],"Perry forces Japan open":[35.25,139.72,"Uraga, Tokyo Bay","point"],"Meiji Restoration — Japan sprints":[35.01,135.77,"Kyoto","point"],"Last emperor: Qing falls":[39.92,116.39,"Beijing","point"],"India independent, partitioned":[28.61,77.21,"Delhi","region"],"People's Republic of China":[39.91,116.39,"Beijing","point"],"Deng opens China":[39.9,116.4,"Beijing","point"],"India liberalizes":[28.61,77.21,"New Delhi","point"],"First peoples reach the Americas":[65.0,-168.0,"Beringia","region"],"Olmec — first American civilization":[18.1,-94.03,"Gulf coast, Mexico","region"],"Maya classic period":[17.22,-89.62,"Maya lowlands","region"],"Vikings land in Newfoundland":[51.6,-55.53,"L'Anse aux Meadows","point"],"Tenochtitlan founded":[19.43,-99.13,"Tenochtitlan","point"],"Inca Empire":[-13.53,-71.97,"Cusco","region"],"Cortés destroys the Aztecs":[19.43,-99.13,"Tenochtitlan","point"],"Pizarro seizes the Inca":[-7.16,-78.51,"Cajamarca","point"],"Jamestown — English America begins":[37.21,-76.78,"Jamestown","point"],"First enslaved Africans in Virginia":[37.0,-76.31,"Point Comfort, Virginia","point"],"Mayflower lands":[41.96,-70.66,"Plymouth, Massachusetts","point"],"Declaration of Independence":[39.95,-75.16,"Philadelphia","point"],"Treaty of Paris: USA recognized":[48.86,2.35,"Paris","point"],"US Constitution written":[39.95,-75.15,"Philadelphia","point"],"Haitian Revolution":[19.0,-72.4,"Haiti","region"],"Bolívar & Latin American independence":[5.0,-72.0,"Gran Colombia","region"],"US Civil War":[36.5,-79.5,"United States","region"],"Slavery abolished in the US":[38.9,-77.04,"Washington, D.C.","point"],"Canada confederates":[45.42,-75.7,"Ottawa","point"],"Wall Street crash — Great Depression":[40.71,-74.01,"New York","point"],"UN founded · US superpower era":[37.78,-122.42,"San Francisco","point"],"Cuban Revolution":[23.11,-82.37,"Havana","region"],"Cuban Missile Crisis":[22.0,-79.5,"Cuba","region"],"Apollo 11: humans on the Moon":[28.57,-80.65,"Cape Canaveral","point"],"September 11 attacks":[40.71,-74.01,"New York","point"],"Global financial crisis":[40.71,-74.01,"Wall Street, New York","point"],"Gregorian chant codified":[41.9,12.45,"Rome","point"],"Guido invents staff notation":[43.46,11.88,"Arezzo","point"],"Opera born (Monteverdi's Orfeo)":[45.16,10.79,"Mantua","point"],"Bach & Handel born":[51.23,11.15,"Eisenach & Halle","region"],"Vivaldi's Four Seasons":[45.44,12.34,"Venice","point"],"Bach dies — Baroque ends":[51.34,12.37,"Leipzig","point"],"Mozart born":[47.8,13.04,"Salzburg","point"],"Beethoven born":[50.74,7.1,"Bonn","point"],"Mozart dies at 35":[48.21,16.37,"Vienna","point"],"Eroica — Romanticism opens":[48.21,16.37,"Vienna","point"],"Beethoven's Ninth":[48.2,16.37,"Vienna","point"],"Dvořák born":[50.26,14.3,"Nelahozeves","point"],"Smetana begins Má vlast":[50.09,14.42,"Prague","point"],"Recorded sound (phonograph)":[40.55,-74.33,"Menlo Park, New Jersey","point"],"Rite of Spring riot":[48.87,2.3,"Paris","point"],"Jazz age roars":[40.71,-73.99,"New York","region"],"Rock'n'roll breaks out":[35.15,-90.05,"Memphis","point"],"Beatlemania":[53.41,-2.98,"Liverpool","point"],"Hip-hop born in the Bronx":[40.85,-73.87,"The Bronx, New York","point"],"MTV: video kills the radio star":[40.76,-73.98,"New York","point"],"Thales predicts an eclipse":[37.53,27.28,"Miletus","point"],"Plato founds the Academy":[37.99,23.71,"Athens","point"],"Euclid's Elements":[31.2,29.92,"Alexandria","point"],"Archimedes at work":[37.08,15.28,"Syracuse, Sicily","point"],"Paper invented in China":[34.62,112.45,"Luoyang","point"],"Ptolemy maps the cosmos (wrongly)":[31.2,29.92,"Alexandria","point"],"Al-Khwarizmi writes the algebra book":[33.32,44.36,"Baghdad","point"],"First printed book (Diamond Sutra)":[40.14,94.66,"Dunhuang","point"],"First university (Bologna)":[44.49,11.34,"Bologna","point"],"Gutenberg's printing press":[50.0,8.27,"Mainz","point"],"Copernicus: Earth moves":[54.36,19.68,"Frombork","point"],"Galileo points a telescope up":[45.41,11.88,"Padua","point"],"Newton's Principia":[52.21,0.12,"Cambridge","point"],"The Encyclopédie — Enlightenment engine":[48.86,2.34,"Paris","point"],"Watt's steam engine goes commercial":[52.48,-1.9,"Birmingham","point"],"Adam Smith's Wealth of Nations":[55.95,-3.19,"Edinburgh","point"],"First vaccine (smallpox)":[51.69,-2.46,"Berkeley, Gloucestershire","point"],"Faraday: electricity from motion":[51.51,-0.14,"London","point"],"Darwin's Origin of Species":[51.51,-0.13,"London","point"],"Marx's Das Kapital":[51.52,-0.13,"London","point"],"Mendeleev's periodic table":[59.94,30.31,"Saint Petersburg","point"],"Telephone":[42.36,-71.06,"Boston","point"],"Electric light bulb":[40.55,-74.33,"Menlo Park, New Jersey","point"],"First automobile":[49.49,8.47,"Mannheim","point"],"First powered flight":[36.02,-75.67,"Kitty Hawk","point"],"Einstein's miracle year":[46.95,7.45,"Bern","point"],"Penicillin discovered":[51.52,-0.17,"London","point"],"Turing defines computation":[52.2,0.12,"Cambridge","point"],"Atomic bomb":[35.88,-106.31,"Los Alamos","point"],"Transistor invented":[40.68,-74.4,"Murray Hill, New Jersey","point"],"DNA structure solved":[52.2,0.12,"Cambridge","point"],"Sputnik — space age":[45.92,63.34,"Baikonur","point"],"ARPANET: internet's first packet":[34.07,-118.44,"Los Angeles","point"],"World Wide Web proposed":[46.23,6.05,"CERN, Geneva","point"],"iPhone":[37.33,-122.03,"Cupertino","point"],"AI goes mainstream (ChatGPT)":[37.77,-122.42,"San Francisco","point"],"Born in Salzburg, Jan 27":[47.8,13.04,"Salzburg","point"],"First compositions, age 5":[47.8,13.04,"Salzburg","point"],"Grand tour: Munich, Paris, London":[49.5,4.6,"Munich, Paris, London","region"],"Transcribes the Vatican's secret Miserere from memory, age 14":[41.9,12.45,"Vatican, Rome","point"],"Three Italian journeys":[43.0,12.0,"Italy","region"],"Job-hunting in Paris; his mother dies there":[48.86,2.35,"Paris","point"],"Quits Salzburg, goes freelance in Vienna":[48.21,16.37,"Vienna","point"],"Marries Constanze · Abduction premieres":[48.21,16.37,"Vienna","point"],"Joins the Freemasons":[48.21,16.37,"Vienna","point"],"The Marriage of Figaro":[48.21,16.37,"Vienna","point"],"Don Giovanni premieres in Prague — 'my Praguers understand me'":[50.09,14.42,"Prague","point"],"Last three symphonies in six weeks":[48.21,16.37,"Vienna","point"],"Magic Flute · unfinished Requiem · dies Dec 5":[48.19,16.34,"Vienna","point"],"Confucius":[35.58,116.99,"Qufu","point"],"The Buddha":[27.48,83.28,"Lumbini","point"],"Plato":[37.98,23.73,"Athens","point"],"Aristotle":[40.31,23.6,"Stagira","point"],"Alexander the Great":[40.75,22.52,"Pella","point"],"Julius Caesar":[41.89,12.48,"Rome","point"],"Cleopatra":[31.2,29.92,"Alexandria","point"],"Charlemagne":[50.78,6.08,"Aachen","point"],"Genghis Khan":[48.0,110.0,"Khentii Mountains","point"],"Jan Hus":[49.3,13.68,"Husinec","point"],"Leonardo da Vinci":[43.78,10.93,"Vinci","point"],"Nicolaus Copernicus":[53.01,18.6,"Toruń","point"],"Michelangelo":[43.64,11.98,"Caprese","point"],"Martin Luther":[51.62,11.44,"Eisleben","point"],"William Shakespeare":[52.19,-1.71,"Stratford-upon-Avon","point"],"Galileo Galilei":[43.72,10.4,"Pisa","point"],"Jan Amos Komenský (Comenius)":[48.97,17.62,"Moravia","point"],"Isaac Newton":[52.81,-0.62,"Woolsthorpe","point"],"Johann Sebastian Bach":[50.98,10.32,"Eisenach","point"],"Wolfgang Amadeus Mozart":[47.8,13.04,"Salzburg","point"],"Ludwig van Beethoven":[50.74,7.1,"Bonn","point"],"Napoleon Bonaparte":[41.93,8.74,"Ajaccio","point"],"Charles Darwin":[52.71,-2.75,"Shrewsbury","point"],"Abraham Lincoln":[37.53,-85.74,"Hodgenville","point"],"Karl Marx":[49.75,6.64,"Trier","point"],"Bedřich Smetana":[49.87,15.47,"Litomyšl","point"],"Antonín Dvořák":[50.24,14.31,"Nelahozeves","point"],"Marie Curie":[52.23,21.01,"Warsaw","point"],"Mahatma Gandhi":[21.64,69.61,"Porbandar","point"],"Winston Churchill":[51.84,-1.36,"Blenheim","point"],"Albert Einstein":[48.4,9.99,"Ulm","point"],"Franz Kafka":[50.09,14.42,"Prague","point"],"Alan Turing":[51.51,-0.13,"London","point"]};
+</script>
+<script>
+"use strict";
+// ============================================================================
+// Timeline — VERTICAL. A transposition of instrument ② (`TL`) from partB.html.
+// Time runs DOWN. Past at top, always: that is the product's settled reading
+// direction, so there is no flip — the core-sample view elsewhere runs the
+// other way on purpose, and this one does not have to apologise for it.
+//
+// Verbatim from TL: THR thresholds, levelFor/alphaFor, LMAX + the log mapping,
+// the band list (its numbers now weight lane counts and rail widths), the five
+// shapes and their magic numbers, category colours, lens + category filters,
+// search dimming, tooltip contents, presets, animTo, wheel-zoom maths.
+//
+// Adapted for the rotation:
+//  · a horizontal label no longer eats time-axis space, so the lane packer no
+//    longer budgets for it;
+//  · COLUMN WIDTHS ARE DRIVEN BY CONTENT, not by the viewport. Each column asks
+//    for the width its own longest visible label wants on one line, clamped to
+//    [LABMIN, LABMAX]; sparse columns collapse toward the width of their own
+//    header. The columns therefore sum to a SURFACE that is usually WIDER than
+//    the window, and the canvas is a window onto it.
+//  · the drag is two-axis: Y travels through time, X pans across the surface,
+//    in one gesture. The time axis lives in a fixed gutter and the headers ride
+//    the surface horizontally only, so neither is ever lost mid-drag.
+// ============================================================================
+
+// ---------- shared helpers (verbatim from partB.html) ----------
+const CAT_MAP = (typeof CATMAP  !== 'undefined') ? CATMAP  : {};
+const PLACES  = (typeof PLACEMAP!== 'undefined') ? PLACEMAP: {};
+const $=s=>document.querySelector(s);
+const tokens=()=>{const cs=getComputedStyle(document.documentElement);const g=n=>cs.getPropertyValue(n).trim();
+  return {bg:g('--bg'),panel:g('--panel'),panel2:g('--panel2'),line:g('--line'),ink:g('--ink'),ink2:g('--ink2'),ink3:g('--ink3'),
+  accent:g('--accent'),accent2:g('--accent2'),sea:g('--sea'),stroke:g('--stroke'),
+  s:[g('--s1'),g('--s2'),g('--s3'),g('--s4'),g('--s5'),g('--s6'),g('--s7'),g('--s8')]};};
+// astronomical year 0 is 1 BCE — never print "0 BCE"
+const fmtY=y=>{y=Math.round(y); return y<0? (Math.abs(y)+" BCE") : (y===0? "1 BCE" : ""+y);};
+const fmtBig=y=>{const a=2026-y; if(a>=1e9) return (a/1e9).toFixed(1).replace(/\.0$/,"")+" billion yrs ago";
+  if(a>=1e6) return (a/1e6).toFixed(0)+" million yrs ago"; if(a>=20000) return Math.round(a/1000)+",000 yrs ago"; return fmtY(y);};
+const clamp=(v,a,b)=>Math.max(a,Math.min(b,v));
+const reduceMotion=matchMedia('(prefers-reduced-motion: reduce)').matches;
+const tip=$('#tip');
+function showTip(x,y,html){tip.innerHTML=html;tip.style.display='block';
+  const r=tip.getBoundingClientRect();
+  tip.style.left=clamp(x+14,8,innerWidth-r.width-8)+'px';
+  tip.style.top=clamp(y+14,8,innerHeight-r.height-8)+'px';}
+function hideTip(){tip.style.display='none';}
+// same colour at a given alpha. Canvas gradients interpolate in straight RGBA,
+// so fading a hex to `transparent` runs it through grey — always fade to the
+// colour's own zero-alpha form instead.
+function withA(c,a){
+  let m=/^#([0-9a-f]{3,8})$/i.exec(c);
+  if(m){let h=m[1]; if(h.length===3)h=h[0]+h[0]+h[1]+h[1]+h[2]+h[2];
+    return `rgba(${parseInt(h.slice(0,2),16)},${parseInt(h.slice(2,4),16)},${parseInt(h.slice(4,6),16)},${a})`;}
+  m=/rgba?\(([^)]+)\)/.exec(c);
+  if(m){const p=m[1].split(',').map(s=>s.trim()); return `rgba(${p[0]},${p[1]},${p[2]},${a})`;}
+  return c;
+}
+function fitCanvas(cv,h){
+  const cw=cv.clientWidth||cv.parentElement.clientWidth; if(!cw)return null;
+  const dpr=devicePixelRatio||1;
+  if(cv.width!==Math.round(cw*dpr)||cv.height!==Math.round(h*dpr)){
+    cv.width=Math.round(cw*dpr);cv.height=Math.round(h*dpr);cv.style.height=h+'px';}
+  const ctx=cv.getContext('2d');ctx.setTransform(dpr,0,0,dpr,0,0);
+  return {cw,ch:h,ctx};
+}
+// year pill at the cursor — rotated: sits on the left axis, vertically centred on the crosshair
+function yearPillV(ctx,T,x,cy,text,accent){
+  ctx.font='600 12px ui-monospace,Menlo,monospace';
+  const w=ctx.measureText(text).width+14;
+  ctx.fillStyle=accent||T.accent; ctx.beginPath(); ctx.roundRect(x,cy-10,w,20,10); ctx.fill();
+  ctx.fillStyle=T.bg; ctx.textAlign='center'; ctx.fillText(text,x+w/2,cy+4); ctx.textAlign='left';
+}
+
+// ---------- the visual grammar (verbatim from partB.html) ----------
+const CATS=[
+  {id:'power',  name:'Power & states', si:0},
+  {id:'war',    name:'War & conflict', si:7},
+  {id:'belief', name:'Ideas & belief', si:6},
+  {id:'sci',    name:'Science & tech', si:2},
+  {id:'art',    name:'Art & culture',  si:4},
+  {id:'nature', name:'Nature & catastrophe', si:5},
+  {id:'society',name:'Society & economy', si:3},
+  {id:'reach',  name:'Exploration & movement', si:1}];
+const CATBY={}; CATS.forEach(c=>CATBY[c.id]=c);
+const catColor=(id,T)=>{const c=CATBY[id]; return c?T.s[c.si]:T.ink2;};
+function guessCat(ev){
+  const t=(ev[5]+' '+ev[2]).toLowerCase();
+  if(/war|battle|conquest|siege|invade|invasion|armada|crusade|revolt/.test(t))return 'war';
+  if(/religio|christian|islam|buddh|philosoph|reformation|schism|communism|enlighten/.test(t))return 'belief';
+  if(/science|physics|math|astronom|medicine|technolog|invention|computing|printing|space|internet|dna|electricity/.test(t))return 'sci';
+  if(/music|opera|art|literature|jazz|rock|symphon|mozart|beethoven/.test(t))return 'art';
+  if(/cosmos|life|extinction|plague|pandemic|volcano|earth|human|climate/.test(t))return 'nature';
+  if(/exploration|migration|colony|colonialism|voyage|route/.test(t))return 'reach';
+  if(/trade|economy|slavery|university|law|gold|money|independence/.test(t))return 'society';
+  return 'power';
+}
+if(typeof LIVES!=='undefined') for(const L of LIVES) EVENTS.push(L.slice());
+for(const ev of EVENTS){
+  const m=CAT_MAP[ev[2]];
+  ev[6]=m?m[0]:guessCat(ev);
+  ev[7]=m?m[1]:(ev[1]?'episode':'moment');
+  const p=PLACES[ev[2]];
+  ev[8]=p||null;                     // [lat, lon, place, scope]
+}
+
+// ---------- label wrapping (only possible because labels now run across time) ----------
+const LABFONT='11.5px -apple-system,system-ui,sans-serif';
+const HEADFONT='600 10.5px -apple-system,system-ui,sans-serif';
+const LH=13, MAXLINES=3;
+const _wrapCache=new Map();
+function wrapText(ctx,text,maxW,maxLines){
+  const key=text+'|'+Math.round(maxW)+'|'+maxLines;
+  let hit=_wrapCache.get(key); if(hit)return hit;
+  const words=String(text).split(/\s+/);
+  const lines=[]; let cur='', broke=false;
+  for(let i=0;i<words.length;i++){
+    const t=cur?cur+' '+words[i]:words[i];
+    if(cur&&ctx.measureText(t).width>maxW){
+      lines.push(cur); cur=words[i];
+      if(lines.length===maxLines){broke=true;break;}
+    } else cur=t;
+  }
+  if(!broke){ if(cur){ if(lines.length<maxLines) lines.push(cur); else broke=true; } }
+  if(broke){
+    let last=lines[lines.length-1];
+    while(last.length>1&&ctx.measureText(last+'…').width>maxW) last=last.slice(0,-1);
+    lines[lines.length-1]=last.replace(/[\s,;:·—-]+$/,'')+'…';
+  }
+  for(let k=0;k<lines.length;k++){            // a single word wider than the column
+    if(ctx.measureText(lines[k]).width>maxW){
+      let s=lines[k];
+      while(s.length>1&&ctx.measureText(s+'…').width>maxW) s=s.slice(0,-1);
+      lines[k]=s+'…';
+    }
+  }
+  if(_wrapCache.size>4000)_wrapCache.clear();
+  _wrapCache.set(key,lines); return lines;
+}
+// How wide does this label WANT to be? oneLineW is the ideal (a label that fits
+// on one line is what makes a column read as a list rather than a paragraph);
+// it is what a column bids with. Measured once per title and cached — the label
+// font never changes.
+const _wantCache=new Map();
+function oneLineW(ctx,text){
+  let hit=_wantCache.get(text); if(hit!==undefined)return hit;
+  const w=Math.ceil(ctx.measureText(text).width);
+  if(_wantCache.size>4000)_wantCache.clear();
+  _wantCache.set(text,w); return w;
+}
+
+// ================= VERTICAL TIMELINE =================
+const VT={
+  cv:$('#vertCanvas'), d0:-3000,d1:2026, log:false,
+  lens:{MU:false,SC:false,MZ:true}, q:'', hoverY:null, off:new Set(),
+  THR:{1:Infinity,2:40000,3:2400,4:650,5:170},                       // verbatim
+  // verbatim band list. The third number was the band's HEIGHT in the horizontal
+  // view; rotated it still drives the lane count (and so the mark rail's width).
+  bands(){ const b=[['CO','Deep time',34,null],['EU','Europe',86,0],['ME','MidEast & Africa',86,1],['AS','Asia',86,2],['AM','Americas',86,3]];
+    if(this.lens.MU)b.push(['MU','Music',88,4]); if(this.lens.SC)b.push(['SC','Science & ideas',88,5]); if(this.lens.MZ)b.push(['MZ','Mozart',88,6]);
+    return b;},
+  span(){return this.d1-this.d0;},
+  LMAX:10.2,
+  GX:96, GY:44, PAD:26, MAXPUSH:64,
+  // Label-column width band. LABMAX is the cap on a column's bid; it is also the
+  // no-ellipsis guarantee — the widest title in the corpus needs 138px to wrap
+  // into MAXLINES lines without truncation, so any column at or above that can
+  // never ellipsise. Widths quantise to STEPW so a zoom does not make the
+  // columns shiver.
+  LABMIN:96, LABMAX:192, LABNEED:144, STEPW:16, PITCH:9,
+  panX:0, H:760,
+  // screen pixel for a year (past at top, monotonically increasing)
+  y(t,G,Hp){ if(!this.log) return G+(t-this.d0)/this.span()*Hp;
+    const ya=Math.max(2026.5-t,0.6); return G+(1-Math.log10(ya)/this.LMAX)*Hp;},
+  // inverse: year at a screen pixel
+  it(py,G,Hp){ if(!this.log) return this.d0+(py-G)/Hp*this.span();
+    return 2026.5-Math.pow(10,(1-(py-G)/Hp)*this.LMAX);},
+  levelFor(S){ if(S<=this.THR[5])return 5; if(S<=this.THR[4])return 4; if(S<=this.THR[3])return 3; if(S<=this.THR[2])return 2; return 1;},
+  alphaFor(lvl,S,isLens){
+    const t=this.THR[lvl]*(isLens?2.5:1); if(!isFinite(t))return 1;
+    if(S<=t)return 1; if(S<=t*1.6)return 1-(S-t)/(t*.6); return 0;},
+  // Is this event drawn in this column, and at what alpha? The importance ramp
+  // and the off-screen cull, verbatim — factored out so the width-measuring
+  // pass and the drawing pass can never disagree about what is on screen.
+  // `pad` widens the window for the measuring pass only (see layout).
+  alphaOf(ev,isLens,key,GY,Hp,PB,pad){
+    const a=this.log ? (key==='CO'?1:(ev[4]<=2?1:0)) : this.alphaFor(ev[4],this.span(),isLens);
+    if(a<=0.02)return 0;
+    const p=pad||0;
+    const ya=this.y(ev[0],GY,Hp), yb=ev[1]?this.y(ev[1],GY,Hp):ya;
+    if(Math.max(ya,yb)<GY-40-p||Math.min(ya,yb)>PB+p)return 0;
+    return a;
+  },
+  railWidth(bw){ const maxTracks=Math.max(1,Math.floor((bw-24)/17)); return {maxTracks,railW:10+(maxTracks-1)*this.PITCH+9};},
+  measure(){
+    const top=this.cv.getBoundingClientRect().top+scrollY;
+    this.H=clamp(Math.round(innerHeight-top-142),460,1600);
+  },
+  size(){ const d=fitCanvas(this.cv,this.H); return d?{cw:d.cw,H:this.H,ctx:d.ctx}:null; },
+  boxes:[],
+  // ---- pass 1: what width does each column actually need? -------------------
+  // A column bids the width its longest label wants on one line. Nothing here
+  // looks at the viewport, and nothing looks at the search query, so typing
+  // never reflows the columns — that is the whole point. It measures over a
+  // window padded by a screenful of time above and below, too, so that dragging
+  // through time does not make the columns breathe under your hand: the bid
+  // changes when the level of detail changes, not on every frame of a drag.
+  layout(ctx,bands,bandEvs,GY,Hp,PB,VW){
+    const cols=[];
+    for(const [key,label,bw,si] of bands){
+      const {maxTracks,railW}=this.railWidth(bw);
+      const isLens=['MU','SC','MZ'].includes(key);
+      ctx.font=LABFONT;
+      let want=0, n=0;
+      for(const ev of bandEvs[key]){
+        const a=this.alphaOf(ev,isLens,key,GY,Hp,PB,Hp);
+        if(a<=0.25)continue;                       // no label at this alpha (verbatim rule)
+        n++; const w=oneLineW(ctx,ev[2]); if(w>want)want=w;
+      }
+      ctx.font=HEADFONT;
+      const headW=Math.ceil(ctx.measureText(label.toUpperCase()).width)+26;
+      let colW, minW;
+      if(!n){ colW=minW=Math.max(headW,railW+34); }   // nothing to say: get out of the way
+      else {
+        const labW=clamp(Math.ceil(want/this.STEPW)*this.STEPW,this.LABMIN,this.LABMAX);
+        colW=Math.max(railW+12+labW,headW);
+        minW=Math.max(railW+12+this.LABNEED,headW);   // below this something would truncate
+      }
+      cols.push({key,label,bw,si,maxTracks,railW,w:colW,min:minW,demand:n?colW:0});
+    }
+    // A column is ENTITLED to `min` — the width below which its labels would
+    // truncate. Everything above that is appetite. So: if the window can hold
+    // every entitlement, never overflow — squeeze the appetites and, if there is
+    // still room, hand the leftover to the busiest columns. Only when the window
+    // cannot hold the entitlements does the surface grow past it and pan.
+    let SW=cols.reduce((a,c)=>a+c.w,0);
+    if(SW<VW){
+      const dsum=cols.reduce((a,c)=>a+c.demand,0)||SW, slack=VW-SW;
+      for(const c of cols) c.w+=slack*(c.demand||(c.w*0.0001))/dsum;
+    } else {
+      const give=cols.reduce((a,c)=>a+(c.w-c.min),0), need=SW-VW;
+      const f=Math.min(1,give?need/give:0);
+      for(const c of cols) c.w-=(c.w-c.min)*f;
+    }
+    SW=cols.reduce((a,c)=>a+c.w,0);
+    return {cols,SW};
+  },
+  render(){
+    const dim=this.size(); if(!dim)return;
+    const {cw,H,ctx}=dim; const T=tokens();
+    ctx.fillStyle=T.panel; ctx.fillRect(0,0,cw,H);
+    const GX=this.GX, GY=this.GY, PAD=this.PAD;
+    const Hp=H-GY-PAD, PB=H-PAD;              // plot height, plot bottom
+    const CW=cw-GX-8;                          // width of the WINDOW onto the surface
+    const bands=this.bands();
+    const q=this.q.toLowerCase();
+    let hitCount=0; this._dropped=0; this.boxes=[];
+
+    const bandEvs={};
+    for(const b of bands) bandEvs[b[0]]=EVENTS.filter(e=>e[3]===b[0]&&!this.off.has(e[6])).sort((a,b)=>a[0]-b[0]);
+    const {cols,SW}=this.layout(ctx,bands,bandEvs,GY,Hp,PB,CW);
+    const maxPan=Math.max(0,SW-CW);
+    this.panX=clamp(this.panX,0,maxPan);
+    const panX=this.panX;
+
+    // ---- era wash (verbatim thresholds; stripes are now horizontal) ----
+    this._eras=[];
+    if(!this.log){
+      const eras=[[-800,476,'Antiquity'],[476,1453,'Middle Ages'],[1453,1789,'Early Modern'],[1789,2026,'Modern']];
+      ctx.textAlign='left'; ctx.font='10px -apple-system,system-ui,sans-serif';
+      for(const [a,b,n] of eras){
+        let ya=this.y(a,GY,Hp), yb=this.y(b,GY,Hp);
+        if(ya>yb){const t=ya;ya=yb;yb=t;}
+        ya=clamp(ya,GY,PB); yb=clamp(yb,GY,PB);
+        if(yb-ya<4)continue;
+        ctx.fillStyle=T.accent; ctx.globalAlpha=.055; ctx.fillRect(GX,ya,CW,yb-ya);
+        if(yb-ya>22){ctx.globalAlpha=.75;ctx.fillStyle=T.ink3;ctx.fillText(n,GX+6,ya+12);this._eras.push([n,ya+12]);}
+        ctx.globalAlpha=1;
+      }
+    }
+
+    // ---- time axis (same step table, same ≤14 rule). Lives in a fixed gutter
+    // and spans the window, not the surface: panning sideways never loses it.
+    ctx.strokeStyle=T.line;ctx.lineWidth=1;
+    ctx.font='11px ui-monospace,Menlo,monospace'; ctx.fillStyle=T.ink2; ctx.textAlign='right';
+    if(!this.log){
+      const steps=[2000,1000,500,200,100,50,20,10,5,2,1];
+      const step=steps.find(s=>this.span()/s<=14)||1;
+      const start=Math.ceil(this.d0/step)*step;
+      ctx.beginPath();
+      for(let t=start;t<=this.d1;t+=step){
+        const yy=this.y(t,GY,Hp);
+        ctx.moveTo(GX,yy);ctx.lineTo(cw-8,yy);
+        ctx.fillText(fmtY(t),GX-10,yy+4);
+      }
+      ctx.globalAlpha=.35;ctx.stroke();ctx.globalAlpha=1;
+    } else {
+      const labs=[[1e10,'10 Gya'],[1e9,'1 Gya'],[1e8,'100 Mya'],[1e7,'10 Mya'],[1e6,'1 Mya'],[1e5,'100 kya'],[1e4,'10 kya'],[1e3,'1,000 ya'],[100,'100 ya'],[10,'10 ya']];
+      ctx.beginPath();
+      for(const [ya,lab] of labs){
+        const yy=this.y(2026.5-ya,GY,Hp);
+        if(yy<GY-1||yy>PB+1)continue;
+        ctx.moveTo(GX,yy);ctx.lineTo(cw-8,yy);ctx.fillText(lab,GX-10,yy+4);
+      }
+      ctx.globalAlpha=.35;ctx.stroke();ctx.globalAlpha=1;
+    }
+    ctx.textAlign='left';
+    const yn=this.y(2026,GY,Hp);
+    if(yn>=GY&&yn<=PB){ctx.strokeStyle=T.accent2;ctx.setLineDash([4,4]);ctx.beginPath();ctx.moveTo(GX,yn);ctx.lineTo(cw-8,yn);ctx.stroke();ctx.setLineDash([]);}
+
+    const baseL=this.log?2:this.levelFor(this.span());
+
+    // ---- columns. The surface is drawn at -panX and clipped to the window, so
+    // nothing ever paints over the time-axis gutter.
+    ctx.save(); ctx.beginPath(); ctx.rect(GX,0,CW,PB); ctx.clip();
+    let cx=GX-panX; this._cols={}; this._colList=[];
+    for(const C of cols){
+      const {key,label,si,maxTracks,railW}=C, colW=C.w;
+      this._cols[key]=[cx,colW]; this._colList.push({key,label,si,x:cx,w:colW});
+      ctx.strokeStyle=T.line;ctx.globalAlpha=.8;ctx.beginPath();
+      ctx.moveTo(cx+colW,GY-26);ctx.lineTo(cx+colW,PB);ctx.stroke();ctx.globalAlpha=1;
+      ctx.fillStyle=si===null?T.accent:T.s[si];ctx.beginPath();ctx.arc(cx+8,GY-20,4,0,7);ctx.fill();
+      ctx.fillStyle=T.ink2;ctx.font=HEADFONT;ctx.textAlign='left';
+      ctx.fillText(label.toUpperCase(),cx+18,GY-16);
+
+      const isLens=['MU','SC','MZ'].includes(key);
+      const evs=bandEvs[key];
+      const PITCH=this.PITCH;
+      const labX=cx+railW+4, labW=Math.max(46,colW-railW-12);
+      const trackEnd=new Array(maxTracks).fill(-1e18);
+      const labels=[];
+      ctx.save(); ctx.beginPath(); ctx.rect(cx,GY,colW,Hp); ctx.clip();
+      ctx.font=LABFONT;
+
+      for(const ev of evs){
+        const [y0,y1,title,,lvl]=ev; const cat=ev[6], typ=ev[7];
+        let a=this.alphaOf(ev,isLens,key,GY,Hp,PB);
+        if(!a)continue;
+        const ya=this.y(y0,GY,Hp), yb=y1?this.y(y1,GY,Hp):ya;
+        const top=Math.min(ya,yb), bot=Math.max(ya,yb);
+        const isMatch=q&&((title.toLowerCase().includes(q))||ev[5].includes(q));
+        if(q){ if(isMatch){hitCount++;} else a*=.12; }
+        const col=catColor(cat,T);
+
+        // lane packing, in time-pixels. No label width in the budget any more —
+        // that whole term is what the rotation buys us.
+        let track=trackEnd.findIndex(te=>te<top-4);
+        if(track<0){track=0;let m=1e18;trackEnd.forEach((te,i)=>{if(te<m){m=te;track=i;}});}
+        trackEnd[track]=Math.max(trackEnd[track],bot+8);
+        const mx=cx+10+track*PITCH;
+
+        const ct=Math.max(top,GY-30), cb=Math.min(bot,PB+30), clen=Math.max(cb-ct,6);
+        ctx.globalAlpha=a; ctx.fillStyle=col; ctx.strokeStyle=col;
+        if(typ==='era'){                                    // translucent swath, full column
+          ctx.globalAlpha=a*.22; ctx.fillRect(cx+2,ct,colW-4,clen);
+          ctx.globalAlpha=a*.9;  ctx.fillRect(mx-1,ct,2,clen);
+        } else if(typ==='zone'){                            // thick tapered ribbon
+          const th=Math.max(5,12-lvl*1.2), cap=Math.min(9,clen*.28);
+          ctx.beginPath();
+          ctx.moveTo(mx,ct); ctx.lineTo(mx-th/2,ct+cap);
+          ctx.lineTo(mx-th/2,ct+clen-cap); ctx.lineTo(mx,ct+clen);
+          ctx.lineTo(mx+th/2,ct+clen-cap); ctx.lineTo(mx+th/2,ct+cap);
+          ctx.closePath(); ctx.fill();
+        } else if(typ==='life'){                            // capsule + birth dot + death cap
+          ctx.globalAlpha=a*.55; ctx.beginPath(); ctx.roundRect(mx-3.5,ct,7,clen,3.5); ctx.fill();
+          ctx.globalAlpha=a;
+          if(ya>GY-8&&ya<PB+8){ctx.beginPath(); ctx.arc(mx,ya,3.4,0,7); ctx.fill();}
+          if(y1&&yb>GY-8&&yb<PB+8){ctx.lineWidth=2; ctx.beginPath(); ctx.moveTo(mx-5,yb); ctx.lineTo(mx+5,yb); ctx.stroke();}
+        } else if(y1||typ==='episode'){                     // bar
+          ctx.beginPath(); ctx.roundRect(mx-4,ct,8,clen,4); ctx.fill();
+        } else {                                            // moment — a quiet point
+          ctx.beginPath(); ctx.arc(mx,ya,3.2,0,7); ctx.fill();
+        }
+        ctx.globalAlpha=1;
+        this.boxes.push({k:'mark',x:mx-8,y:ct-5,w:16,h:clen+10,ev,band:label});
+
+        // anchor: the point the label belongs to. Durations use the midpoint of
+        // their *visible* stretch so an era running off both ends keeps its name.
+        const vt=Math.max(top,GY+2), vb=Math.min(bot,PB-2);
+        const anchor=clamp(y1?(vt+vb)/2:ya,GY+2,PB-2);
+        if(a>0.25){
+          const lines=wrapText(ctx,title,labW,MAXLINES);
+          labels.push({anchor,h:lines.length*LH,lines,a,col,mx,lvl,ev,isMatch});
+        } else if(isMatch){
+          ctx.globalAlpha=1;ctx.strokeStyle=T.accent2;ctx.lineWidth=1.6;
+          ctx.beginPath();ctx.arc(mx,anchor,7,0,7);ctx.stroke();ctx.globalAlpha=1;
+        }
+      }
+
+      // ---- label placement. Most-important-first into the nearest free slot.
+      // Replaces the horizontal view's lane budgeting + left/right edge flipping.
+      const GAP=4, MAXPUSH=this.MAXPUSH, slots=[];
+      labels.sort((A,B)=>A.lvl-B.lvl||A.anchor-B.anchor);
+      for(const L of labels){
+        const bh=L.h+GAP, want=L.anchor-bh/2;
+        let put=null;
+        for(let d=0;d<=MAXPUSH&&put===null;d+=3){
+          for(const t of (d===0?[want]:[want+d,want-d])){
+            if(t<GY+2||t+bh>PB-2)continue;
+            let ok=true;
+            for(const s of slots){ if(t<s[1]&&t+bh>s[0]){ok=false;break;} }
+            if(ok){put=t;break;}
+          }
+        }
+        if(put===null){L.drop=true;this._dropped++;continue;}
+        L.y=put+GAP/2; slots.push([put,put+bh]);
+      }
+      ctx.font=LABFONT; ctx.textAlign='left';
+      for(const L of labels){
+        if(L.drop)continue;
+        const cy=L.y+L.h/2;
+        if(Math.abs(cy-L.anchor)>3){                 // leader hairline back to the true year
+          ctx.globalAlpha=L.a*.45; ctx.strokeStyle=L.col; ctx.lineWidth=1;
+          ctx.beginPath(); ctx.moveTo(L.mx+6,L.anchor); ctx.lineTo(labX-4,cy); ctx.stroke();
+        }
+        if(L.isMatch){
+          ctx.globalAlpha=1;ctx.strokeStyle=T.accent2;ctx.lineWidth=1.6;
+          ctx.beginPath();ctx.arc(L.mx,L.anchor,7,0,7);ctx.stroke();
+        }
+        ctx.globalAlpha=L.a; ctx.fillStyle=T.ink;
+        for(let k=0;k<L.lines.length;k++) ctx.fillText(L.lines[k],labX,L.y+10+k*LH);
+        ctx.globalAlpha=1;
+        this.boxes.push({k:'lab',x:labX-6,y:L.y-2,w:labW+10,h:L.h+4,ev:L.ev,band:label,col:key});
+      }
+      ctx.restore();
+      cx+=colW;
+    }
+    ctx.restore();
+    // hit-testing works on the visible slice of each box, so a mark half-scrolled
+    // under the axis gutter cannot be clicked through it
+    let visLabels=0;
+    for(const b of this.boxes){
+      const x0=Math.max(b.x,GX), x1=Math.min(b.x+b.w,cw-8);
+      b.vx=x0; b.vw=x1-x0;
+      if(b.k==='lab'&&b.vw>b.w*0.6)visLabels++;
+    }
+    this._visLabels=visLabels;
+
+    // ---- "there is more over here" ------------------------------------------
+    this._surface={SW,CW,panX,maxPan};
+    this.edgeHints(ctx,T,cw,GX,GY,PB,CW,panX,maxPan);
+    if(panX>0.5){    // era names are viewport furniture, not surface — the fade must not eat them
+      ctx.font='10px -apple-system,system-ui,sans-serif'; ctx.textAlign='left';
+      ctx.globalAlpha=.75; ctx.fillStyle=T.ink3;
+      for(const [n,yy] of this._eras) ctx.fillText(n,GX+6,yy);
+      ctx.globalAlpha=1;
+    }
+    this.panRail(ctx,T,cw,GX,PB,H,CW,SW,panX);
+
+    // ---- hover crosshair + year readout ----
+    if(this.hoverY!==null&&this.hoverY>GY&&this.hoverY<PB){
+      const yr=this.it(this.hoverY,GY,Hp);
+      ctx.strokeStyle=T.accent;ctx.globalAlpha=.55;ctx.lineWidth=1;
+      ctx.beginPath();ctx.moveTo(GX,this.hoverY);ctx.lineTo(cw-8,this.hoverY);ctx.stroke();
+      ctx.globalAlpha=1;
+      yearPillV(ctx,T,4,this.hoverY,this.log?fmtBig(yr):fmtY(yr));
+    }
+    $('#zoomReadout').textContent=this.log?'log scale · Big Bang → now':
+      `showing importance ≤ ${baseL} of 5 · span ${Math.round(this.span()).toLocaleString()} yrs`;
+    $('#searchCnt').textContent=q?`${hitCount} hits`:'';
+  },
+  // Fade the columns out against the panel at whichever edge has more surface
+  // behind it, and name the next column that way. The fade says "this is cut
+  // off"; the pill says what you would get for dragging.
+  edgeHints(ctx,T,cw,GX,GY,PB,CW,panX,maxPan){
+    const R=cw-8, FW=58;
+    this._pills=[];
+    // The chip sits above the header row, where it can never cover a header or a
+    // label, and it is a control as well as a hint: click it and the named column
+    // slides in.
+    const pill=(x,text,dir,to,col)=>{
+      ctx.font='600 10.5px -apple-system,system-ui,sans-serif';
+      const label=dir<0?'‹  '+text:text+'  ›';
+      const w=ctx.measureText(label).width+20, h=18, y=1, px=dir<0?x:x-w;
+      ctx.globalAlpha=1; ctx.fillStyle=T.accent;
+      ctx.beginPath(); ctx.roundRect(px,y,w,h,9); ctx.fill();
+      ctx.fillStyle=T.bg; ctx.textAlign='left'; ctx.fillText(label,px+10,y+12.5);
+      this._pills.push({x:px,y,w,h,to,col});
+    };
+    const fade=(side)=>{
+      const x0=side<0?GX:R, x1=side<0?GX+FW:R-FW;
+      const g=ctx.createLinearGradient(x0,0,x1,0);
+      // opaque for the first third, so text is gone before the hard cut rather
+      // than being sliced mid-word
+      g.addColorStop(0,withA(T.panel,1)); g.addColorStop(.3,withA(T.panel,1));
+      g.addColorStop(.62,withA(T.panel,.62)); g.addColorStop(1,withA(T.panel,0));
+      ctx.fillStyle=g; ctx.fillRect(Math.min(x0,x1),GY-30,FW,PB-GY+30);
+      ctx.strokeStyle=T.line; ctx.globalAlpha=.9; ctx.lineWidth=1;
+      ctx.beginPath(); ctx.moveTo(x0+(side<0?.5:-.5),GY-30); ctx.lineTo(x0+(side<0?.5:-.5),PB); ctx.stroke();
+      ctx.globalAlpha=1;
+    };
+    // "off screen" means too little of it is left to read, not literally zero —
+    // an 18px sliver under the fade is not a column you can see.
+    const READ=72, surfX=c=>c.x+panX-GX;
+    if(panX>0.5){
+      fade(-1);
+      const off=this._colList.filter(c=>c.x+c.w<=GX+READ), h=off[off.length-1];
+      if(h) pill(GX+6,h.label+(off.length>1?'  +'+(off.length-1):''),-1,surfX(h),h['key']);
+    }
+    if(panX<maxPan-0.5){
+      fade(1);
+      const off=this._colList.filter(c=>c.x>=R-READ), h=off[0];
+      // the shortest pan that brings the named column fully into view — not a
+      // jump to the far end, so you keep your bearings
+      if(h) pill(R-6,h.label+(off.length>1?'  +'+(off.length-1):''),1,surfX(h)+h.w-CW,h['key']);
+    }
+  },
+  // A scrollbar that is also a map: every column as a block, in its own colour,
+  // with the window drawn over it. It reads as "you are here, that is the whole
+  // of it" even when nothing is hidden.
+  panRail(ctx,T,cw,GX,PB,H,CW,SW,panX){
+    const y0=PB+7, h=12, tw=CW, k=tw/SW;
+    this._rail={y0,y1:y0+h,k,SW};
+    ctx.fillStyle=T.panel2; ctx.globalAlpha=.9;
+    ctx.beginPath(); ctx.roundRect(GX,y0,tw,h,6); ctx.fill(); ctx.globalAlpha=1;
+    ctx.save(); ctx.beginPath(); ctx.roundRect(GX,y0,tw,h,6); ctx.clip();
+    let sx=0;
+    for(const c of this._colList){
+      const bx=GX+sx*k, bw=Math.max(1,c.w*k-1.5);
+      ctx.fillStyle=c.si===null?T.accent:T.s[c.si]; ctx.globalAlpha=.32;
+      ctx.fillRect(bx,y0,bw,h); ctx.globalAlpha=1;
+      ctx.font='600 8px -apple-system,system-ui,sans-serif'; ctx.textAlign='center';
+      const nm=c.label.toUpperCase();
+      if(ctx.measureText(nm).width<bw-8){ctx.fillStyle=T.ink3;ctx.fillText(nm,bx+bw/2,y0+8.5);}
+      sx+=c.w;
+    }
+    ctx.restore();
+    ctx.textAlign='left';
+    const thx=GX+panX*k, thw=Math.max(18,CW*k);
+    ctx.fillStyle=T.ink; ctx.globalAlpha=.09;
+    ctx.beginPath(); ctx.roundRect(thx,y0-2,thw,h+4,7); ctx.fill(); ctx.globalAlpha=1;
+    ctx.strokeStyle=T.accent; ctx.lineWidth=2;
+    ctx.beginPath(); ctx.roundRect(thx+1,y0-1,thw-2,h+2,7); ctx.stroke();
+    if(thw<CW-1){                       // grips, so the frame reads as draggable
+      ctx.strokeStyle=T.accent; ctx.lineWidth=1.2; ctx.globalAlpha=.85; ctx.beginPath();
+      for(const gx of [thx+5,thx+thw-5]){ctx.moveTo(gx,y0+3);ctx.lineTo(gx,y0+h-3);}
+      ctx.stroke(); ctx.globalAlpha=1;
+    }
+  },
+  hit(mx,my){ return this.boxes.findLast(b=>b.vw>0&&mx>=b.vx&&mx<=b.vx+b.vw&&my>=b.y&&my<=b.y+b.h); },
+  animTo(a,b){                                        // verbatim
+    if(reduceMotion){this.d0=a;this.d1=b;this.render();return;}
+    const A0=this.d0,B0=this.d1,t0=performance.now();
+    const step=t=>{const p=clamp((t-t0)/650,0,1),e=p<.5?4*p*p*p:1-Math.pow(-2*p+2,3)/2;
+      this.d0=A0+(a-A0)*e; this.d1=B0+(b-B0)*e; this.render();
+      if(p<1)requestAnimationFrame(step);};
+    requestAnimationFrame(step);
+  },
+  panTo(x){ this.panX=x; this.render(); },
+  pillAt(mx,my){ return (this._pills||[]).find(p=>mx>=p.x&&mx<=p.x+p.w&&my>=p.y-2&&my<=p.y+p.h+2); },
+  panAnim(to){
+    to=clamp(to,0,this._surface.maxPan);
+    if(reduceMotion){this.panTo(to);return;}
+    const A=this.panX,t0=performance.now();
+    const step=t=>{const p=clamp((t-t0)/380,0,1),e=p<.5?4*p*p*p:1-Math.pow(-2*p+2,3)/2;
+      this.panX=A+(to-A)*e; this.render(); if(p<1)requestAnimationFrame(step);};
+    requestAnimationFrame(step);
+  },
+  init(){
+    const cv=this.cv;
+    $('#btnMozart').addEventListener('click',()=>{this.log=false;this.lens.MZ=true;this.lens.MU=true;
+      this.syncChips();this.animTo(1735,1835);});
+    $('#btn1776z').addEventListener('click',()=>{this.log=false;this.animTo(1746,1806);});
+    $('#btnDeep').addEventListener('click',()=>{this.log=!this.log;this.render();});
+    $('#btnResetZ').addEventListener('click',()=>{this.log=false;this.panX=0;this.animTo(-3000,2026);});
+    $('#searchBox').addEventListener('input',e=>{this.q=e.target.value.trim();this.render();});
+    document.querySelectorAll('#lensRow .chip').forEach(ch=>ch.addEventListener('click',()=>{
+      const k=ch.dataset.lens; this.lens[k]=!this.lens[k]; ch.classList.toggle('on',this.lens[k]); this.render();}));
+    const row=$('#catRow');
+    for(const c of CATS){
+      const b=document.createElement('button'); b.className='chip on'; b.dataset.cat=c.id;
+      b.innerHTML=`<span class="dot" style="background:var(--s${c.si+1})"></span>${c.name}`;
+      b.addEventListener('click',()=>{
+        if(this.off.has(c.id)){this.off.delete(c.id);b.classList.add('on');}
+        else {this.off.add(c.id);b.classList.remove('on');}
+        this.render();});
+      row.appendChild(b);
+    }
+    buildGrammarLegend();
+    // Wheel stays what it was: time zoom. Sideways travel is on shift+wheel and
+    // on an unambiguously horizontal trackpad swipe, so it never fights the zoom.
+    cv.addEventListener('wheel',e=>{e.preventDefault();
+      const sideways=e.shiftKey||Math.abs(e.deltaX)>Math.abs(e.deltaY)*2;
+      if(sideways){ const d=(e.shiftKey&&Math.abs(e.deltaX)<Math.abs(e.deltaY))?e.deltaY:e.deltaX;
+        this.panX+=d; this.render(); return; }
+      if(this.log)return;
+      const r=cv.getBoundingClientRect(); const Hp=this.H-this.GY-this.PAD;
+      const tc=this.it(e.clientY-r.top,this.GY,Hp);
+      const f=Math.pow(1.0018,e.deltaY); let s=clamp(this.span()*f,8,80000);
+      const frac=(tc-this.d0)/this.span();
+      this.d0=tc-frac*s; this.d1=this.d0+s; this.render();
+    },{passive:false});
+    let drag=null;
+    const onRail=my=>this._rail&&my>=this._rail.y0-5&&my<=this._rail.y1+5;
+    cv.addEventListener('pointerdown',e=>{
+      const r=cv.getBoundingClientRect(),mx=e.clientX-r.left,my=e.clientY-r.top;
+      cv.setPointerCapture(e.pointerId);
+      const pl=this.pillAt(mx,my);
+      if(pl){ drag={rail:true,moved:true}; this.panAnim(pl.to); return; }
+      if(onRail(my)){                       // grab the map: centre the window on the click
+        drag={rail:true,moved:true};
+        this.panTo((mx-this.GX)/this._rail.k-this._surface.CW/2); return;
+      }
+      drag={x:e.clientX,y:e.clientY,d0:this.d0,d1:this.d1,panX:this.panX,moved:false};
+      cv.style.cursor='grabbing';
+    });
+    cv.addEventListener('pointermove',e=>{
+      const r=cv.getBoundingClientRect(),mx=e.clientX-r.left,my=e.clientY-r.top;
+      this.hoverY=my;
+      if(drag&&drag.rail){ this.panTo((mx-this.GX)/this._rail.k-this._surface.CW/2); return; }
+      if(drag){
+        // one gesture, both axes: Y travels through time, X pans the surface
+        const Hp=this.H-this.GY-this.PAD;
+        const dx=e.clientX-drag.x, dy=e.clientY-drag.y;
+        if(Math.abs(dx)>3||Math.abs(dy)>3)drag.moved=true;
+        this.panX=drag.panX-dx;
+        if(!this.log){ const dt=dy/Hp*(drag.d1-drag.d0);
+          this.d0=drag.d0-dt; this.d1=drag.d1-dt; }
+        this.render(); return;   // keep the crosshair: the year readout is the anchor while travelling
+      }
+      const b=this.hit(mx,my);
+      this.render();
+      if(onRail(my)||this.pillAt(mx,my)){hideTip();cv.style.cursor='pointer';return;}
+      if(b){const [y0,y1,t,,lvl,tags]=b.ev; const cat=CATBY[b.ev[6]], typ=b.ev[7], pl=b.ev[8];
+        showTip(e.clientX,e.clientY,`<div class=t>${t}</div><div class=m>${fmtBig(y0)}${y1?' – '+fmtY(y1):''} · ${b.band}</div>`+
+          `<div class=m>${cat?cat.name:''} · ${typ}${pl?' · '+pl[2]:''}</div>`+
+          `<div class=m>importance ${'●'.repeat(6-lvl)}${'○'.repeat(lvl-1)} (${lvl}) · click → Wikipedia</div>`);
+        cv.style.cursor='pointer';
+      } else {hideTip();cv.style.cursor='grab';}
+    });
+    cv.addEventListener('pointerup',e=>{
+      const wasDrag=drag&&drag.moved; drag=null; cv.style.cursor='grab'; if(wasDrag)return;
+      const r=cv.getBoundingClientRect(),mx=e.clientX-r.left,my=e.clientY-r.top;
+      const b=this.hit(mx,my);
+      if(b){const t=b.ev[2].split(/ — | \(|·/)[0];
+        window.open('https://en.wikipedia.org/wiki/Special:Search?search='+encodeURIComponent(t),'_blank');}
+    });
+    cv.addEventListener('pointerleave',()=>{hideTip();this.hoverY=null;this.render();});
+    this.syncChips(); this.measure();
+  },
+  syncChips(){document.querySelectorAll('#lensRow .chip').forEach(ch=>ch.classList.toggle('on',this.lens[ch.dataset.lens]));}
+};
+// same legend, glyphs rotated a quarter turn to match what's on the canvas
+function buildGrammarLegend(){
+  const row=$('#grammarRow'); if(!row)return;
+  const g=(svg,label)=>`<span class="g"><svg width="14" height="30" viewBox="0 0 14 30">${svg}</svg>${label}</span>`;
+  const c='var(--ink2)';
+  row.innerHTML=`<span class="note" style="font-weight:600">Shape =</span>`+
+    g(`<circle cx="7" cy="15" r="3.2" fill="${c}"/>`,'moment')+
+    g(`<rect x="3" y="3" width="8" height="24" rx="4" fill="${c}"/>`,'episode')+
+    g(`<rect x="3.5" y="4" width="7" height="22" rx="3.5" fill="${c}" opacity=".55"/><circle cx="7" cy="4" r="3.2" fill="${c}"/><rect x="2" y="25" width="10" height="2" fill="${c}"/>`,'a life')+
+    g(`<path d="M7 2 L2.5 7 L2.5 23 L7 28 L11.5 23 L11.5 7 Z" fill="${c}"/>`,'territory')+
+    g(`<rect x="1" y="2" width="12" height="26" fill="${c}" opacity=".22"/><rect x="6" y="2" width="2" height="26" fill="${c}"/>`,'era')+
+    `<span class="note" style="font-weight:600;margin-left:6px">Color = domain</span>`;
+}
+
+VT.init(); VT.measure(); VT.render();
+addEventListener('resize',()=>{VT.measure();VT.render();});
+window.VT=VT;
+</script>

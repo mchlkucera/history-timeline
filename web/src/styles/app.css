@@ -1,0 +1,268 @@
+/* =============================================================================
+   app.css — the classes SHELL adds on top of the Survey system.
+   tokens.css owns every colour. shell.css owns the chrome. This file owns only
+   what the *application* needs and the design system could not know about:
+   the eleven mounted views, the canvas wrapper, the rail's per-view stacks,
+   the snapshot engraving, and the ⌘K palette.
+
+   Nothing here declares a raw colour. If you need one, it belongs in tokens.css.
+   ============================================================================= */
+
+/* ── Fonts ────────────────────────────────────────────────────────────────────
+   next/font exposes each face as a CSS variable on <html>. tokens.css names the
+   families literally, so without this override all three faces fall back
+   silently to Helvetica and the whole thing de-designs itself with no error.
+   Verify with: getComputedStyle(document.body).fontFamily                    */
+:root {
+  --tl-font-ui:   var(--font-tl-sans), "Helvetica Neue", -apple-system, BlinkMacSystemFont, "Segoe UI", system-ui, sans-serif;
+  --tl-font-mono: var(--font-tl-mono), ui-monospace, "SF Mono", SFMono-Regular, Menlo, Consolas, monospace;
+  --tl-font-mark: var(--font-tl-mark), "Iowan Old Style", Charter, Georgia, serif;
+}
+
+/* ── The eleven views ─────────────────────────────────────────────────────────
+   All eleven are mounted at boot — every renderer resolves its ids by
+   querySelector once and never again. Visibility is CSS only.
+
+   WARNING: a display:none view has clientWidth 0, so fitCanvas() returns null
+   and the renderer no-ops in total silence. renderTab() in Lab.tsx must cover
+   every one of these ids, or the tab shows a blank canvas and says nothing. */
+.tl-view {
+  position: absolute;
+  inset: 0;
+  overflow-x: hidden;
+  overflow-y: auto;
+  display: none;
+}
+/* Flex column + auto margins on the child centres a SHORT canvas in the stage
+   without clipping a TALL one — the classic failure of justify-content:center
+   inside a scroll container. Three renderers derive their height from their
+   width or their content (map 1000:403, the timeline from its band count,
+   Connections a fixed 826px) and cannot be made viewport-driven from here. */
+.tl-view[data-active="true"] { display: flex; flex-direction: column; }
+.tl-view > .tl-canvasbox, .tl-view > .tl-centre { margin-block: auto; }
+
+/* The two views with no canvas are documents, not chart film: the graticule
+   under running prose reads as a spreadsheet. */
+.tl-view[data-view="core"], .tl-view[data-view="concepts"] { background: var(--tl-ground); }
+
+/* Canvases live in a block wrapper, NOT shell.css's .tl-canvas.
+   fitCanvas() writes an inline style.height that beats .tl-canvas>canvas
+   {height:100%}; Conn.height() is a fixed 826px while map.ts derives its
+   height from its width. A block wrapper + overflow-y on .tl-view is the only
+   arrangement that survives all three. The stage scrolls vertically when a
+   view is intrinsically taller than it; it never scrolls horizontally. */
+.tl-canvasbox { position: relative; display: block; width: 100%; }
+.tl-canvasbox > canvas { display: block; width: 100%; cursor: crosshair; touch-action: none; }
+
+/* Panels live at STAGE level, not inside the sections, for two reasons:
+   Connections is intrinsically 826px tall so its section scrolls, and an
+   absolutely-positioned child of a scroll container scrolls away with the
+   content — "Reading" would sit 826px down, invisible. And the Timeline group
+   shares ONE control panel across two projections (vertical + horizontal), so
+   that panel cannot live inside either section. A stage-level panel keeps the
+   same containing block for all four corners in every view. */
+.tl-panel[hidden], .tl-panel[data-panelfor][hidden] { display: none; }
+
+/* Views with no canvas (Core, Concepts) get ordinary document flow. */
+.tl-doc {
+  padding: var(--tl-space-7) var(--tl-space-8) var(--tl-space-11);
+  max-width: 1180px;
+}
+.tl-doc > * + * { margin-top: var(--tl-space-6); }
+/* The gallery is a grid, not prose — it takes the whole stage. */
+.tl-view[data-view="concepts"] .tl-doc { max-width: none; }
+
+/* ── Top rail: keep the switcher and the seg from colliding ───────────────────
+   .tl-switch and .tl-gist both carry min-width:0, so flex shrinkage was being
+   split between them and the switcher's items overflowed *visibly* on top of
+   the seg. All shrinkage must land on the gist, which already ellipsises and
+   disappears entirely below 1180px. */
+.tl-rail__mid > .tl-switch { flex: none; overflow-x: auto; overflow-y: hidden; scrollbar-width: none; }
+.tl-rail__mid > .tl-switch::-webkit-scrollbar { display: none; }
+.tl-rail__mid > .tl-seg { flex: none; }
+.tl-rail__mid > .tl-gist { flex: 1 1 0; }
+
+/* ── Rail: per-view stacks ────────────────────────────────────────────────────
+   "Time" means three different things across eleven views, so each rail cell
+   holds a stack of per-view children, all present from boot, with only the
+   active one shown. That is what lets #yearLabel / #yearSlider / #btnPlay keep
+   working untouched while other views drive the same rail differently. */
+[data-railcell] { display: none; }
+[data-railcell][data-on="true"] { display: var(--tl-railcell-display, block); }
+.tl-timerail__year > [data-railcell][data-on="true"] { display: contents; }
+.tl-transport > [data-railcell][data-on="true"] { display: flex; align-items: center; gap: var(--tl-space-4); }
+
+/* A transport with nothing in it still draws its hairline and its padding. */
+.tl-transport[data-empty="true"] { display: none; }
+
+/* The rail hides outright in the two views where time means nothing. */
+.tl-app[data-rail="off"] { grid-template-rows: auto minmax(0, 1fr) 0; }
+.tl-app[data-rail="off"] .tl-timerail { display: none; }
+
+/* Snapshot engraving — the 18 world snapshots as 1px marks at railPos(year).
+   The generic 2% / 10% ruling stays underneath as the ruler. */
+.tl-scale__stop {
+  position: absolute;
+  bottom: var(--tl-scale-base, 16px);
+  width: 1px;
+  height: 9px;
+  background: var(--tl-tick-major);
+  pointer-events: none;
+  z-index: 1;
+}
+.tl-scale__stop[data-here="true"] { background: var(--tl-ink); height: 12px; }
+
+/* The visible zoom window, for the views whose canvas axis IS time. */
+.tl-scale__span {
+  position: absolute;
+  top: 0;
+  bottom: var(--tl-scale-base, 16px);
+  background: var(--tl-selected);
+  border-left: 1px solid var(--tl-rule-strong);
+  border-right: 1px solid var(--tl-rule-strong);
+  pointer-events: none;
+  z-index: 1;
+}
+
+/* Cube's rail is a legend, not a control: no thumb, no index, no transport.
+   It must look inert rather than like a control that ignores you — including
+   the readout, which at 32px would read as "the current year". */
+.tl-scale[data-inert="true"] { cursor: default; }
+.tl-timerail__year[data-legend="true"] .tl-year {
+  font-size: var(--tl-text-md);
+  letter-spacing: var(--tl-track-xs);
+  color: var(--tl-ink-2);
+}
+
+/* ── Command palette ──────────────────────────────────────────────────────────
+   Load-bearing, not a nicety: five of the eleven views sit behind the seg. */
+.tl-cmdk {
+  position: fixed;
+  inset: 0;
+  z-index: var(--tl-z-pop);
+  display: grid;
+  grid-template-rows: 12vh auto 1fr;
+  justify-items: center;
+  background: var(--tl-scrim);
+}
+.tl-cmdk[hidden] { display: none; }
+.tl-cmdk__box {
+  grid-row: 2;
+  width: min(520px, calc(100vw - var(--tl-space-8)));
+  background: var(--tl-surface);
+  border: var(--tl-border) solid var(--tl-rule);
+  border-radius: var(--tl-radius-lg);
+  box-shadow: var(--tl-shadow-pop);
+  overflow: hidden;
+}
+.tl-cmdk__in {
+  width: 100%;
+  height: 44px;
+  padding: 0 var(--tl-space-6);
+  border: 0;
+  border-bottom: var(--tl-border) solid var(--tl-rule-soft);
+  background: transparent;
+  color: var(--tl-ink);
+  font-family: var(--tl-font-ui);
+  font-size: var(--tl-text-md);
+  outline: none;
+}
+.tl-cmdk__in::placeholder { color: var(--tl-ink-3); }
+.tl-cmdk__list { max-height: 46vh; overflow-y: auto; padding: var(--tl-space-2); }
+.tl-cmdk__row {
+  display: flex;
+  align-items: baseline;
+  gap: var(--tl-space-5);
+  width: 100%;
+  padding: var(--tl-space-4) var(--tl-space-5);
+  border: 0;
+  border-radius: var(--tl-radius-xs);
+  background: transparent;
+  color: var(--tl-ink);
+  font-size: var(--tl-text-base);
+  text-align: left;
+  cursor: pointer;
+}
+.tl-cmdk__row[data-sel="true"] { background: var(--tl-selected); }
+.tl-cmdk__row em {
+  margin-left: auto;
+  font-style: normal;
+  font-family: var(--tl-font-mono);
+  font-size: var(--tl-text-2xs);
+  letter-spacing: var(--tl-track-caps);
+  text-transform: uppercase;
+  color: var(--tl-ink-3);
+}
+.tl-cmdk__empty { padding: var(--tl-space-6); color: var(--tl-ink-3); font-size: var(--tl-text-sm); }
+
+/* ── Small shared bits ───────────────────────────────────────────────────── */
+.tl-panel__bd .tl-label { display: block; }
+.tl-stack { display: flex; flex-direction: column; gap: var(--tl-space-4); }
+.tl-pop__link {
+  font-size: var(--tl-text-xs);
+  color: var(--tl-ink-2);
+  text-decoration: underline;
+  text-decoration-color: var(--tl-rule-strong);
+  text-underline-offset: 2px;
+  background: none;
+  border: 0;
+  padding: 0;
+  cursor: pointer;
+  font-family: inherit;
+}
+.tl-pop__link:hover { color: var(--tl-ink); }
+
+/* Vertical / People placeholders — the reserved slots. */
+.tl-slot {
+  display: grid;
+  place-items: center;
+  min-height: 340px;
+  padding: var(--tl-space-9);
+}
+
+/* ── Responsive ───────────────────────────────────────────────────────────── */
+
+/* Short viewports: spend less inside the panel.
+   The Timeline panel's own content — 4 presets, a search field, 3 lenses and 8
+   domain chips — is ~650px tall, and a 1280x800 laptop with browser chrome, a
+   bookmarks bar and a dock leaves about 700px of viewport, i.e. ~535px of
+   panel. It scrolls, and now says so, but the better answer at these heights
+   is to need less room, so the density steps down one notch. Height-only: this
+   must not fire on a tall narrow phone, where the panel is a bottom sheet. */
+@media (max-height: 780px) {
+  .tl-panel__bd { gap: var(--tl-space-3); padding: var(--tl-space-4) var(--tl-space-5); }
+  .tl-panel__bd .tl-field-group { gap: var(--tl-space-2); }
+  .tl-panel__bd .tl-cluster { gap: var(--tl-space-2); }
+  .tl-panel__bd :is(.chip, .tl-chip) { height: 25px; }
+  .tl-panel__bd :is(.btn, .tl-btn) { height: 28px; }
+  .tl-panel__bd .tl-label { line-height: 1.2; }
+}
+
+/* shell.css moves .tl-rail__mid onto its own scrolling row at 1023px. These
+   two rules are the app-side half of that: the rules above make the switcher
+   flex:none with its own overflow so all shrinkage lands on the gist, and a
+   nested scroller inside a scrolling row would swallow the seg instead of
+   letting the row carry it. app.css loads after shell.css, so the override has
+   to be here or it silently loses. */
+@media (max-width: 1023px) {
+  .tl-rail__mid > .tl-switch { overflow: visible; }
+  /* The seg is the payload of the second row and must not be the thing that
+     falls off the end, so it keeps clearance ahead of the row's 28px fade mask
+     — as margin for the resting layout, and as scroll-margin so that
+     scrollIntoView() (Lab.tsx) parks it clear of the fade rather than under
+     it. */
+  .tl-rail__mid > .tl-seg { margin-right: var(--tl-space-6); scroll-margin-inline-end: 34px; }
+}
+
+@media (max-width: 759px) {
+  .tl-doc { padding: var(--tl-space-6) var(--tl-space-5) var(--tl-space-11); }
+  /* Panels become bottom sheets in shell.css. Only the primary one survives;
+     stacking four sheets on a phone would bury the canvas entirely. */
+  .tl-panel--bl, .tl-panel--tr, .tl-panel--br { display: none; }
+  .tl-cmdk { grid-template-rows: 6vh auto 1fr; }
+  /* The rail is only ~150px of scale on a phone once the readout and the
+     transport have taken their share. The scale itself is the drag surface, so
+     the step buttons are the ones that go. */
+  #railPrev, #railNext, #railPrevP, #railNextP { display: none; }
+  .tl-transport .btn { height: var(--tl-ctl-sm); padding: 0 var(--tl-space-3); font-size: var(--tl-text-2xs); }
+}

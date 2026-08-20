@@ -1,0 +1,166 @@
+{"polities":[
+  {"id":"clovis-culture","name":"Clovis and Paleo-Indian Peoples","start":-11500,"end":-8800,"region":"AM",
+   "weight":[[-11500,1],[-10900,2],[-8800,1]],
+   "from":[],"to":["olmec-civilization","chavin-culture","ancestral-puebloans","mississippian-culture"],
+   "note":"first continent-wide culture of the Americas; every later American society descends from this founding population"},
+
+  {"id":"olmec-civilization","name":"Olmec Civilization","start":-1200,"end":-400,"region":"AM",
+   "weight":[[-1200,1],[-900,2],[-500,2],[-400,1]],
+   "from":["clovis-culture"],"to":["zapotec-civilization","maya-city-states","teotihuacan"],
+   "note":"Mesoamerica's mother culture: colossal heads, the ballgame, and the calendar and glyph traditions everyone after inherited"},
+
+  {"id":"zapotec-civilization","name":"Zapotec Civilization (Monte Alban)","start":-500,"end":800,"region":"AM",
+   "weight":[[-500,1],[100,2],[500,2],[800,1]],
+   "from":["olmec-civilization"],"to":["aztec-empire"],
+   "note":"Oaxaca's mountaintop capital, home to the earliest true writing and calendar system in the Americas"},
+
+  {"id":"teotihuacan","name":"Teotihuacan","start":-100,"end":750,"region":"AM",
+   "weight":[[-100,1],[150,3],[450,4],[600,2],[750,1]],
+   "from":["olmec-civilization"],"to":["toltec-empire"],
+   "note":"largest city in the pre-Columbian Americas at roughly 125,000 people, its politics and art reaching into the Maya lowlands"},
+
+  {"id":"maya-city-states","name":"Maya City-States","start":-250,"end":1697,"region":"AM",
+   "weight":[[-250,1],[250,2],[750,3],[900,2],[1300,2],[1697,1]],
+   "from":["olmec-civilization"],"to":["new-spain"],
+   "note":"never one empire but a competing constellation of kingdoms holding the only full writing system in the Americas"},
+
+  {"id":"toltec-empire","name":"Toltec Empire","start":950,"end":1150,"region":"AM",
+   "weight":[[950,1],[1050,3],[1150,1]],
+   "from":["teotihuacan"],"to":["aztec-empire"],
+   "note":"Tula's hegemony over central Mexico, claimed as ancestral by every later Mesoamerican dynasty including the Aztecs"},
+
+  {"id":"aztec-empire","name":"Aztec Empire","start":1428,"end":1521,"region":"AM",
+   "weight":[[1428,2],[1470,4],[1519,5],[1521,2]],
+   "from":["toltec-empire","zapotec-civilization"],"to":["new-spain","spanish-empire"],
+   "note":"Triple Alliance tribute empire of some six million; Tenochtitlan was among the largest cities on Earth when Cortes arrived"},
+
+  {"id":"chavin-culture","name":"Chavin Culture","start":-900,"end":-250,"region":"AM",
+   "weight":[[-900,1],[-500,2],[-250,1]],
+   "from":["clovis-culture"],"to":["moche-civilization","tiwanaku-empire"],
+   "note":"the Andes' first pan-regional religious horizon, setting the template every later Andean state built on"},
+
+  {"id":"moche-civilization","name":"Moche Civilization","start":100,"end":800,"region":"AM",
+   "weight":[[100,1],[400,2],[600,2],[800,1]],
+   "from":["chavin-culture"],"to":["wari-empire"],
+   "note":"north-coast Peruvian lords of adobe pyramids, desert irrigation, and the finest portrait ceramics in the Americas"},
+
+  {"id":"tiwanaku-empire","name":"Tiwanaku","start":550,"end":1000,"region":"AM",
+   "weight":[[550,1],[800,3],[1000,1]],
+   "from":["chavin-culture"],"to":["inca-empire"],
+   "note":"Lake Titicaca ceremonial capital whose colonies and iconography spread across the southern Andes"},
+
+  {"id":"wari-empire","name":"Wari Empire","start":600,"end":1000,"region":"AM",
+   "weight":[[600,1],[800,3],[1000,1]],
+   "from":["moche-civilization"],"to":["inca-empire"],
+   "note":"first true Andean empire: administrative centres, terracing and the highland road network the Inca later inherited"},
+
+  {"id":"inca-empire","name":"Inca Empire","start":1438,"end":1533,"region":"AM",
+   "weight":[[1438,3],[1471,5],[1527,6],[1533,2]],
+   "from":["wari-empire","tiwanaku-empire"],"to":["viceroyalty-of-peru","spanish-empire"],
+   "note":"Tawantinsuyu, the largest empire of the pre-Columbian world: two million square kilometres bound by roads and khipu"},
+
+  {"id":"ancestral-puebloans","name":"Ancestral Puebloans","start":100,"end":1300,"region":"AM",
+   "weight":[[100,1],[900,2],[1100,2],[1300,1]],
+   "from":["clovis-culture"],"to":["new-spain"],
+   "note":"Chaco Canyon's great houses and the Mesa Verde cliff dwellings, abandoned in the thirteenth-century megadrought"},
+
+  {"id":"mississippian-culture","name":"Mississippian Culture","start":800,"end":1600,"region":"AM",
+   "weight":[[800,1],[1100,2],[1350,2],[1600,1]],
+   "from":["clovis-culture"],"to":["british-america"],
+   "note":"maize-fed mound-building chiefdoms; Cahokia was the largest city north of Mexico until Philadelphia passed it in the 1780s"},
+
+  {"id":"iroquois-confederacy","name":"Iroquois Confederacy","start":1450,"end":1784,"region":"AM",
+   "weight":[[1450,1],[1600,2],[1700,2],[1784,1]],
+   "from":[],"to":["united-states","canada"],
+   "note":"Haudenosaunee league of five then six nations that held the balance between New France and British America for a century"},
+
+  {"id":"powhatan-confederacy","name":"Powhatan Confederacy","start":1570,"end":1646,"region":"AM",
+   "weight":[[1570,1],[1610,2],[1646,1]],
+   "from":[],"to":["british-america"],
+   "note":"paramount chiefdom of thirty-odd Algonquian tribes that Jamestown landed inside, and that England broke within forty years"},
+
+  {"id":"comanche-empire","name":"Comancheria","start":1700,"end":1875,"region":"AM",
+   "weight":[[1700,1],[1780,2],[1840,2],[1875,1]],
+   "from":[],"to":["united-states"],
+   "note":"horse-borne southern-plains power that checked Spanish, Mexican and Texan expansion for a century and a half"},
+
+  {"id":"new-spain","name":"Viceroyalty of New Spain","start":1535,"end":1821,"region":"AM",
+   "weight":[[1535,3],[1600,5],[1700,4],[1790,5],[1821,3]],
+   "from":["spanish-empire","aztec-empire","maya-city-states","ancestral-puebloans"],"to":["mexico"],
+   "note":"the silver viceroyalty that bankrolled Habsburg Spain, running from Oregon to Costa Rica and across the Pacific to Manila"},
+
+  {"id":"viceroyalty-of-peru","name":"Viceroyalty of Peru","start":1542,"end":1824,"region":"AM",
+   "weight":[[1542,3],[1600,4],[1700,3],[1780,3],[1824,2]],
+   "from":["spanish-empire","inca-empire"],"to":["gran-colombia","argentina"],
+   "note":"Potosi's silver mountain made this the richest colony on Earth; its dismemberment produced most of South America"},
+
+  {"id":"portuguese-brazil","name":"Portuguese Brazil","start":1500,"end":1822,"region":"AM",
+   "weight":[[1500,1],[1600,2],[1700,3],[1800,4],[1822,4]],
+   "from":["portuguese-empire"],"to":["brazil"],
+   "note":"sugar, then gold, then coffee, and the only European colony ever to host its own mother country's exiled court"},
+
+  {"id":"new-france","name":"New France","start":1534,"end":1763,"region":"AM",
+   "weight":[[1534,1],[1650,2],[1712,3],[1763,1]],
+   "from":["kingdom-of-france"],"to":["british-america","canada","united-states"],
+   "note":"a fur-trade empire claiming the St Lawrence, Great Lakes and Mississippi with barely seventy thousand settlers"},
+
+  {"id":"british-america","name":"British America","start":1607,"end":1783,"region":"AM",
+   "weight":[[1607,1],[1700,2],[1750,3],[1783,3]],
+   "from":["british-empire","new-france","powhatan-confederacy","mississippian-culture"],"to":["united-states","canada"],
+   "note":"thirteen Atlantic colonies plus the northern conquests, 2.5 million people and a tax revolt by 1776"},
+
+  {"id":"united-states","name":"United States","start":1776,"end":2026,"region":"AM",
+   "weight":[[1776,2],[1865,4],[1900,6],[1945,9],[1965,10],[2026,9]],
+   "from":["british-america","new-france","mexico","iroquois-confederacy","comanche-empire","hawaiian-kingdom","british-empire"],"to":[],
+   "note":"thirteen colonies to continental then global hegemon; the dominant power on Earth from 1945"},
+
+  {"id":"canada","name":"Canada","start":1867,"end":2026,"region":"AM",
+   "weight":[[1867,2],[1918,3],[1945,4],[2026,4]],
+   "from":["british-america","new-france","iroquois-confederacy"],"to":[],
+   "note":"Confederation fused British and French North America into a transcontinental dominion, fully sovereign by stages to 1982"},
+
+  {"id":"mexico","name":"Mexico","start":1821,"end":2026,"region":"AM",
+   "weight":[[1821,3],[1848,2],[1910,2],[1980,3],[2026,3]],
+   "from":["new-spain"],"to":["united-states"],
+   "note":"inherited New Spain's vast north, lost half of it by 1848, then remade itself in a decade of revolution"},
+
+  {"id":"brazil","name":"Brazil","start":1822,"end":2026,"region":"AM",
+   "weight":[[1822,2],[1889,3],[1950,3],[2010,4],[2026,4]],
+   "from":["portuguese-brazil"],"to":[],
+   "note":"the one Latin American state to win independence as a monarchy, and the only one to keep a whole colonial empire intact"},
+
+  {"id":"gran-colombia","name":"Gran Colombia","start":1819,"end":1831,"region":"AM",
+   "weight":[[1819,2],[1825,3],[1831,1]],
+   "from":["spanish-empire","viceroyalty-of-peru"],"to":[],
+   "note":"Bolivar's union of modern Colombia, Venezuela, Ecuador and Panama, which fell apart into its parts within twelve years"},
+
+  {"id":"argentina","name":"Argentina","start":1816,"end":2026,"region":"AM",
+   "weight":[[1816,1],[1880,2],[1913,4],[1960,3],[2026,3]],
+   "from":["viceroyalty-of-peru"],"to":[],
+   "note":"grain and beef made it one of the ten richest countries on Earth by 1913, followed by a century of relative decline"},
+
+  {"id":"aboriginal-australian-nations","name":"Aboriginal Australian Nations","start":-50000,"end":1788,"region":"AM",
+   "weight":[[-50000,1],[-20000,2],[0,2],[1788,2]],
+   "from":[],"to":["australia"],
+   "note":"hundreds of nations and 250-odd languages across a continent, the longest continuous cultural tradition on Earth"},
+
+  {"id":"lapita-polynesian-expansion","name":"Lapita and Polynesian Expansion","start":-1500,"end":1300,"region":"AM",
+   "weight":[[-1500,1],[-800,1],[500,2],[1300,2]],
+   "from":[],"to":["hawaiian-kingdom","maori-aotearoa"],
+   "note":"the greatest maritime colonisation in history: Lapita potters out of the Bismarcks to every habitable Pacific island"},
+
+  {"id":"hawaiian-kingdom","name":"Hawaiian Kingdom","start":1795,"end":1893,"region":"AM",
+   "weight":[[1795,1],[1850,2],[1875,2],[1893,1]],
+   "from":["lapita-polynesian-expansion"],"to":["united-states"],
+   "note":"Kamehameha's unification produced an internationally recognised Pacific monarchy, overthrown by American planters in 1893"},
+
+  {"id":"maori-aotearoa","name":"Maori Iwi of Aotearoa","start":1300,"end":1840,"region":"AM",
+   "weight":[[1300,1],[1500,2],[1769,2],[1840,1]],
+   "from":["lapita-polynesian-expansion"],"to":["british-empire"],
+   "note":"the last major landmass on Earth settled by humans; the iwi ceded governance under the Treaty of Waitangi in 1840"},
+
+  {"id":"australia","name":"Australia","start":1788,"end":2026,"region":"AM",
+   "weight":[[1788,1],[1850,2],[1901,3],[1945,3],[2026,4]],
+   "from":["british-empire","aboriginal-australian-nations"],"to":[],
+   "note":"penal colony to gold-rush settler society to federated Commonwealth in 1901, on a continent taken without treaty"}
+]}

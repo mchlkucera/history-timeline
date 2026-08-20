@@ -1,0 +1,222 @@
+{
+  "regions": [
+    { "id": "east-asia", "name": "East Asia", "lon": 110, "lat": 36 },
+    { "id": "south-asia", "name": "South Asia", "lon": 78, "lat": 22 },
+    { "id": "southeast-asia", "name": "Southeast Asia", "lon": 108, "lat": 3 },
+    { "id": "europe", "name": "Europe", "lon": 15, "lat": 50 },
+    { "id": "mena", "name": "Middle East & North Africa", "lon": 40, "lat": 28 },
+    { "id": "subsaharan-africa", "name": "Sub-Saharan Africa", "lon": 20, "lat": -2 },
+    { "id": "americas", "name": "Americas", "lon": -78, "lat": 5 },
+    { "id": "oceania", "name": "Oceania", "lon": 140, "lat": -22 }
+  ],
+  "slices": [
+    {
+      "year": -10000,
+      "pop": {
+        "east-asia": 0.7,
+        "south-asia": 0.4,
+        "southeast-asia": 0.3,
+        "europe": 0.4,
+        "mena": 0.5,
+        "subsaharan-africa": 0.8,
+        "americas": 0.7,
+        "oceania": 0.2
+      }
+    },
+    {
+      "year": -5000,
+      "pop": {
+        "east-asia": 1.3,
+        "south-asia": 0.8,
+        "southeast-asia": 0.5,
+        "europe": 1.0,
+        "mena": 1.8,
+        "subsaharan-africa": 1.3,
+        "americas": 1.1,
+        "oceania": 0.2
+      }
+    },
+    {
+      "year": -3000,
+      "pop": {
+        "east-asia": 3.0,
+        "south-asia": 1.5,
+        "southeast-asia": 0.8,
+        "europe": 2.0,
+        "mena": 3.5,
+        "subsaharan-africa": 1.5,
+        "americas": 1.4,
+        "oceania": 0.3
+      }
+    },
+    {
+      "year": -1000,
+      "pop": {
+        "east-asia": 11,
+        "south-asia": 12,
+        "southeast-asia": 1.8,
+        "europe": 8,
+        "mena": 10,
+        "subsaharan-africa": 4,
+        "americas": 3,
+        "oceania": 0.4
+      }
+    },
+    {
+      "year": -500,
+      "pop": {
+        "east-asia": 25,
+        "south-asia": 25,
+        "southeast-asia": 3,
+        "europe": 18,
+        "mena": 18,
+        "subsaharan-africa": 6,
+        "americas": 5,
+        "oceania": 0.5
+      }
+    },
+    {
+      "year": 1,
+      "pop": {
+        "east-asia": 60,
+        "south-asia": 46,
+        "southeast-asia": 6,
+        "europe": 31,
+        "mena": 28,
+        "subsaharan-africa": 12,
+        "americas": 10,
+        "oceania": 1
+      }
+    },
+    {
+      "year": 500,
+      "pop": {
+        "east-asia": 50,
+        "south-asia": 50,
+        "southeast-asia": 8,
+        "europe": 27,
+        "mena": 30,
+        "subsaharan-africa": 15,
+        "americas": 14,
+        "oceania": 1
+      }
+    },
+    {
+      "year": 1000,
+      "pop": {
+        "east-asia": 68,
+        "south-asia": 79,
+        "southeast-asia": 11,
+        "europe": 40,
+        "mena": 33,
+        "subsaharan-africa": 24,
+        "americas": 21,
+        "oceania": 1.2
+      }
+    },
+    {
+      "year": 1300,
+      "pop": {
+        "east-asia": 100,
+        "south-asia": 95,
+        "southeast-asia": 16,
+        "europe": 79,
+        "mena": 33,
+        "subsaharan-africa": 33,
+        "americas": 36,
+        "oceania": 1.5
+      }
+    },
+    {
+      "year": 1500,
+      "pop": {
+        "east-asia": 118,
+        "south-asia": 110,
+        "southeast-asia": 23,
+        "europe": 84,
+        "mena": 32,
+        "subsaharan-africa": 44,
+        "americas": 50,
+        "oceania": 3
+      }
+    },
+    {
+      "year": 1700,
+      "pop": {
+        "east-asia": 175,
+        "south-asia": 165,
+        "southeast-asia": 27,
+        "europe": 122,
+        "mena": 32,
+        "subsaharan-africa": 55,
+        "americas": 12,
+        "oceania": 3
+      }
+    },
+    {
+      "year": 1800,
+      "pop": {
+        "east-asia": 360,
+        "south-asia": 200,
+        "southeast-asia": 36,
+        "europe": 195,
+        "mena": 38,
+        "subsaharan-africa": 66,
+        "americas": 31,
+        "oceania": 2.5
+      }
+    },
+    {
+      "year": 1900,
+      "pop": {
+        "east-asia": 485,
+        "south-asia": 292,
+        "southeast-asia": 80,
+        "europe": 405,
+        "mena": 63,
+        "subsaharan-africa": 100,
+        "americas": 160,
+        "oceania": 6
+      }
+    },
+    {
+      "year": 1950,
+      "pop": {
+        "east-asia": 685,
+        "south-asia": 476,
+        "southeast-asia": 165,
+        "europe": 530,
+        "mena": 138,
+        "subsaharan-africa": 177,
+        "americas": 342,
+        "oceania": 12.6
+      }
+    },
+    {
+      "year": 2000,
+      "pop": {
+        "east-asia": 1494,
+        "south-asia": 1410,
+        "southeast-asia": 528,
+        "europe": 700,
+        "mena": 485,
+        "subsaharan-africa": 650,
+        "americas": 838,
+        "oceania": 31
+      }
+    },
+    {
+      "year": 2025,
+      "pop": {
+        "east-asia": 1652,
+        "south-asia": 1993,
+        "southeast-asia": 697,
+        "europe": 712,
+        "mena": 765,
+        "subsaharan-africa": 1295,
+        "americas": 1058,
+        "oceania": 46.4
+      }
+    }
+  ]
+}

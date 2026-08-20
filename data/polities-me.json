@@ -1,0 +1,181 @@
+{"polities":[
+  {"id":"sumer","name":"Sumer","start":-3500,"end":-2004,"region":"ME",
+   "weight":[[-3500,1],[-2900,3],[-2600,4],[-2100,5],[-2004,2]],
+   "from":[],"to":["akkadian-empire","babylonia"],
+   "note":"the world's first cities, writing and law, in the marshes of southern Mesopotamia"},
+
+  {"id":"ancient-egypt","name":"Ancient Egypt","start":-3100,"end":-30,"region":"ME",
+   "weight":[[-3100,3],[-2500,7],[-1400,8],[-1077,3],[-525,2],[-30,4]],
+   "from":[],"to":["kingdom-of-kush","roman-empire"],
+   "note":"three thousand years of pharaonic rule on the Nile, from the pyramids to Cleopatra"},
+
+  {"id":"akkadian-empire","name":"Akkadian Empire","start":-2334,"end":-2154,"region":"ME",
+   "weight":[[-2334,4],[-2270,7],[-2200,5],[-2154,2]],
+   "from":["sumer"],"to":["babylonia","assyria"],
+   "note":"Sargon's conquest of the Sumerian cities produced the first empire in history"},
+
+  {"id":"babylonia","name":"Babylonia","start":-1894,"end":-539,"region":"ME",
+   "weight":[[-1894,3],[-1750,6],[-1595,3],[-1155,2],[-570,7],[-539,2]],
+   "from":["sumer","akkadian-empire"],"to":["achaemenid-persia"],
+   "note":"Hammurabi's law code and, a millennium later, Nebuchadnezzar's Neo-Babylonian revival"},
+
+  {"id":"hittite-empire","name":"Hittite Empire","start":-1650,"end":-1178,"region":"ME",
+   "weight":[[-1650,3],[-1500,2],[-1300,6],[-1230,5],[-1178,1]],
+   "from":[],"to":["assyria"],
+   "note":"Anatolian iron-age rival that fought Egypt to a draw at Kadesh before the Bronze Age collapse"},
+
+  {"id":"assyria","name":"Assyria","start":-2025,"end":-609,"region":"ME",
+   "weight":[[-2025,1],[-1800,2],[-1240,5],[-1050,2],[-660,8],[-609,1]],
+   "from":["akkadian-empire","hittite-empire"],"to":["achaemenid-persia"],
+   "note":"the first true military superpower, holding Mesopotamia to Egypt before a sudden total collapse"},
+
+  {"id":"phoenicia-carthage","name":"Phoenicia and Carthage","start":-1200,"end":-146,"region":"ME",
+   "weight":[[-1200,2],[-900,4],[-550,3],[-264,6],[-201,3],[-146,1]],
+   "from":[],"to":["achaemenid-persia","roman-republic"],
+   "note":"Levantine traders who spread the alphabet and founded Carthage, Rome's great western rival"},
+
+  {"id":"achaemenid-persia","name":"Achaemenid Persia","start":-550,"end":-330,"region":"ME",
+   "weight":[[-550,4],[-500,9],[-420,8],[-350,6],[-330,3]],
+   "from":["babylonia","assyria","phoenicia-carthage"],"to":["macedon","seleucid-empire"],
+   "note":"the largest empire the world had yet seen, ruling perhaps two in five living people"},
+
+  {"id":"seleucid-empire","name":"Seleucid Empire","start":-312,"end":-63,"region":"ME",
+   "weight":[[-312,4],[-280,7],[-200,5],[-140,3],[-63,1]],
+   "from":["achaemenid-persia","macedon"],"to":["parthian-empire","roman-republic"],
+   "note":"the largest fragment of Alexander's empire, spreading Greek cities from Syria to the Indus"},
+
+  {"id":"parthian-empire","name":"Parthian Empire","start":-247,"end":224,"region":"ME",
+   "weight":[[-247,2],[-100,5],[1,6],[116,4],[224,2]],
+   "from":["seleucid-empire"],"to":["sassanid-persia"],
+   "note":"horse-archer empire that held Rome at the Euphrates for nearly three centuries"},
+
+  {"id":"kingdom-of-kush","name":"Kingdom of Kush","start":-1070,"end":350,"region":"AF",
+   "weight":[[-1070,2],[-730,5],[-650,3],[-300,4],[100,3],[350,1]],
+   "from":["ancient-egypt"],"to":["aksum"],
+   "note":"Nubian kingdom of Napata and Meroe whose kings ruled Egypt as its 25th Dynasty"},
+
+  {"id":"nok-culture","name":"Nok Culture","start":-1500,"end":500,"region":"AF",
+   "weight":[[-1500,1],[-500,1],[500,1]],
+   "from":[],"to":[],
+   "note":"West Africa's earliest known ironworking and terracotta sculpture tradition"},
+
+  {"id":"aksum","name":"Kingdom of Aksum","start":100,"end":940,"region":"AF",
+   "weight":[[100,2],[350,5],[550,5],[750,2],[940,1]],
+   "from":["kingdom-of-kush"],"to":["ethiopian-empire"],
+   "note":"Red Sea trading power that minted its own coinage and adopted Christianity in the 4th century"},
+
+  {"id":"sassanid-persia","name":"Sassanid Persia","start":224,"end":651,"region":"ME",
+   "weight":[[224,5],[350,7],[531,8],[620,7],[651,2]],
+   "from":["parthian-empire"],"to":["rashidun-caliphate"],
+   "note":"the last pre-Islamic Persian empire, Byzantium's equal until both were exhausted by war"},
+
+  {"id":"rashidun-caliphate","name":"Rashidun Caliphate","start":632,"end":661,"region":"ME",
+   "weight":[[632,2],[642,6],[655,8],[661,8]],
+   "from":["sassanid-persia","byzantine-empire"],"to":["umayyad-caliphate"],
+   "note":"in thirty years the first caliphs took Persia, Egypt and the Levant"},
+
+  {"id":"umayyad-caliphate","name":"Umayyad Caliphate","start":661,"end":750,"region":"ME",
+   "weight":[[661,8],[720,9],[740,8],[750,5]],
+   "from":["rashidun-caliphate","visigothic-kingdom"],"to":["abbasid-caliphate"],
+   "note":"stretched from Spain to the Indus, the largest empire on Earth in its day"},
+
+  {"id":"abbasid-caliphate","name":"Abbasid Caliphate","start":750,"end":1258,"region":"ME",
+   "weight":[[750,8],[800,9],[900,7],[1055,4],[1150,3],[1258,1]],
+   "from":["umayyad-caliphate"],"to":["fatimid-caliphate","seljuk-empire","mongol-empire"],
+   "note":"Baghdad's golden age of science and translation, ended by the Mongol sack of 1258"},
+
+  {"id":"ghana-empire","name":"Ghana Empire","start":300,"end":1240,"region":"AF",
+   "weight":[[300,1],[800,3],[1000,4],[1150,3],[1240,1]],
+   "from":[],"to":["mali-empire"],
+   "note":"first of the Sahelian gold empires, controlling the trans-Saharan trade in gold and salt"},
+
+  {"id":"fatimid-caliphate","name":"Fatimid Caliphate","start":909,"end":1171,"region":"ME",
+   "weight":[[909,2],[970,5],[1050,6],[1100,3],[1171,2]],
+   "from":["abbasid-caliphate"],"to":["ayyubid-sultanate"],
+   "note":"Shia rival caliphate that founded Cairo and ruled from Tunisia to Syria"},
+
+  {"id":"seljuk-empire","name":"Seljuk Empire","start":1037,"end":1194,"region":"ME",
+   "weight":[[1037,3],[1092,6],[1140,4],[1194,2]],
+   "from":["abbasid-caliphate"],"to":["ayyubid-sultanate","ottoman-empire"],
+   "note":"Turkic dynasty that took Baghdad, broke Byzantine Anatolia and provoked the Crusades"},
+
+  {"id":"great-zimbabwe","name":"Great Zimbabwe","start":1100,"end":1450,"region":"AF",
+   "weight":[[1100,1],[1250,2],[1350,3],[1450,1]],
+   "from":[],"to":[],
+   "note":"dry-stone capital of a Shona gold-trading state linked to the Indian Ocean coast"},
+
+  {"id":"ayyubid-sultanate","name":"Ayyubid Sultanate","start":1171,"end":1260,"region":"ME",
+   "weight":[[1171,3],[1193,5],[1220,4],[1250,2],[1260,1]],
+   "from":["fatimid-caliphate","seljuk-empire"],"to":["mamluk-sultanate"],
+   "note":"Saladin's dynasty, which reunited Egypt with Syria and retook Jerusalem in 1187"},
+
+  {"id":"mali-empire","name":"Mali Empire","start":1235,"end":1670,"region":"AF",
+   "weight":[[1235,2],[1337,5],[1450,3],[1550,2],[1670,1]],
+   "from":["ghana-empire"],"to":["songhai-empire"],
+   "note":"Mansa Musa's gold empire, with Timbuktu as a centre of Islamic scholarship"},
+
+  {"id":"mamluk-sultanate","name":"Mamluk Sultanate","start":1250,"end":1517,"region":"ME",
+   "weight":[[1250,3],[1300,5],[1400,4],[1517,2]],
+   "from":["ayyubid-sultanate"],"to":["ottoman-empire"],
+   "note":"slave-soldier regime in Cairo that stopped the Mongols and ended the Crusader states"},
+
+  {"id":"ottoman-empire","name":"Ottoman Empire","start":1299,"end":1922,"region":"ME",
+   "weight":[[1299,1],[1453,5],[1566,8],[1683,7],[1800,4],[1922,2]],
+   "from":["seljuk-empire","byzantine-empire","mamluk-sultanate"],"to":["turkey","saudi-arabia","israel"],
+   "note":"took Constantinople in 1453 and ruled the Balkans, Anatolia and the Arab world for six centuries"},
+
+  {"id":"kingdom-of-kongo","name":"Kingdom of Kongo","start":1390,"end":1914,"region":"AF",
+   "weight":[[1390,2],[1500,4],[1650,3],[1750,2],[1914,1]],
+   "from":[],"to":["colonial-africa"],
+   "note":"Central African state that converted to Christianity and traded, then unravelled, with Portugal"},
+
+  {"id":"songhai-empire","name":"Songhai Empire","start":1464,"end":1591,"region":"AF",
+   "weight":[[1464,2],[1500,4],[1550,5],[1591,1]],
+   "from":["mali-empire"],"to":[],
+   "note":"largest of the Sahelian empires, destroyed by a Moroccan army with gunpowder at Tondibi"},
+
+  {"id":"safavid-persia","name":"Safavid Persia","start":1501,"end":1736,"region":"ME",
+   "weight":[[1501,3],[1550,4],[1600,5],[1700,4],[1736,2]],
+   "from":["timurid-empire"],"to":["iran"],
+   "note":"made Shia Islam the state faith of Iran and rebuilt Isfahan as a world capital"},
+
+  {"id":"ethiopian-empire","name":"Ethiopian Empire","start":1270,"end":1974,"region":"AF",
+   "weight":[[1270,3],[1450,4],[1600,3],[1750,2],[1900,4],[1974,3]],
+   "from":["aksum"],"to":[],
+   "note":"Solomonic Christian monarchy, the one African state to defeat a European empire and stay free"},
+
+  {"id":"iran","name":"Iran","start":1796,"end":2026,"region":"ME",
+   "weight":[[1796,3],[1850,2],[1900,2],[1950,3],[1979,3],[2026,4]],
+   "from":["safavid-persia"],"to":[],
+   "note":"Qajar and Pahlavi Iran and the Islamic Republic that replaced them in 1979"},
+
+  {"id":"zulu-kingdom","name":"Zulu Kingdom","start":1816,"end":1897,"region":"AF",
+   "weight":[[1816,2],[1828,3],[1879,3],[1897,1]],
+   "from":[],"to":["colonial-africa","south-africa"],
+   "note":"Shaka's military revolution reshaped southern Africa and checked the British at Isandlwana"},
+
+  {"id":"colonial-africa","name":"Colonial Africa","start":1884,"end":1975,"region":"AF",
+   "weight":[[1884,3],[1914,7],[1945,7],[1960,4],[1975,1]],
+   "from":["british-empire","french-empire","portuguese-empire","kingdom-of-kongo","zulu-kingdom"],"to":["south-africa"],
+   "note":"composite ribbon for the European partition of Africa, from the Berlin Conference to independence"},
+
+  {"id":"south-africa","name":"South Africa","start":1910,"end":2026,"region":"AF",
+   "weight":[[1910,3],[1960,4],[1994,4],[2026,4]],
+   "from":["colonial-africa","british-empire","zulu-kingdom"],"to":[],
+   "note":"the continent's industrial heartland, through apartheid and its negotiated end in 1994"},
+
+  {"id":"turkey","name":"Turkey","start":1923,"end":2026,"region":"ME",
+   "weight":[[1923,2],[1950,3],[1990,3],[2026,4]],
+   "from":["ottoman-empire"],"to":[],
+   "note":"Ataturk's secular republic built on the Anatolian core of the fallen Ottoman state"},
+
+  {"id":"saudi-arabia","name":"Saudi Arabia","start":1932,"end":2026,"region":"ME",
+   "weight":[[1932,1],[1960,2],[1980,4],[2026,4]],
+   "from":["ottoman-empire"],"to":[],
+   "note":"guardian of Mecca and Medina, transformed by oil into a decisive economic power"},
+
+  {"id":"israel","name":"Israel","start":1948,"end":2026,"region":"ME",
+   "weight":[[1948,1],[1970,2],[2000,3],[2026,3]],
+   "from":["ottoman-empire","british-empire"],"to":[],
+   "note":"founded in former Ottoman and British Mandate territory, at the centre of the modern Middle East"}
+]}

@@ -1,0 +1,480 @@
+/* =============================================================================
+   globals.css — THE COMPAT LAYER. Loaded last, after tokens / shell / app.
+
+   Every class in here is one the RENDERERS emit as a literal string
+   (`div.className = 'chip on'`, `innerHTML = '<div class="relrow">…'`), so it
+   can never be renamed in CSS — only re-skinned. Markup that SHELL authors by
+   hand uses tl-* classes instead and is styled by shell.css.
+
+   Three rules govern this file:
+     1. NO THEME BLOCKS. tokens.css owns all theming. The prototype's :root /
+        @media dark / [data-theme=dark] blocks were deleted, not commented out —
+        they load AFTER tokens.css and would silently win, painting every canvas
+        in the old cream palette.
+     2. NO RAW COLOURS. Every value is a --tl-* token.
+     3. ACCENT BUDGET. Minium means "where you are" and survives only where
+        shell.css already puts it — the rail index, the range thumb needle, the
+        focus ring, the unread dot. Below the alias block the ONLY --tl-accent
+        left in this file is that same needle (input[type=range]). Every legacy
+        rule that used var(--accent) for hover / active / links / emphasis is
+        now --tl-ink or --tl-ink-2.
+   ============================================================================= */
+
+
+/* ── THE ALIAS BLOCK — this is what keeps the frozen renderers alive ──────────
+   Renderers bake literal var(--…) strings into generated HTML and SVG, and
+   src/render/shared.ts's tokens() reads these names through getComputedStyle to
+   colour every canvas. Three of those files are owned by other agents right now
+   and cannot be edited, so the legacy names must keep resolving.
+
+   This block is NOT duplicated per theme. The right-hand sides are --tl-*,
+   which tokens.css already redefines in all three theme blocks, so the aliases
+   follow the theme for free.
+
+   --accent2 maps to INK on purpose: DESIGN.md forbids a second chrome hue, and
+   connections.ts embeds var(--accent2) at two places that mean emphasis, not
+   location. Do not "fix" this back to a colour.
+
+   The --s1..--s8 ORDER IS NOT ALPHABETICAL and is not the order in CATS: it is
+   the inverse of the `si` indices in shared.ts (power 0, reach 1, sci 2,
+   society 3, art 4, nature 5, belief 6, war 7). Get it wrong and war renders
+   indigo with no error thrown. Check in the console, in BOTH themes:
+     CATS.map(c => [c.id, tokens().s[c.si]])
+   must give power=indigo, war=iron oxide, belief=aubergine, sci=verdigris,
+   art=madder, nature=terre verte, society=ochre, reach=sea blue.          */
+:root {
+  --bg:      var(--tl-canvas-bg);
+  --panel:   var(--tl-surface);
+  --panel2:  var(--tl-surface-2);
+  --line:    var(--tl-rule);
+  --ink:     var(--tl-ink);
+  --ink2:    var(--tl-ink-2);
+  --ink3:    var(--tl-ink-3);
+  --accent:  var(--tl-accent);
+  --accent2: var(--tl-ink);
+  --sea:     var(--tl-sea);
+  --land:    var(--tl-land);
+  --stroke:  var(--tl-coast);
+  --shadow:  var(--tl-shadow-panel);
+
+  --s1: var(--tl-cat-power);    /* si 0 */
+  --s2: var(--tl-cat-reach);    /* si 1 */
+  --s3: var(--tl-cat-sci);      /* si 2 */
+  --s4: var(--tl-cat-society);  /* si 3 */
+  --s5: var(--tl-cat-art);      /* si 4 */
+  --s6: var(--tl-cat-nature);   /* si 5 */
+  --s7: var(--tl-cat-belief);   /* si 6 */
+  --s8: var(--tl-cat-war);      /* si 7 */
+}
+
+* { box-sizing: border-box; }
+
+.serif { font-family: var(--tl-font-mark); }
+.mono  { font-family: var(--tl-font-mono); font-variant-numeric: tabular-nums; }
+
+
+/* ── Buttons ─────────────────────────────────────────────────────────────────
+   .btn reads like .tl-btn; .btn.hero like .tl-btn--primary — solid INK, never
+   accent. braid.ts toggles 'hero' on [data-braid] to mark the active stream
+   set, so 'hero' has to keep working as the active modifier. */
+.btn {
+  appearance: none;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: var(--tl-space-3);
+  height: var(--tl-ctl);
+  padding: 0 var(--tl-space-5);
+  border: var(--tl-border) solid var(--tl-rule);
+  border-radius: var(--tl-radius-sm);
+  background: var(--tl-surface);
+  color: var(--tl-ink);
+  font-family: var(--tl-font-ui);
+  font-size: var(--tl-text-sm);
+  font-weight: var(--tl-w-medium);
+  letter-spacing: var(--tl-track-xs);
+  white-space: nowrap;
+  cursor: pointer;
+  transition: background var(--tl-dur-fast) var(--tl-ease),
+              border-color var(--tl-dur-fast) var(--tl-ease),
+              color var(--tl-dur-fast) var(--tl-ease);
+}
+.btn:hover  { background: var(--tl-surface-3); border-color: var(--tl-rule-strong); color: var(--tl-ink); }
+.btn:active { background: var(--tl-press); }
+.btn.hero {
+  background: var(--tl-ink);
+  border-color: var(--tl-ink);
+  color: var(--tl-ink-invert);
+  font-weight: var(--tl-w-semi);
+}
+.btn.hero:hover  { background: var(--tl-ink); color: var(--tl-ink-invert); box-shadow: inset 0 0 0 999px rgba(128,128,128,.16); }
+.btn.hero:active { box-shadow: inset 0 0 0 999px rgba(128,128,128,.26); }
+.btn--wide { width: 100%; }
+
+
+/* ── Chips — machined rectangles, 3px. Never pills. ──────────────────────────
+   timeline.ts queries '#lensRow .chip' and toggles .on; core.ts, flow.ts and
+   timeline.ts all create className='chip' at runtime. .chip.on must read like
+   .tl-chip[aria-pressed="true"]. */
+.chip {
+  appearance: none;
+  display: inline-flex;
+  align-items: center;
+  gap: var(--tl-space-3);
+  height: var(--tl-ctl-sm);
+  padding: 0 var(--tl-space-4);
+  border: var(--tl-border) solid var(--tl-rule);
+  border-radius: var(--tl-radius-xs);
+  background: transparent;
+  color: var(--tl-ink-3);
+  font-family: var(--tl-font-ui);
+  font-size: var(--tl-text-xs);
+  font-weight: var(--tl-w-medium);
+  letter-spacing: var(--tl-track-xs);
+  white-space: nowrap;
+  cursor: pointer;
+  transition: background var(--tl-dur-fast) var(--tl-ease), color var(--tl-dur-fast) var(--tl-ease);
+}
+.chip:hover { background: var(--tl-hover); color: var(--tl-ink-2); }
+.chip.on {
+  background: var(--tl-selected);
+  border-color: var(--tl-rule-strong);
+  color: var(--tl-ink);
+}
+/* The chip dot QUOTES a data hue so the reader can match it to the canvas.
+   That is the only crossing allowed between the eight data hues and the
+   chrome — see tokens.css. */
+.chip .dot {
+  display: inline-block;
+  width: 7px; height: 7px;
+  flex: none;
+  border-radius: var(--tl-radius-full);
+  margin: 0;
+  vertical-align: baseline;
+  opacity: .45;
+  transition: opacity var(--tl-dur-fast) var(--tl-ease);
+}
+.chip.on .dot { opacity: 1; }
+
+/* all / none, created at runtime by the CATEGORIES agent in timeline.ts and
+   flow.ts. A verb, not a filter — no swatch, no pressed state. */
+.chip.catall {
+  color: var(--tl-ink-2);
+  border-style: dashed;
+  letter-spacing: var(--tl-track-caps);
+  text-transform: uppercase;
+  font-size: var(--tl-text-2xs);
+  font-weight: var(--tl-w-semi);
+}
+.chip.catall:hover { color: var(--tl-ink); border-color: var(--tl-rule-strong); }
+
+
+/* ── Inputs ──────────────────────────────────────────────────────────────── */
+select {
+  appearance: none;
+  -webkit-appearance: none;
+  height: var(--tl-ctl);
+  padding: 0 var(--tl-space-7) 0 var(--tl-space-4);
+  background: var(--tl-surface-2);
+  border: var(--tl-border) solid var(--tl-rule);
+  border-radius: var(--tl-radius-xs);
+  color: var(--tl-ink);
+  font-family: var(--tl-font-ui);
+  font-size: var(--tl-text-sm);
+  cursor: pointer;
+  background-image:
+    linear-gradient(45deg, transparent 50%, var(--tl-ink-3) 50%),
+    linear-gradient(135deg, var(--tl-ink-3) 50%, transparent 50%);
+  background-position: right 14px center, right 9px center;
+  background-size: 5px 5px, 5px 5px;
+  background-repeat: no-repeat;
+}
+select:hover { border-color: var(--tl-rule-strong); }
+
+input[type=text], input[type=number] {
+  height: var(--tl-ctl);
+  padding: 0 var(--tl-space-4);
+  background: var(--tl-surface-2);
+  border: var(--tl-border) solid var(--tl-rule);
+  border-radius: var(--tl-radius-xs);
+  color: var(--tl-ink);
+  font-family: var(--tl-font-ui);
+  font-size: var(--tl-text-sm);
+}
+input[type=text]::placeholder, input[type=number]::placeholder { color: var(--tl-ink-3); }
+input[type=text]:hover, input[type=number]:hover { border-color: var(--tl-rule-strong); }
+
+/* The needle thumb, same object as the rail index — the one sanctioned
+   appearance of minium outside the rail itself. */
+input[type=range] {
+  appearance: none;
+  -webkit-appearance: none;
+  width: 100%;
+  height: var(--tl-tap);
+  margin: 0;
+  background: transparent;
+  cursor: ew-resize;
+}
+input[type=range]::-webkit-slider-runnable-track { height: 2px; background: var(--tl-rule-strong); border-radius: 1px; }
+input[type=range]::-webkit-slider-thumb {
+  -webkit-appearance: none;
+  width: 4px; height: 18px; margin-top: -8px;
+  border: 0; border-radius: 1px;
+  background: var(--tl-accent);
+  box-shadow: 0 0 0 1px var(--tl-surface);
+}
+input[type=range]::-moz-range-track { height: 2px; background: var(--tl-rule-strong); border-radius: 1px; }
+input[type=range]::-moz-range-thumb {
+  width: 4px; height: 18px; border: 0; border-radius: 1px;
+  background: var(--tl-accent);
+  box-shadow: 0 0 0 1px var(--tl-surface);
+}
+
+.searchwrap { position: relative; }
+.searchwrap .cnt {
+  position: absolute; right: var(--tl-space-4); top: 50%;
+  transform: translateY(-50%);
+  font-family: var(--tl-font-mono);
+  font-size: var(--tl-text-2xs);
+  color: var(--tl-ink-3);
+  pointer-events: none;
+  font-variant-numeric: tabular-nums;
+}
+
+
+/* ── Text bits the renderers emit ────────────────────────────────────────── */
+.note {
+  color: var(--tl-ink-3);
+  font-size: var(--tl-text-xs);
+  line-height: var(--tl-lh-ui);
+}
+.caption {
+  color: var(--tl-ink-2);
+  font-size: var(--tl-text-sm);
+  line-height: var(--tl-lh-ui);
+}
+.caption b { color: var(--tl-ink); font-weight: var(--tl-w-semi); }
+.yearbig {
+  font-family: var(--tl-font-mono);
+  font-size: var(--tl-text-2xl);
+  font-weight: var(--tl-w-medium);
+  line-height: var(--tl-lh-flat);
+  letter-spacing: var(--tl-track-num);
+  font-variant-numeric: tabular-nums;
+  color: var(--tl-ink);
+}
+.grow { flex: 1 1 auto; min-width: 0; }
+.two  { display: grid; grid-template-columns: 1fr; gap: 0; }
+
+/* .card and .controls survive only as neutral containers now: every panel that
+   used to be a card is a floating .tl-panel, and every .controls row is gone.
+   gallery.ts still writes 'card concept', so .card keeps a surface. */
+.card {
+  background: var(--tl-surface);
+  border: var(--tl-border) solid var(--tl-rule);
+  border-radius: var(--tl-radius-md);
+}
+.controls { display: flex; flex-wrap: wrap; align-items: center; gap: var(--tl-space-4); }
+
+
+/* ── Grammar legend — timeline.ts buildGrammarLegend(), connections.ts ────── */
+.grammar { display: flex; flex-wrap: wrap; gap: var(--tl-space-3) var(--tl-space-6); align-items: center; }
+.grammar .g {
+  display: flex; align-items: center; gap: var(--tl-space-3);
+  font-size: var(--tl-text-2xs);
+  color: var(--tl-ink-2);
+}
+.grammar svg { overflow: visible; }
+
+
+/* ── Core sample — core.ts writes .stratum rows ──────────────────────────── */
+.presetrow { display: flex; flex-wrap: wrap; gap: var(--tl-space-3); }
+.strata { display: flex; flex-direction: column; }
+.stratum {
+  display: grid;
+  grid-template-columns: 122px 14px 1fr;
+  gap: var(--tl-space-5);
+  align-items: center;
+  padding: var(--tl-space-4) var(--tl-space-2);
+  border-bottom: var(--tl-border) solid var(--tl-rule-soft);
+}
+.stratum:last-child { border-bottom: none; }
+.stratum:hover { background: var(--tl-hover); }
+.stratum .era {
+  font-family: var(--tl-font-mono);
+  font-size: var(--tl-text-2xs);
+  color: var(--tl-ink-3);
+  text-align: right;
+  font-variant-numeric: tabular-nums;
+}
+.stratum .sw { width: 14px; height: 14px; border-radius: 2px; border: var(--tl-border) solid var(--tl-coast); }
+.stratum .who b { font-size: var(--tl-text-base); font-weight: var(--tl-w-semi); color: var(--tl-ink); }
+.stratum .who .of { color: var(--tl-ink-3); font-size: var(--tl-text-xs); margin-left: var(--tl-space-3); }
+
+
+/* ── Information horizon feed — horizon.ts writes .newsitem rows ─────────── */
+.newsfeed { display: flex; flex-direction: column; }
+.newsitem { padding: var(--tl-space-4) 0; border-bottom: var(--tl-border) solid var(--tl-rule-soft); }
+.newsitem:last-child { border-bottom: none; }
+.newsitem .h { font-size: var(--tl-text-sm); font-weight: var(--tl-w-semi); color: var(--tl-ink); line-height: var(--tl-lh-tight); }
+.newsitem .d {
+  font-family: var(--tl-font-mono);
+  font-size: var(--tl-text-2xs);
+  color: var(--tl-ink-3);
+  margin-top: 2px;
+  font-variant-numeric: tabular-nums;
+}
+/* "still in transit" is emphasis, not location — ink, not minium. */
+.newsitem .lag {
+  font-size: var(--tl-text-2xs);
+  font-weight: var(--tl-w-semi);
+  letter-spacing: var(--tl-track-xs);
+  color: var(--tl-ink);
+  margin-top: 2px;
+}
+.newsitem.known .lag { color: var(--tl-ink-3); font-weight: var(--tl-w-regular); }
+
+
+/* ── Connections side panel — connections.ts (frozen file) ───────────────── */
+.relpanel { display: flex; flex-direction: column; }
+.relpanel h4 {
+  margin: 0 0 2px;
+  font-size: var(--tl-text-md);
+  font-weight: var(--tl-w-semi);
+  letter-spacing: var(--tl-track-tight);
+  color: var(--tl-ink);
+}
+.relpanel .sub { color: var(--tl-ink-2); font-size: var(--tl-text-xs); margin-bottom: 2px; }
+.relpanel .empty { color: var(--tl-ink-3); font-size: var(--tl-text-xs); }
+.relpanel .empty b { color: var(--tl-ink-2); }
+.relpanel .grp {
+  display: flex; align-items: center; gap: var(--tl-space-3);
+  margin: var(--tl-space-5) 0 var(--tl-space-1);
+  font-size: var(--tl-text-2xs);
+  font-weight: var(--tl-w-semi);
+  letter-spacing: var(--tl-track-caps);
+  text-transform: uppercase;
+  color: var(--tl-ink-2);
+}
+.relpanel .grp .dot { width: 7px; height: 7px; border-radius: var(--tl-radius-full); flex: 0 0 7px; }
+.relrow {
+  display: grid;
+  grid-template-columns: 1fr 40px;
+  gap: var(--tl-space-4);
+  align-items: center;
+  padding: var(--tl-space-3) 0;
+  border-bottom: var(--tl-border) solid var(--tl-rule-soft);
+  cursor: pointer;
+}
+.relrow:last-child { border-bottom: none; }
+.relrow:hover .n { color: var(--tl-ink); }
+.relrow .n { font-size: var(--tl-text-sm); line-height: var(--tl-lh-tight); color: var(--tl-ink-2); }
+.relrow .k {
+  font-family: var(--tl-font-mono);
+  font-size: var(--tl-text-2xs);
+  color: var(--tl-ink-3);
+  margin-bottom: 3px;
+}
+.relrow .bar { height: 3px; border-radius: 1px; background: var(--tl-surface-3); overflow: hidden; }
+.relrow .bar i { display: block; height: 100%; }
+.relrow .w {
+  font-family: var(--tl-font-mono);
+  font-size: var(--tl-text-2xs);
+  color: var(--tl-ink-3);
+  text-align: right;
+  font-variant-numeric: tabular-nums;
+}
+
+
+/* ── Concept gallery — gallery.ts ────────────────────────────────────────── */
+.gallery { display: grid; grid-template-columns: repeat(auto-fit, minmax(280px, 1fr)); gap: var(--tl-space-5); }
+.concept { padding: var(--tl-space-6); display: flex; flex-direction: column; gap: var(--tl-space-4); }
+.concept:hover { border-color: var(--tl-rule-strong); }
+.concept h3 {
+  margin: 0;
+  font-size: var(--tl-text-md);
+  font-weight: var(--tl-w-semi);
+  letter-spacing: var(--tl-track-tight);
+  display: flex; justify-content: space-between; align-items: center; gap: var(--tl-space-4);
+}
+.concept .verdict {
+  font-family: var(--tl-font-mono);
+  font-size: var(--tl-text-2xs);
+  letter-spacing: var(--tl-track-xs);
+  text-transform: uppercase;
+  padding: 2px var(--tl-space-3);
+  border-radius: 2px;
+  border: var(--tl-border) solid var(--tl-rule);
+  color: var(--tl-ink-3);
+  white-space: nowrap;
+}
+/* Emphasis without hue — see tokens.css §badges. */
+.concept .verdict.built { background: var(--tl-ink); border-color: var(--tl-ink); color: var(--tl-ink-invert); }
+.concept .verdict.next  { color: var(--tl-ink); border-color: var(--tl-rule-strong); }
+.concept p { margin: 0; color: var(--tl-ink-2); font-size: var(--tl-text-sm); line-height: var(--tl-lh-ui); }
+.concept svg { width: 100%; height: 86px; border-radius: var(--tl-radius-xs); background: var(--tl-surface-2); }
+/* gallery.ts bakes fill="var(--accent)" into its sketches. Presentation
+   attributes lose to any CSS rule, so the concepts page stays minium-free
+   without editing a file SHELL does not own in this pass. */
+.concept svg [fill="var(--accent)"]   { fill: var(--tl-ink-2); }
+.concept svg [stroke="var(--accent)"] { stroke: var(--tl-ink-2); }
+.scores { display: flex; gap: var(--tl-space-3); flex-wrap: wrap; }
+.scores span {
+  font-family: var(--tl-font-mono);
+  font-size: var(--tl-text-2xs);
+  color: var(--tl-ink-3);
+  border: var(--tl-border) solid var(--tl-rule);
+  border-radius: 2px;
+  padding: 2px var(--tl-space-3);
+}
+.scores b { color: var(--tl-ink); font-weight: var(--tl-w-medium); }
+
+
+/* ── Cube caption ────────────────────────────────────────────────────────────
+   cube.ts writes <b style="color:var(--accent)"> for the traced empire. That is
+   emphasis, not location, so it must not be minium. cube.ts belongs to another
+   agent this pass, so the inline style is beaten here instead. */
+#cubeCap b[style] { color: var(--tl-ink) !important; font-weight: var(--tl-w-semi); }
+
+
+/* ── Tooltip — shared.ts showTip/hideTip ─────────────────────────────────────
+   MUST stay position:fixed: showTip clamps against innerWidth / innerHeight, so
+   the element cannot be reparented into a positioned ancestor. */
+.tooltip {
+  position: fixed;
+  pointer-events: none;
+  display: none;
+  z-index: var(--tl-z-tip);
+  max-width: 300px;
+  padding: var(--tl-space-4) var(--tl-space-5);
+  background: var(--tl-surface);
+  border: var(--tl-border) solid var(--tl-rule);
+  border-radius: var(--tl-radius-lg);
+  box-shadow: var(--tl-shadow-pop);
+  color: var(--tl-ink);
+  font-family: var(--tl-font-ui);
+  font-size: var(--tl-text-sm);
+  line-height: var(--tl-lh-ui);
+}
+.tooltip .t { font-weight: var(--tl-w-semi); letter-spacing: var(--tl-track-tight); }
+.tooltip .m { color: var(--tl-ink-2); font-size: var(--tl-text-xs); }
+.tooltip .m b { color: var(--tl-ink); font-weight: var(--tl-w-medium); }
+
+
+/* ── Boot state — must sit above --tl-z-rail ─────────────────────────────── */
+.bootstate {
+  position: fixed;
+  left: 50%; bottom: 78px;
+  transform: translateX(-50%);
+  z-index: var(--tl-z-sheet);
+  max-width: min(92vw, 640px);
+  padding: var(--tl-space-4) var(--tl-space-7);
+  background: var(--tl-surface);
+  border: var(--tl-border) solid var(--tl-rule);
+  border-radius: var(--tl-radius-sm);
+  box-shadow: var(--tl-shadow-panel);
+  color: var(--tl-ink-2);
+  font-family: var(--tl-font-ui);
+  font-size: var(--tl-text-sm);
+}
+.bootstate b { color: var(--tl-ink); font-weight: var(--tl-w-semi); }

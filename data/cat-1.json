@@ -1,0 +1,376 @@
+{
+ "assignments": [
+  {
+   "t": "Big Bang",
+   "cat": "nature",
+   "type": "moment",
+   "flag": false
+  },
+  {
+   "t": "Earth forms",
+   "cat": "nature",
+   "type": "moment",
+   "flag": false
+  },
+  {
+   "t": "First life",
+   "cat": "nature",
+   "type": "moment",
+   "flag": false
+  },
+  {
+   "t": "Oxygen fills the air",
+   "cat": "nature",
+   "type": "moment",
+   "flag": false
+  },
+  {
+   "t": "Cambrian explosion",
+   "cat": "nature",
+   "type": "moment",
+   "flag": false
+  },
+  {
+   "t": "Great Dying (worst extinction)",
+   "cat": "nature",
+   "type": "moment",
+   "flag": false
+  },
+  {
+   "t": "Dinosaurs wiped out",
+   "cat": "nature",
+   "type": "moment",
+   "flag": false
+  },
+  {
+   "t": "Homo sapiens appears",
+   "cat": "nature",
+   "type": "moment",
+   "flag": false
+  },
+  {
+   "t": "Out of Africa migration",
+   "cat": "nature",
+   "type": "moment",
+   "flag": false
+  },
+  {
+   "t": "Farming begins",
+   "cat": "society",
+   "type": "moment",
+   "flag": false
+  },
+  {
+   "t": "Writing invented (Sumer)",
+   "cat": "sci",
+   "type": "moment",
+   "flag": false
+  },
+  {
+   "t": "Stonehenge raised",
+   "cat": "art",
+   "type": "moment",
+   "flag": false
+  },
+  {
+   "t": "Mycenaean Greece",
+   "cat": "power",
+   "type": "zone",
+   "flag": true
+  },
+  {
+   "t": "First Olympic games",
+   "cat": "art",
+   "type": "moment",
+   "flag": false
+  },
+  {
+   "t": "Rome founded (legend)",
+   "cat": "power",
+   "type": "moment",
+   "flag": false
+  },
+  {
+   "t": "Athenian democracy",
+   "cat": "power",
+   "type": "moment",
+   "flag": false
+  },
+  {
+   "t": "Battle of Marathon",
+   "cat": "war",
+   "type": "moment",
+   "flag": false
+  },
+  {
+   "t": "Peloponnesian War",
+   "cat": "war",
+   "type": "episode",
+   "flag": false
+  },
+  {
+   "t": "Alexander conquers the East",
+   "cat": "war",
+   "type": "episode",
+   "flag": false
+  },
+  {
+   "t": "Punic Wars: Rome vs Carthage",
+   "cat": "war",
+   "type": "episode",
+   "flag": false
+  },
+  {
+   "t": "Caesar assassinated",
+   "cat": "power",
+   "type": "moment",
+   "flag": false
+  },
+  {
+   "t": "Vesuvius buries Pompeii",
+   "cat": "nature",
+   "type": "moment",
+   "flag": false
+  },
+  {
+   "t": "Roman Empire at maximum",
+   "cat": "power",
+   "type": "moment",
+   "flag": false
+  },
+  {
+   "t": "Christianity legalized",
+   "cat": "belief",
+   "type": "moment",
+   "flag": false
+  },
+  {
+   "t": "Western Rome falls",
+   "cat": "power",
+   "type": "moment",
+   "flag": false
+  },
+  {
+   "t": "Viking age begins (Lindisfarne)",
+   "cat": "war",
+   "type": "moment",
+   "flag": false
+  },
+  {
+   "t": "Charlemagne crowned emperor",
+   "cat": "power",
+   "type": "moment",
+   "flag": false
+  },
+  {
+   "t": "Great Schism east/west",
+   "cat": "belief",
+   "type": "moment",
+   "flag": false
+  },
+  {
+   "t": "Norman conquest of England",
+   "cat": "war",
+   "type": "moment",
+   "flag": false
+  },
+  {
+   "t": "First Crusade launched",
+   "cat": "war",
+   "type": "moment",
+   "flag": false
+  },
+  {
+   "t": "Magna Carta",
+   "cat": "power",
+   "type": "moment",
+   "flag": false
+  },
+  {
+   "t": "Black Death kills a third of Europe",
+   "cat": "nature",
+   "type": "episode",
+   "flag": false
+  },
+  {
+   "t": "Charles University founded in Prague",
+   "cat": "society",
+   "type": "moment",
+   "flag": false
+  },
+  {
+   "t": "Jan Hus burned at Konstanz",
+   "cat": "belief",
+   "type": "moment",
+   "flag": false
+  },
+  {
+   "t": "Constantinople falls to Ottomans",
+   "cat": "war",
+   "type": "moment",
+   "flag": false
+  },
+  {
+   "t": "Columbus reaches the Americas",
+   "cat": "power",
+   "type": "moment",
+   "flag": false
+  },
+  {
+   "t": "Luther's 95 theses — Reformation",
+   "cat": "belief",
+   "type": "moment",
+   "flag": false
+  },
+  {
+   "t": "Spanish Armada defeated",
+   "cat": "war",
+   "type": "moment",
+   "flag": false
+  },
+  {
+   "t": "Thirty Years' War",
+   "cat": "war",
+   "type": "episode",
+   "flag": false
+  },
+  {
+   "t": "Defenestration of Prague",
+   "cat": "power",
+   "type": "moment",
+   "flag": false
+  },
+  {
+   "t": "English Civil War",
+   "cat": "war",
+   "type": "episode",
+   "flag": false
+  },
+  {
+   "t": "Ottomans turned back at Vienna",
+   "cat": "war",
+   "type": "moment",
+   "flag": false
+  },
+  {
+   "t": "Great Britain formed",
+   "cat": "power",
+   "type": "moment",
+   "flag": false
+  },
+  {
+   "t": "Seven Years' War — first world war",
+   "cat": "war",
+   "type": "episode",
+   "flag": false
+  },
+  {
+   "t": "French Revolution begins",
+   "cat": "power",
+   "type": "moment",
+   "flag": false
+  },
+  {
+   "t": "Terror: Louis XVI guillotined",
+   "cat": "power",
+   "type": "moment",
+   "flag": false
+  },
+  {
+   "t": "Napoleon crowns himself",
+   "cat": "power",
+   "type": "moment",
+   "flag": false
+  },
+  {
+   "t": "Napoleon freezes in Russia",
+   "cat": "war",
+   "type": "moment",
+   "flag": false
+  },
+  {
+   "t": "Waterloo — Napoleon done",
+   "cat": "war",
+   "type": "moment",
+   "flag": false
+  },
+  {
+   "t": "Revolutions sweep Europe",
+   "cat": "power",
+   "type": "moment",
+   "flag": false
+  },
+  {
+   "t": "Germany unified",
+   "cat": "power",
+   "type": "moment",
+   "flag": false
+  },
+  {
+   "t": "World War I",
+   "cat": "war",
+   "type": "episode",
+   "flag": false
+  },
+  {
+   "t": "Russian Revolution",
+   "cat": "power",
+   "type": "moment",
+   "flag": false
+  },
+  {
+   "t": "USSR founded",
+   "cat": "power",
+   "type": "moment",
+   "flag": false
+  },
+  {
+   "t": "Hitler takes power",
+   "cat": "power",
+   "type": "moment",
+   "flag": false
+  },
+  {
+   "t": "World War II",
+   "cat": "war",
+   "type": "episode",
+   "flag": false
+  },
+  {
+   "t": "Iron Curtain descends",
+   "cat": "power",
+   "type": "moment",
+   "flag": false
+  },
+  {
+   "t": "Treaty of Rome — EEC born",
+   "cat": "power",
+   "type": "moment",
+   "flag": false
+  },
+  {
+   "t": "Prague Spring crushed",
+   "cat": "power",
+   "type": "moment",
+   "flag": false
+  },
+  {
+   "t": "Berlin Wall falls · Velvet Revolution",
+   "cat": "power",
+   "type": "moment",
+   "flag": false
+  },
+  {
+   "t": "EU founded · Czechoslovakia splits",
+   "cat": "power",
+   "type": "moment",
+   "flag": false
+  },
+  {
+   "t": "Russia invades Ukraine",
+   "cat": "war",
+   "type": "moment",
+   "flag": false
+  }
+ ]
+}

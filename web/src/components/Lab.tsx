@@ -1,0 +1,1161 @@
+'use client';
+/* eslint-disable @typescript-eslint/no-explicit-any */
+/* =============================================================================
+   Lab.tsx — the Survey shell.
+
+   ONE fixed grid: 44px top rail / 1fr stage / 64px time rail. No page scroll,
+   no centred column, no cards, no lede paragraphs. The essay moved into the
+   field-notes popover; the controls moved into floating panels over the canvas.
+
+   HARD RULES this file obeys, because renderers in src/render/* are owned by
+   other agents right now and resolve their DOM by querySelector exactly once:
+     · every canvas id and every renderer init call site survives;
+     · all eleven views are MOUNTED AT BOOT — visibility is CSS only;
+     · containers a renderer appendChild()s into (#catRow, #flowRegionRow,
+       #corePresets) ship EMPTY;
+     · legacy class names (.chip/.on, .btn/.hero, .card, .caption, .note …) are
+       frozen vocabulary — re-skinned in globals.css, never renamed here.
+
+   And the one that bites hardest: a display:none view has clientWidth 0, so
+   fitCanvas() returns null and the renderer no-ops in silence. renderTab()
+   below therefore covers all eleven ids.
+   ============================================================================= */
+
+import { useCallback, useEffect, useRef, useState, useSyncExternalStore } from 'react';
+import { initData, setGotoTab, type Datasets } from '@/render/shared';
+import { WorldMap } from '@/render/map';
+import { TL } from '@/render/timeline';
+import { Flow, initFlow } from '@/render/flow';
+import { Cube } from '@/render/cube';
+import { Core } from '@/render/core';
+import { Braid, initBraid } from '@/render/braid';
+import { Horizon } from '@/render/horizon';
+import { Pop, loadPopulation } from '@/render/population';
+import { buildGallery } from '@/render/gallery';
+import { Conn, initConn, loadRelations } from '@/render/connections';
+import { railPos, railYear, railNum, railEraOf, SNAPSHOTS } from './rail';
+
+// ── The information architecture ────────────────────────────────────────────
+// Eleven flat tabs do not fit a 44px rail: eleven uppercase items is ~800px of
+// switcher and .tl-rail__end alone is ~450px. So the IA is two levels — six
+// groups in .tl-switch, and a .tl-seg sub-switcher for the three groups that
+// have more than one member. Five of eleven views therefore sit behind a seg,
+// which is why the ⌘K palette below is load-bearing rather than a nicety.
+
+type ViewId =
+  | 'map' | 'pop' | 'horizon'
+  | 'vertical' | 'zoom'
+  | 'flow' | 'braid'
+  | 'conn' | 'cube' | 'core' | 'concepts';
+
+type RailMode = 'live' | 'span' | 'legend' | 'off';
+
+const GROUPS: { id: string; label: string; members: ViewId[] }[] = [
+  { id: 'g-map', label: 'Map', members: ['map', 'pop', 'horizon'] },
+  { id: 'g-time', label: 'Timeline', members: ['vertical', 'zoom'] },
+  { id: 'g-flow', label: 'Flow', members: ['flow', 'braid'] },
+  { id: 'g-conn', label: 'Connections', members: ['conn'] },
+  { id: 'g-cube', label: 'Cube', members: ['cube'] },
+  { id: 'g-core', label: 'Core', members: ['core'] },
+];
+
+// Per-group landing member. Timeline lands on 'zoom' today; flip to 'vertical'
+// the day the vertical port lands — that is the whole change, here and below.
+const GROUP_DEFAULT: Record<string, ViewId> = {
+  'g-map': 'map', 'g-time': 'zoom', 'g-flow': 'flow', 'g-conn': 'conn', 'g-cube': 'cube', 'g-core': 'core',
+};
+const DEFAULT_VIEW: ViewId = 'map';
+
+// Concepts is deliberately NOT in the switcher: it is documentation about the
+// tool, not a view of history. It stays reachable from ⌘K and from the
+// "Concepts, rated →" link in the field-notes footer.
+const groupOf = (v: ViewId): string => GROUPS.find(g => g.members.includes(v))?.id || 'g-map';
+
+interface ViewMeta { seg: string; name: string; gist: string; meta: string; rail: RailMode }
+
+const VIEWS: Record<ViewId, ViewMeta> = {
+  map: {
+    seg: 'Borders', name: 'World map + time dial', rail: 'live',
+    gist: 'Fix a moment, show me everywhere — drag the index to move the world.',
+    meta: '18 snapshots · 3000 BCE – 1994',
+  },
+  pop: {
+    seg: 'People', name: 'People, not land', rail: 'live',
+    gist: 'Where the people actually are — four thousand years of it, cell by cell.',
+    meta: 'density field · 2° cells',
+  },
+  horizon: {
+    seg: 'Horizon', name: 'Information horizon', rail: 'live',
+    gist: 'Not what happened — what a person standing here could have known yet.',
+    meta: 'news at the speed of a horse',
+  },
+  vertical: {
+    seg: 'Vertical', name: 'Vertical timeline', rail: 'span',
+    gist: 'The primary timeline. Reserved slot — the port lands separately.',
+    meta: 'reserved slot',
+  },
+  zoom: {
+    seg: 'Horizontal', name: 'Zoomable timeline', rail: 'span',
+    gist: 'A map of time with level of detail — zoom in and smaller events fade in.',
+    meta: 'shape = kind · colour = domain',
+  },
+  flow: {
+    seg: 'Empires', name: 'Flow of empires', rail: 'span',
+    gist: 'Ribbons whose thickness is weight in the world, forking along real lineage.',
+    meta: 'lineage · 1200 BCE – 2026',
+  },
+  braid: {
+    seg: 'Beliefs', name: 'Braided rivers of ideas', rail: 'span',
+    gist: 'Beliefs as streams that fork at schisms and occasionally merge again.',
+    meta: 'thickness is an estimate',
+  },
+  conn: {
+    seg: 'Connections', name: 'Connections', rail: 'span',
+    gist: 'Click anything — everything related stays lit in proportion to how related.',
+    meta: 'four lanes · queries, overlapping',
+  },
+  cube: {
+    seg: 'Cube', name: 'Space-time cube', rail: 'legend',
+    gist: 'Latitude × longitude × time as one solid block. Drag to rotate.',
+    meta: '18 sheets · oldest at the bottom',
+  },
+  core: {
+    seg: 'Core', name: 'Core sample', rail: 'off',
+    gist: 'Fix a place, show me every moment — strata of sovereigns under your feet.',
+    meta: '18 strata · newest on top',
+  },
+  concepts: {
+    seg: 'Concepts', name: 'Concepts, rated', rail: 'off',
+    gist: 'The divergent set, scored and pruned. Every good view is a slice of one block.',
+    meta: '10 concepts · 5 axes',
+  },
+};
+
+const ORDER: ViewId[] = ['map', 'pop', 'horizon', 'vertical', 'zoom', 'flow', 'braid', 'conn', 'cube', 'core', 'concepts'];
+
+// ── Which views dock the panel column instead of floating it ────────────────
+// A floating panel is honest over a MAP — it sits on ocean, and the map has no
+// furniture under it. It is a lie over a CHART. Every view in the timeline
+// family draws row furniture in a fixed left gutter of its own canvas that the
+// renderer cannot move: timeline band names at x=20 (timeline.ts), connections
+// lane names at x=22 (connections.ts), and Flow's earliest ribbons starting at
+// x=0. The 264px panel sat exactly there, so the first sight of the primary
+// timeline was six unlabelled bands.
+//
+// These five give the column a strip of its own (shell.css §04) and the canvas
+// takes the remaining width. Map, People, Horizon and Cube keep floating
+// panels — verified sitting over ocean and over empty projection space.
+const DOCKED: ReadonlySet<ViewId> = new Set<ViewId>(['vertical', 'zoom', 'flow', 'braid', 'conn']);
+
+// ── Field notes ─────────────────────────────────────────────────────────────
+// Everything the old <p class="lede"> and the hand-authored captions used to
+// say, moved verbatim behind a popover. Onboarding is read once; a docked strip
+// taxes every session after that and costs 8–10% of the viewport.
+interface Notes { body: React.ReactNode; src?: React.ReactNode }
+
+const NOTES: Record<ViewId, Notes> = {
+  map: {
+    body: <>
+      <p>The <strong>&ldquo;Google Earth of history&rdquo;</strong> answer to <em>&ldquo;I see 1776 and can&rsquo;t imagine the world.&rdquo;</em> Drag the index along the bottom rail and every border on the map moves with it.</p>
+      <p>Territories are real research data &mdash; 18 snapshots between 3000 BCE and 1994 &mdash; coloured by sovereign, the British Empire in its traditional atlas pink. Scroll to zoom, drag to pan, and <strong>click any spot to drill a core sample</strong> through everything that ever happened there.</p>
+    </>,
+    src: <>Snapshots: 3000 · 1000 · 323 BCE · 1 CE · 400 · 800 · 1000 · 1279 · 1492 · 1600 · 1715 · 1783 · 1815 · 1880 · 1914 · 1938 · 1960 · 1994. Border data: aourednik/historical-basemaps (GPL-3.0) &mdash; scholarly approximation, since historical borders are fuzzy and contested by nature.</>,
+  },
+  pop: {
+    body: <>
+      <p>Not area, not borders &mdash; <strong>where the people actually are</strong>. A coarse density field over the land, one cell at a time. Asia holds two thirds of humanity for four thousand years, the Americas collapse after 1492, Africa surges in the last century. <strong>Press play.</strong></p>
+      <p>The grid is deliberately visible, because the cell size <em>is</em> the resolution of the claim. &ldquo;Field&rdquo; smooths the same numbers for legibility; &ldquo;Plate&rdquo; shows you what was actually computed.</p>
+    </>,
+    src: <>What is data and what is model: the eight macro-region totals per slice are scholarly estimates (McEvedy &amp; Jones, Biraben, the UN &mdash; wide error bars before 1500), and every region&rsquo;s field is normalised to sum back to exactly that published number. The distribution <em>inside</em> a region is a hand-written table of ~110 population centres plus desert, ice, altitude and latitude rules. Nobody measured that. Read it for shape and concentration, never for a local figure.</>,
+  },
+  horizon: {
+    body: <>
+      <p>The most novel idea on the list: not <em>what happened</em>, but <strong>what a person standing here could possibly have known yet</strong>. News moved at the speed of a horse, then a ship, then a telegraph.</p>
+      <p>Pick a city and a year. The rings are how far word had travelled after a week, a month, six months; the list on the right is the world still in transit toward you.</p>
+    </>,
+    src: <>Calibrated against known cases: news of the Declaration of 4 July 1776 was printed in London on 17 August &mdash; about 5,900 km in 44 days, so roughly 130 km/day for an important dispatch in 1776.</>,
+  },
+  vertical: {
+    body: <>
+      <p>The vertical timeline is the <strong>primary</strong> projection of the timeline &mdash; it reads down the page like a scroll, which is how a person actually reads a chronology.</p>
+      <p>It is being ported from its standalone prototype. The slot, the canvas id and the rail behaviour are reserved for it here. <strong>It shares this group&rsquo;s controls on purpose:</strong> vertical and horizontal are two projections of one timeline state &mdash; the same span, the same lenses, the same domains, the same search.</p>
+    </>,
+  },
+  zoom: {
+    body: <>
+      <p>Your core vision: <strong>a map of time with level of detail</strong>. Zoomed out you see only what matters most; scroll to zoom in and smaller events fade in, exactly like streets appearing on Google Maps.</p>
+      <p><strong>Two orthogonal axes.</strong> Shape says what kind of thing it is &mdash; a moment, a stretch of time, a life, a territory, an era. Colour says which domain it belongs to. That split is what lets one person sit in several domains at once. Click any event to open it on Wikipedia.</p>
+    </>,
+    src: <>Importance is an editorial ladder, not a measurement. The five levels are thresholds on the visible span, so the same event appears and disappears with the zoom rather than with the data.</>,
+  },
+  flow: {
+    body: <>
+      <p>Empires as <strong>flowing ribbons whose thickness is their weight in the world</strong>, and lineage as forks: the Roman Empire splits into West and East, the East runs on for a thousand years as Byzantium, and the Ottomans absorb it.</p>
+      <p>The 1931 Histomap idea, rebuilt with real lineage links. <strong>Hover any ribbon to light up its whole ancestry.</strong></p>
+    </>,
+    src: <>Weights are editorial estimates of reach and consequence, hand-curated for this prototype &mdash; not measurements.</>,
+  },
+  braid: {
+    body: <>
+      <p>Your own sketch, working: beliefs as streams that <strong>fork at schisms and occasionally merge</strong>. Christianity splits at 1054 and again at 1517; Islam at 632.</p>
+      <p>The same engine as the flow of empires &mdash; because a schism and an imperial partition are the same shape of event.</p>
+    </>,
+    src: <>Thickness is an editorial estimate of reach, not a measurement of adherents.</>,
+  },
+  conn: {
+    body: <>
+      <p>An <strong>event</strong> happens at a point in time. An <strong>entity</strong> persists and is in one place at a time. A <strong>spread</strong> persists and is in <em>many</em> places at once, with a footprint that moves and an intensity that waxes and wanes &mdash; printing, an empire, a religion.</p>
+      <p>Spreads are drawn with the same ribbon engine as the flow of empires, so they swell and taper instead of sitting in a rectangle, and the events that belong to one are drawn <em>inside</em> it: Mainz 1439 is a point within the printing ribbon. <strong>Click anything</strong> &mdash; everything related stays lit in proportion to how strongly it is related, everything else dims but stays on screen as context.</p>
+    </>,
+    src: <>The four lanes are <strong>queries, and they overlap on purpose</strong>: Europe is a region match, the other three are category matches. An item is drawn solid in whichever lane matches it most strongly and hollow wherever else it also matches, so the British Empire appears once in <em>Europe</em> as a filled ribbon and again in <em>Power &amp; economy</em> as an outline. Selecting it threads every copy together, so the repetition reads as information.</>,
+  },
+  cube: {
+    body: <>
+      <p>Your third take, built: <strong>latitude × longitude × time as one solid block.</strong> The map is a horizontal slice through it, the core sample is a vertical drill, the timeline is its shadow on the wall.</p>
+      <p><strong>Reading the block:</strong> each horizontal sheet is a world map at one date, stacked oldest at the bottom. A territory that persists becomes a column; an empire that grows becomes a cone; a conquest is where one column swallows another. Drag to rotate, scroll to zoom.</p>
+    </>,
+    src: <>The rail below is a legend for the block&rsquo;s third axis, not a control &mdash; there is no moment to scrub to inside a solid.</>,
+  },
+  core: {
+    body: <>
+      <p>The map asks <em>&ldquo;fix a moment, show me everywhere.&rdquo;</em> The core sample asks the opposite: <strong>fix a place, show me every moment.</strong></p>
+      <p>Like a geological drill &mdash; newest layer on top, dig down into the past. Click anywhere on the world map, or pick a famous drill site.</p>
+    </>,
+    src: <>The time rail is hidden here on purpose: the eighteen strata <em>are</em> the time axis, running down the page. A rail that cannot be operated is noise.</>,
+  },
+  concepts: {
+    body: <>
+      <p>The divergent set, scored and pruned. The unlock: they aren&rsquo;t competitors. <strong>History is one 3-D block (place × place × time), and every good view is a slice or projection of it.</strong></p>
+      <p>The map is a horizontal slice, the core sample a vertical drill, the timeline a shadow &mdash; and the cube, now built, is the block itself.</p>
+    </>,
+  },
+};
+
+// ── Boot ────────────────────────────────────────────────────────────────────
+function boot() {
+  WorldMap.init(); TL.init(); initFlow(); Cube.init(); Core.init(); initBraid(); Horizon.init(); Pop.init(); buildGallery();
+  initConn();
+  WorldMap.render();
+}
+
+
+const stageHeight = () => {
+  const s = document.getElementById('stage');
+  const h = s ? s.clientHeight : 0;
+  return Math.max(420, Math.min(1200, h || 700));
+};
+
+// Four renderers expose a writable height, so they can fill the stage. TL,
+// WorldMap and Conn compute their own — never try to set those.
+//
+// Horizon and the cartogram are the exception: both project 360° × 145° of the
+// globe onto (width × H), so giving them the full stage height stretches the
+// world vertically. They get the map's own 1000:403 aspect instead, capped by
+// the stage, and app.css centres the short canvas.
+function sizeRenderers() {
+  const H = stageHeight();
+  const s = document.getElementById('stage');
+  const W = s ? s.clientWidth : 0;
+  const geoH = Math.max(300, Math.min(H, Math.round(W * 403 / 1000)));
+  Flow.H = H; Braid.H = H; Cube.H = H;
+  Horizon.H = geoH; Pop.H = geoH;
+}
+
+function renderTab(v: ViewId) {
+  sizeRenderers();
+  switch (v) {
+    case 'map': WorldMap.render(); break;
+    case 'pop': Pop.render(); break;
+    case 'horizon': Horizon.render(); break;
+    case 'zoom': TL.render(); break;
+    case 'vertical': break;                       // reserved — the port draws #vertCanvas
+    case 'flow': Flow.render(); break;
+    case 'braid': Braid.render(); break;
+    case 'conn': Conn.dirty = true; Conn.render(); break;
+    case 'cube': Cube.render(); break;
+    case 'core': break;                           // no canvas
+    case 'concepts': break;                       // no canvas
+  }
+}
+
+const rerenderAll = () => {
+  sizeRenderers();
+  WorldMap.render(); TL.render(); Flow.render(); Cube.render(); Braid.render(); Horizon.render(); Pop.render();
+  Conn.dirty = true; Conn.render();
+};
+
+// Panels become bottom sheets below 760px and start collapsed there, so the
+// canvas keeps the screen. Read as an external store rather than set from an
+// effect: that keeps the server snapshot honest (false) and lets React settle
+// the real value during hydration instead of cascading an extra render.
+const NARROW = '(max-width: 759px)';
+const subNarrow = (cb: () => void) => {
+  const m = matchMedia(NARROW); m.addEventListener('change', cb);
+  return () => m.removeEventListener('change', cb);
+};
+
+// The one transient minium dot: this view's field notes have not been read yet.
+// Painted imperatively so the seen-set never has to be React state — the markup
+// ships with the dot on, which is both correct for a first visit and identical
+// on the server, and this corrects it once localStorage has been consulted.
+function paintUnread(seen: Set<string>, view: string) {
+  const b = document.getElementById('notesBtn'); if (!b) return;
+  if (seen.has(view)) b.removeAttribute('data-unread');
+  else b.setAttribute('data-unread', 'true');
+}
+
+// ── Icons ───────────────────────────────────────────────────────────────────
+const I = {
+  mark: <svg viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.3"><circle cx="8" cy="8" r="6" /><path d="M8 2v12M2 8h12" /><ellipse cx="8" cy="8" rx="2.7" ry="6" /></svg>,
+  search: <svg viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.4" aria-hidden="true"><circle cx="7" cy="7" r="4.5" /><path d="M10.5 10.5L14 14" /></svg>,
+  info: <svg viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.4" aria-hidden="true"><circle cx="8" cy="8" r="6.2" /><path d="M8 7.2v4" /><path d="M8 4.7v.6" /></svg>,
+  theme: <svg viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.4" aria-hidden="true"><path d="M13.2 9.6A5.6 5.6 0 0 1 6.4 2.8a5.6 5.6 0 1 0 6.8 6.8z" /></svg>,
+  prev: <svg viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.5" aria-hidden="true"><path d="M10 3.5L5.5 8l4.5 4.5" /></svg>,
+  next: <svg viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.5" aria-hidden="true"><path d="M6 3.5L10.5 8 6 12.5" /></svg>,
+  close: <svg viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.5" aria-hidden="true"><path d="M4 4l8 8M12 4l-8 8" /></svg>,
+};
+
+export default function Lab() {
+  const [view, setView] = useState<ViewId>(DEFAULT_VIEW);
+  const [ready, setReady] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+  const [notesOpen, setNotesOpen] = useState(false);
+  const [palette, setPalette] = useState(false);
+  const [pq, setPq] = useState('');
+  const [psel, setPsel] = useState(0);
+  const [collapsedBy, setCollapsedBy] = useState<boolean | null>(null);
+  const booted = useRef(false);
+  const pinput = useRef<HTMLInputElement>(null);
+  // Coming back to a group should return you to where you were in it. Seeded
+  // from GROUP_DEFAULT; the vertical port flips that seed, not this.
+  const lastMember = useRef<Record<string, ViewId>>({ ...GROUP_DEFAULT });
+  // Which views' field notes have been read. Deliberately NOT React state: the
+  // markup ships with the dot on (correct for a first visit, and identical on
+  // the server), and an effect clears it once localStorage has been consulted.
+  const seen = useRef<Set<string>>(new Set());
+  const narrow = useSyncExternalStore(subNarrow, () => matchMedia(NARROW).matches, () => false);
+  const collapsed = collapsedBy ?? narrow;
+  const viewRef = useRef<ViewId>(view);
+  // Declared FIRST so it is up to date before any effect below reads it.
+  useEffect(() => { viewRef.current = view; });
+
+  const meta = VIEWS[view];
+  // Concepts is outside the switcher, so NOTHING in the switcher is selected
+  // while it is open — a rail that says MAP over a page of concept cards lies.
+  const group = view === 'concepts' ? '' : groupOf(view);
+  const members = group ? GROUPS.find(g => g.id === group)!.members : [];
+
+  // ── view state ────────────────────────────────────────────────────────────
+  // Tolerates unknown ids, and maps the legacy alias 'sketch' -> 'braid'.
+  // gallery.ts still emits data-goto="sketch" on three cards (SHELL does not own
+  // that file in this pass), so all three land on Beliefs rather than on Beliefs,
+  // Horizon and People respectively. Logged as a follow-up.
+  const go = useCallback((id: string) => {
+    const v = (id === 'sketch' ? 'braid' : id) as ViewId;
+    if (!VIEWS[v]) return;
+    setView(v);
+  }, []);
+  useEffect(() => { setGotoTab(go); }, [go]);
+
+  // ── boot ──────────────────────────────────────────────────────────────────
+  useEffect(() => {
+    if (booted.current) return;
+    booted.current = true;
+    try {
+      const raw = localStorage.getItem('tl-notes-seen');
+      if (raw) seen.current = new Set(JSON.parse(raw) as string[]);
+    } catch { /* private mode — the dot just stays on */ }
+    paintUnread(seen.current, viewRef.current);
+    (async () => {
+      try {
+        const grab = async (u: string) => {
+          const r = await fetch(u); if (!r.ok) throw new Error(`${u} → HTTP ${r.status}`); return r.json();
+        };
+        const [worlds, datasets] = await Promise.all([
+          grab('/data/worlds.json'), grab('/data/datasets.json') as Promise<Datasets>,
+          loadRelations(),                       // Connections; a miss must not stop the boot
+          loadPopulation(),                      // Map · People; same posture
+        ]);
+        initData(worlds, datasets);
+        boot();
+        setReady(true);
+      } catch (e: any) {
+        console.error(e);
+        setError(String(e?.message || e));
+      }
+    })();
+  }, []);
+
+  // ═══ THE TIME RAIL ═══════════════════════════════════════════════════════
+  // One scale mapping (rail.ts) drives the index, the snapshot ticks and the
+  // span bracket. Both runtime inputs are set every time the index moves and on
+  // resize: --tl-index-pos is a percentage of the SCALE, --tl-index-x is that
+  // same point in stage pixels (the scale is inset by the readout and the
+  // transport, the canvas is not). Driving both from the percentage alone puts
+  // them about 9% apart at 1440px.
+  const syncRail = useCallback(() => {
+    const app = document.getElementById('app');
+    const scale = document.getElementById('railScale');
+    if (!app || !scale) return;
+    const v = viewRef.current;
+    const mode = VIEWS[v].rail;
+
+    const setIndex = (pct: number) => {
+      app.style.setProperty('--tl-index-pos', pct + '%');
+      app.style.setProperty('--tl-index-x', (scale.offsetLeft + pct / 100 * scale.offsetWidth) + 'px');
+    };
+    const txt = (id: string, s: string) => { const el = document.getElementById(id); if (el && el.textContent !== s) el.textContent = s; };
+
+    const stops = scale.querySelectorAll<HTMLElement>('.tl-scale__stop');
+    const span = document.getElementById('railSpan');
+    const index = document.getElementById('railIndex');
+    const line = document.getElementById('indexLine');
+    const generic = document.getElementById('railRange') as HTMLInputElement | null;
+
+    if (mode === 'off') return;
+
+    if (mode === 'legend') {                     // cube: read-only. No index, no thumb.
+      stops.forEach(s => s.dataset.here = 'false');
+      if (span) span.hidden = true;
+      if (index) index.hidden = true;
+      if (line) line.hidden = true;
+      txt('railYear', '3000 BCE → 1994'); txt('railEra', 'the block’s third axis');
+      return;
+    }
+    if (index) index.hidden = false;
+    if (line) line.hidden = false;
+
+    if (mode === 'live') {
+      if (span) span.hidden = true;
+      let year = 0, era = '';
+      if (v === 'map') {
+        year = (WorldMap as any).year();
+        era = `${railEraOf(year)} · ${WorldMap.ix + 1}/18`;
+      } else if (v === 'pop') {
+        year = Pop.year();
+        era = `${railEraOf(year)} · slice ${Math.round(Pop.ix) + 1}/${Math.max(1, Pop.slices().length)}`;
+      } else {
+        year = Horizon.year;
+        era = `${railEraOf(year)} · standing still`;
+      }
+      const pct = railPos(year);
+      setIndex(pct);
+      const flag = document.getElementById('railFlag');
+      if (flag) flag.textContent = railNum(year);
+      if (v !== 'map' && v !== 'pop') { txt('railYear', railNum(year)); txt('railEra', era); }
+      else { txt(v === 'map' ? 'mapEra' : 'popEra', era); }
+      stops.forEach(s => { s.dataset.here = String(Math.abs(railPos(+s.dataset.year!) - pct) < 0.35); });
+      if (v === 'horizon' && generic && document.activeElement !== generic) generic.value = String(Math.round(pct * 10));
+      return;
+    }
+
+    // mode === 'span': the canvas axis IS time, but the view is a zoom WINDOW,
+    // not a moment. The rail shows the full extent with the visible window
+    // drawn as a bracket, and the index sitting at its centre.
+    const src: any = v === 'flow' ? Flow : v === 'braid' ? Braid : v === 'conn' ? Conn : TL;
+    const d0 = Number(src.d0), d1 = Number(src.d1);
+    const a = railPos(d0), b = railPos(d1);
+    const centre = (d0 + d1) / 2;
+    const pct = railPos(centre);
+    setIndex(pct);
+    if (span) { span.hidden = false; span.style.left = a + '%'; span.style.width = Math.max(0.4, b - a) + '%'; }
+    stops.forEach(s => s.dataset.here = 'false');
+    const flag = document.getElementById('railFlag');
+    if (flag) flag.textContent = railNum(centre);
+    txt('railYear', railNum(centre));
+    txt('railEra', (v === 'zoom' || v === 'vertical') && TL.log
+      ? 'LOG · BIG BANG → NOW'
+      : `${railEraOf(centre)} · SPAN ${Math.round(d1 - d0).toLocaleString('en-US')} YRS`);
+    if (generic && document.activeElement !== generic) generic.value = String(Math.round(pct * 10));
+  }, []);
+
+  // ── resize + theme, exactly as the prototype wired them ───────────────────
+  // Both listeners repaint the canvases on a theme change and must stay.
+  useEffect(() => {
+    if (!ready) return;
+    const onResize = () => { rerenderAll(); syncRail(); };
+    addEventListener('resize', onResize);
+    const mq = matchMedia('(prefers-color-scheme: dark)');
+    mq.addEventListener('change', rerenderAll);
+    const mo = new MutationObserver(rerenderAll);
+    mo.observe(document.documentElement, { attributes: true, attributeFilter: ['data-theme'] });
+    return () => { removeEventListener('resize', onResize); mq.removeEventListener('change', rerenderAll); mo.disconnect(); };
+  }, [ready, syncRail]);
+
+  useEffect(() => {
+    const g = groupOf(view);
+    if (view !== 'concepts') lastMember.current[g] = view;
+    paintUnread(seen.current, view);
+    if (ready) { renderTab(view); syncRail(); }
+  }, [view, ready, syncRail]);
+
+  // Below 1024 the switcher takes its own scrolling row (shell.css §13). On a
+  // phone that row is wider than the screen, and the .tl-seg — the whole reason
+  // a group has more than one view — sits past its right edge behind the fade.
+  // So after a deliberate move, park whatever is contextual inside the row.
+  // Skipped on first paint: yanking the row sideways before the user has
+  // touched anything would just hide the switcher they arrived on.
+  // Compares the previous view rather than "have I run before", because Strict
+  // Mode double-invokes effects in dev and a run-once flag would fire the
+  // scroll on the very first paint in dev and not in production.
+  const prevView = useRef<ViewId | null>(null);
+  useEffect(() => {
+    const prev = prevView.current;
+    prevView.current = view;
+    if (prev === null || prev === view) return;
+    const mid = document.querySelector<HTMLElement>('.tl-rail__mid');
+    if (!mid || mid.scrollWidth <= mid.clientWidth + 1) return;
+    const segEl = document.getElementById('viewSeg');
+    // offsetParent is null while the seg is display:none for a single-member group.
+    const target: HTMLElement | null = segEl && segEl.offsetParent
+      ? segEl
+      : mid.querySelector<HTMLElement>('.tl-switch__item[aria-selected="true"]');
+    target?.scrollIntoView({ inline: 'nearest', block: 'nearest' });
+  }, [view]);
+
+  // Renderers own their own state and emit no events, so the rail follows them
+  // by watching. One rAF loop, four number reads, DOM touched only on change.
+  useEffect(() => {
+    if (!ready) return;
+    let raf = 0, last = '';
+    const tick = () => {
+      const v = viewRef.current;
+      const key = v === 'map' ? `m${WorldMap.ix}`
+        : v === 'pop' ? `p${Pop.ix.toFixed(3)}`
+          : v === 'horizon' ? `h${Horizon.year}`
+            : v === 'flow' ? `f${Flow.d0}|${Flow.d1}`
+              : v === 'braid' ? `b${Braid.d0}|${Braid.d1}`
+                : v === 'conn' ? `c${Conn.d0}|${Conn.d1}`
+                  : `t${TL.d0}|${TL.d1}|${TL.log}`;
+      if (key !== last) { last = key; syncRail(); }
+      raf = requestAnimationFrame(tick);
+    };
+    raf = requestAnimationFrame(tick);
+    return () => cancelAnimationFrame(raf);
+  }, [ready, syncRail]);
+
+  // The generic scale drag surface. Horizon writes into #hzYear and dispatches
+  // 'input' — horizon.ts already listens there, so no renderer changes.
+  const onRailRange = (e: React.FormEvent<HTMLInputElement>) => {
+    const pct = +(e.currentTarget.value) / 10;
+    const y = railYear(pct);
+    const v = viewRef.current;
+    if (v === 'horizon') {
+      const inp = document.getElementById('hzYear') as HTMLInputElement | null;
+      if (inp) { inp.value = String(y); inp.dispatchEvent(new Event('input', { bubbles: true })); }
+      return;
+    }
+    const src: any = v === 'flow' ? Flow : v === 'braid' ? Braid : v === 'conn' ? Conn : TL;
+    const half = (Number(src.d1) - Number(src.d0)) / 2;
+    if (v === 'zoom' || v === 'vertical') { TL.log = false; TL.animTo(y - half, y + half); return; }
+    src.d0 = y - half; src.d1 = y + half;
+    if (v === 'conn') Conn.dirty = true;
+    src.render();
+  };
+
+  const step = (d: number) => {
+    const v = viewRef.current;
+    if (v === 'map') { WorldMap.stop(); WorldMap.ix = Math.max(0, Math.min(17, WorldMap.ix + d)); WorldMap.render(); }
+    else if (v === 'pop') {
+      const n = Pop.slices().length;
+      Pop.stop(); Pop.ix = Math.max(0, Math.min(n - 1, Math.round(Pop.ix) + d)); Pop.render();
+    } else if (v === 'horizon') {
+      const inp = document.getElementById('hzYear') as HTMLInputElement | null;
+      if (inp) { inp.value = String(Horizon.year + d); inp.dispatchEvent(new Event('input', { bubbles: true })); }
+    }
+  };
+
+  // ── field notes ───────────────────────────────────────────────────────────
+  const openNotes = useCallback((open: boolean) => {
+    setNotesOpen(open);
+    if (!open) return;
+    if (!seen.current.has(viewRef.current)) {
+      seen.current.add(viewRef.current);
+      try { localStorage.setItem('tl-notes-seen', JSON.stringify([...seen.current])); } catch { /* ignore */ }
+    }
+    paintUnread(seen.current, viewRef.current);
+  }, []);
+
+  // ── theme: system → dark → light → system ─────────────────────────────────
+  const cycleTheme = () => {
+    const el = document.documentElement;
+    const cur = el.getAttribute('data-theme');
+    const next = cur === null ? 'dark' : cur === 'dark' ? 'light' : null;
+    if (next) { el.setAttribute('data-theme', next); try { localStorage.setItem('tl-theme', next); } catch { /* ignore */ } }
+    else { el.removeAttribute('data-theme'); try { localStorage.removeItem('tl-theme'); } catch { /* ignore */ } }
+  };
+
+  // ── ⌘K ────────────────────────────────────────────────────────────────────
+  const hits = ORDER.filter(v => {
+    const q = pq.trim().toLowerCase();
+    if (!q) return true;
+    return (VIEWS[v].name + ' ' + VIEWS[v].seg + ' ' + VIEWS[v].gist).toLowerCase().includes(q);
+  });
+  const openPalette = (open: boolean) => {
+    setPalette(open);
+    if (open) { setPq(''); setPsel(0); requestAnimationFrame(() => pinput.current?.focus()); }
+  };
+
+  useEffect(() => {
+    const onKey = (e: KeyboardEvent) => {
+      const t = e.target as HTMLElement | null;
+      const typing = !!t && (t.tagName === 'INPUT' || t.tagName === 'TEXTAREA' || t.tagName === 'SELECT');
+      if ((e.key === 'k' || e.key === 'K') && (e.metaKey || e.ctrlKey)) { e.preventDefault(); openPalette(!palette); return; }
+      if (e.key === 'Escape') { if (palette) openPalette(false); else if (notesOpen) { setNotesOpen(false); document.getElementById('notesBtn')?.focus(); } return; }
+      if (palette) {
+        if (e.key === 'ArrowDown') { e.preventDefault(); setPsel(s => Math.min(hits.length - 1, s + 1)); }
+        if (e.key === 'ArrowUp') { e.preventDefault(); setPsel(s => Math.max(0, s - 1)); }
+        if (e.key === 'Enter') { e.preventDefault(); const v = hits[psel]; if (v) { go(v); openPalette(false); } }
+        return;
+      }
+      if (typing) return;
+      if (e.key === '?') { e.preventDefault(); openNotes(true); return; }
+      const m = VIEWS[viewRef.current].rail;
+      if (m !== 'live') return;
+      if (e.key === 'ArrowLeft') { e.preventDefault(); step(-1); }
+      if (e.key === 'ArrowRight') { e.preventDefault(); step(1); }
+      if (e.key === ' ') {
+        e.preventDefault();
+        const v = viewRef.current;
+        if (v === 'map') { if (WorldMap.playing) WorldMap.stop(); else WorldMap.play(); }
+        if (v === 'pop') { if (Pop.playing) Pop.stop(); else Pop.play(); }
+      }
+    };
+    addEventListener('keydown', onKey);
+    return () => removeEventListener('keydown', onKey);
+  });
+
+  // ── derived flags ─────────────────────────────────────────────────────────
+  const railOn = meta.rail !== 'off';
+  const scaleCell = meta.rail === 'live'
+    ? (view === 'map' ? 'yearSlider' : view === 'pop' ? 'popSlider' : 'railRange')
+    : meta.rail === 'span' ? 'railRange' : 'none';
+  const yearCell = view === 'map' ? 'map' : view === 'pop' ? 'pop' : 'rail';
+  const tpCell = view === 'map' ? 'map' : view === 'pop' ? 'pop' : 'none';
+  const seg = members.length > 1;
+  // The engraving on the scale: the 18 world snapshots for Map and Cube, the
+  // population slices for People, nothing for the span views (they get a bracket).
+  const stopYears: number[] =
+    meta.rail === 'legend' || view === 'map' ? SNAPSHOTS
+      : view === 'pop' && ready ? (Pop.slices() as any[]).map(s => s.year)
+        : [];
+
+  const sect = (id: ViewId) => ({
+    className: 'tl-view', id: `tab-${id}`, 'data-view': id,
+    'data-active': String(view === id), role: 'tabpanel' as const,
+  });
+  const panel = (corner: string, forViews: ViewId[], title: string, extra?: string) => ({
+    className: `tl-panel tl-panel--${corner}${extra ? ' ' + extra : ''}`,
+    'data-panelfor': forViews.join(' '),
+    'data-collapsed': corner === 'tl' && collapsed ? 'true' : undefined,
+    hidden: !forViews.includes(view),
+    'aria-label': title,
+  });
+
+  // The primary panel's header, with the collapse control shell.css already
+  // styles. On a phone this is the difference between a canvas and a sheet.
+  const hd = (title: string) => (
+    <div className="tl-panel__hd">
+      <span className="tl-panel__title">{title}</span>
+      <button className="tl-iconbtn" style={{ width: 24, height: 24 }}
+        aria-label={collapsed ? 'Expand panel' : 'Collapse panel'} aria-expanded={!collapsed}
+        onClick={() => setCollapsedBy(!collapsed)}>
+        <svg viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.5" aria-hidden="true"
+          style={collapsed ? { transform: 'rotate(180deg)' } : undefined}><path d="M4 6.5L8 10.5L12 6.5" /></svg>
+      </button>
+    </div>
+  );
+
+  return (
+    <>
+      <div className="tl-app" id="app" data-rail={railOn ? 'on' : 'off'}>
+
+        {/* ══ TOP RAIL ═════════════════════════════════════════════════════ */}
+        <header className="tl-rail">
+          <span className="tl-mark">
+            <span className="tl-mark__glyph" aria-hidden="true">{I.mark}</span>
+            <span className="tl-mark__word">Timeline</span>
+          </span>
+
+          <div className="tl-rail__mid">
+            <nav className="tl-switch" role="tablist" aria-label="View">
+              {GROUPS.map(g => (
+                <button key={g.id} className="tl-switch__item" role="tab"
+                  aria-selected={g.id === group}
+                  aria-controls={`tab-${GROUP_DEFAULT[g.id]}`}
+                  onClick={() => setView(g.members.includes(view) ? view : lastMember.current[g.id])}>
+                  {g.label}
+                </button>
+              ))}
+            </nav>
+
+            <div className="tl-seg" id="viewSeg" role="group" aria-label="Projection"
+              style={seg ? undefined : { display: 'none' }}>
+              {members.map(m => (
+                <button key={m} className="tl-seg__item" aria-pressed={m === view} onClick={() => setView(m)}>
+                  {VIEWS[m].seg}
+                </button>
+              ))}
+            </div>
+
+            <p className="tl-gist" id="viewGist">{meta.gist}</p>
+          </div>
+
+          <div className="tl-rail__end">
+            <span className="tl-meta" id="viewMeta">{meta.meta}</span>
+            <button className="tl-field" id="cmdk" style={{ width: 186 }} aria-label="Search views"
+              onClick={() => openPalette(true)}>
+              {I.search}
+              <span style={{ flex: 1, textAlign: 'left', fontSize: 'var(--tl-text-sm)' }}>Search</span>
+              <kbd className="tl-kbd">⌘K</kbd>
+            </button>
+            <button className="tl-iconbtn" id="notesBtn" aria-expanded={notesOpen} aria-controls="fieldNotes"
+              aria-label="Field notes for this view" title="Field notes  ?"
+              data-unread="true"
+              onClick={() => openNotes(!notesOpen)}>
+              {I.info}
+            </button>
+            <button className="tl-iconbtn" id="themeBtn" aria-label="Switch theme" title="Theme: system → dark → light"
+              onClick={cycleTheme}>
+              {I.theme}
+            </button>
+          </div>
+        </header>
+
+        {/* ══ STAGE ════════════════════════════════════════════════════════ */}
+        <main className="tl-stage" id="stage" data-dock={DOCKED.has(view) ? 'left' : undefined}>
+          <div className="tl-graticule" aria-hidden="true" />
+
+          {/* ── Map · Borders ─────────────────────────────────────────────── */}
+          <section {...sect('map')}>
+            <div className="tl-canvasbox"><canvas id="mapCanvas" height={520} /></div>
+          </section>
+
+          {/* ── Map · People ──────────────────────────────────────────────── */}
+          <section {...sect('pop')}>
+            <div className="tl-canvasbox"><canvas id="popCanvas" height={440} /></div>
+          </section>
+
+          {/* ── Map · Horizon ─────────────────────────────────────────────── */}
+          <section {...sect('horizon')}>
+            <div className="tl-canvasbox"><canvas id="hzCanvas" height={420} /></div>
+          </section>
+
+          {/* ── Timeline · Vertical (reserved) ────────────────────────────── */}
+          <section {...sect('vertical')}>
+            <div className="tl-centre">
+              {/* height:0 until the port's own fitCanvas() writes a real one —
+                  a width:100% canvas otherwise keeps its 300×520 attribute
+                  aspect and grows to 2,496px in an empty view. */}
+              <div className="tl-canvasbox"><canvas id="vertCanvas" height={520} style={{ height: 0 }} /></div>
+              <div className="tl-slot">
+                <div className="tl-canvas__note">
+                  <b>canvas · vertical timeline</b>
+                  <span>Reserved slot. The vertical projection is being ported from its standalone
+                    prototype; it draws into this canvas and shares the Timeline group&rsquo;s controls,
+                    span and search state with the horizontal view.</span>
+                </div>
+              </div>
+            </div>
+          </section>
+
+          {/* ── Timeline · Horizontal ─────────────────────────────────────── */}
+          <section {...sect('zoom')}>
+            <div className="tl-canvasbox"><canvas id="zoomCanvas" height={560} /></div>
+          </section>
+
+          {/* ── Flow · Empires ────────────────────────────────────────────── */}
+          <section {...sect('flow')}>
+            <div className="tl-canvasbox"><canvas id="flowCanvas" height={600} /></div>
+          </section>
+
+          {/* ── Flow · Beliefs ────────────────────────────────────────────── */}
+          <section {...sect('braid')}>
+            <div className="tl-canvasbox"><canvas id="braidCanvas" height={440} /></div>
+          </section>
+
+          {/* ── Connections ───────────────────────────────────────────────── */}
+          <section {...sect('conn')}>
+            <div className="tl-canvasbox"><canvas id="connCanvas" height={826} /></div>
+          </section>
+
+          {/* ── Cube ──────────────────────────────────────────────────────── */}
+          <section {...sect('cube')}>
+            <div className="tl-canvasbox"><canvas id="cubeCanvas" height={600} /></div>
+          </section>
+
+          {/* ── Core — no canvas; the strata ARE the time axis ────────────── */}
+          <section {...sect('core')}>
+            <div className="tl-doc">
+              <div className="caption" id="coreWhere" />
+              <div className="presetrow" id="corePresets" />
+              <div className="strata" id="strata" />
+            </div>
+          </section>
+
+          {/* ── Concepts — documentation about the tool ───────────────────── */}
+          <section {...sect('concepts')}>
+            <div className="tl-doc">
+              <div className="gallery" id="gallery" />
+            </div>
+          </section>
+
+          {/* ══ FLOATING PANELS ═══════════════════════════════════════════════
+              Stage-level, not inside the sections: Connections is 826px tall so
+              its section scrolls, and an abspos child of a scroll container
+              scrolls away with the content. Stage level also lets the Timeline
+              group share ONE control panel across both projections. */}
+
+          {/* Two columns, not four free-floating corners. Corner-anchored
+              panels cannot see each other, so on a short viewport the tall
+              bottom-left "Reading" grew up under "Controls" and ate its last
+              row: at 900x700 the People view's Names toggle was covered, not
+              merely ugly. One flex column per side gives the pair a shared
+              height budget they cannot exceed. Corner classes stay — they are
+              what the column reads to decide which panel hugs the bottom. */}
+          <div className="tl-col tl-col--l">
+            {/* map */}
+            <aside {...panel('tl', ['map'], 'Controls')}>
+              <div className="tl-panel__grip" aria-hidden="true" />
+              {hd('Controls')}
+              <div className="tl-panel__bd">
+                <div className="tl-cluster">
+                  <button className="btn hero" id="btn1776">Show me 1776</button>
+                  <button className="btn" id="btnReset" title="Reset zoom and pan">Reset view</button>
+                </div>
+                <p className="note">Scroll to zoom · drag to pan · click any spot to drill a core sample.</p>
+              </div>
+            </aside>
+            {/* pop */}
+            <aside {...panel('tl', ['pop'], 'Controls')}>
+              <div className="tl-panel__grip" aria-hidden="true" />
+              {hd('Controls')}
+              {/* population.ts appendChild()s its own controls into #popPanel. */}
+              <div className="tl-panel__bd" id="popPanel" />
+            </aside>
+            {/* horizon */}
+            <aside {...panel('tl', ['horizon'], 'Controls')}>
+              <div className="tl-panel__grip" aria-hidden="true" />
+              {hd('Controls')}
+              <div className="tl-panel__bd">
+                <div className="tl-field-group">
+                  <span className="tl-label">Standing in</span>
+                  <select id="hzCity" aria-label="City" defaultValue="" style={{ width: '100%' }} />
+                </div>
+                <div className="tl-field-group">
+                  <span className="tl-label">In the year</span>
+                  <input type="number" id="hzYear" defaultValue="1776" style={{ width: '100%' }} />
+                  <div className="tl-cluster">
+                    <button className="chip" data-hz="1776">1776</button>
+                    <button className="chip" data-hz="1492">1492</button>
+                    <button className="chip" data-hz="1889">1889</button>
+                  </div>
+                </div>
+                <hr className="tl-hr" />
+                <span className="note" id="hzSpeed" />
+              </div>
+            </aside>
+            {/* THE TIMELINE GROUP SHARES ITS CONTROLS ON PURPOSE.
+                vertical and horizontal are two projections of ONE timeline state —
+                span, lenses, domains, search. The vertical port must reuse these
+                ids, not duplicate them: #catRow, #searchBox, #searchCnt,
+                #grammarRow, #zoomReadout, #btnMozart, #btn1776z, #btnDeep,
+                #btnResetZ. The seg switches only which canvas is visible. */}
+            <aside {...panel('tl', ['zoom', 'vertical'], 'Controls')}>
+              <div className="tl-panel__grip" aria-hidden="true" />
+              {hd('Controls')}
+              <div className="tl-panel__bd">
+                <div className="tl-cluster">
+                  <button className="btn hero" id="btnMozart">Mozart&rsquo;s world</button>
+                  <button className="btn" id="btn1776z">1776 in context</button>
+                  <button className="btn" id="btnDeep">Deep time (log)</button>
+                  <button className="btn" id="btnResetZ">Reset</button>
+                </div>
+                <div className="searchwrap">
+                  <input type="text" id="searchBox" style={{ width: '100%' }}
+                    placeholder="Search a thread… (revolution, Prague, plague)" />
+                  <span className="cnt" id="searchCnt" />
+                </div>
+                <hr className="tl-hr" />
+                <div className="tl-field-group">
+                  <span className="tl-label">Lenses</span>
+                  <div className="tl-cluster" id="lensRow">
+                    <button className="chip" data-lens="MU"><span className="dot" style={{ background: 'var(--s5)' }} />Music</button>
+                    <button className="chip" data-lens="SC"><span className="dot" style={{ background: 'var(--s6)' }} />Science &amp; ideas</button>
+                    <button className="chip on" data-lens="MZ"><span className="dot" style={{ background: 'var(--s7)' }} />Mozart&rsquo;s life</button>
+                  </div>
+                </div>
+                <div className="tl-field-group">
+                  <span className="tl-label">Domain</span>
+                  {/* MUST ship EMPTY — timeline.ts appendChild()s the whole row. */}
+                  <div className="tl-cluster" id="catRow" />
+                </div>
+                <hr className="tl-hr" />
+                <span className="note" id="zoomReadout" />
+              </div>
+            </aside>
+            {/* flow */}
+            <aside {...panel('tl', ['flow'], 'Controls')}>
+              <div className="tl-panel__grip" aria-hidden="true" />
+              {hd('Controls')}
+              <div className="tl-panel__bd">
+                <div className="tl-cluster">
+                  <button className="btn hero" id="flowRome">Follow Rome</button>
+                  <button className="btn" id="flowSplit">The great split</button>
+                  <button className="btn" id="flowAll">Whole span</button>
+                  <button className="btn" id="flowMode">Absolute scale</button>
+                </div>
+                <div className="searchwrap">
+                  <input type="text" id="flowSearch" style={{ width: '100%' }}
+                    placeholder="Find a polity… (Rome, Persia, Mali)" />
+                  <span className="cnt" id="flowCnt" />
+                </div>
+                <hr className="tl-hr" />
+                <div className="tl-field-group">
+                  <span className="tl-label">Regions</span>
+                  {/* MUST ship EMPTY — flow.ts appendChild()s into it. */}
+                  <div className="tl-cluster" id="flowRegionRow" />
+                </div>
+              </div>
+            </aside>
+            {/* braid */}
+            <aside {...panel('tl', ['braid'], 'Controls')}>
+              <div className="tl-panel__grip" aria-hidden="true" />
+              {hd('Controls')}
+              <div className="tl-panel__bd">
+                <div className="tl-cluster">
+                  <button className="btn hero" data-braid="religion">Religions</button>
+                  <button className="btn" data-braid="ideology">Political ideologies</button>
+                </div>
+                <span className="note" id="braidNote" />
+              </div>
+            </aside>
+            {/* conn — every id and class from the old #tab-conn subtree, intact */}
+            <aside {...panel('tl', ['conn'], 'Controls')}>
+              <div className="tl-panel__grip" aria-hidden="true" />
+              {hd('Controls')}
+              <div className="tl-panel__bd">
+                <div className="tl-cluster">
+                  <button className="btn hero" id="connIR">Click the Industrial Revolution</button>
+                  <button className="btn" id="connPrint">Printing, from Mainz outward</button>
+                  <button className="btn" id="connAll">Whole span</button>
+                  <button className="btn" id="connMode">Share of lane</button>
+                  <button className="btn" id="connClear">Clear selection</button>
+                </div>
+                <span className="note">scroll to zoom · drag to pan</span>
+              </div>
+            </aside>
+            {/* cube */}
+            <aside {...panel('tl', ['cube'], 'Controls')}>
+              <div className="tl-panel__grip" aria-hidden="true" />
+              {hd('Controls')}
+              <div className="tl-panel__bd">
+                <div className="tl-field-group">
+                  <span className="tl-label">Trace</span>
+                  <select id="cubeSov" aria-label="Empire to trace" defaultValue="" style={{ width: '100%' }} />
+                </div>
+                <div className="tl-cluster">
+                  <button className="btn hero" id="cubeSpin">Spin</button>
+                  <button className="btn" id="cubeTop">Top view</button>
+                  <button className="btn" id="cubeSide">Side view</button>
+                  <button className="btn" id="cubeIso">Reset angle</button>
+                </div>
+                <hr className="tl-hr" />
+                <label className="tl-toggle">
+                  <input type="checkbox" id="cubeEvents" defaultChecked />
+                  <span className="tl-toggle__track" /><span className="tl-toggle__label">Events</span>
+                </label>
+                <label className="tl-toggle">
+                  <input type="checkbox" id="cubeLand" defaultChecked />
+                  <span className="tl-toggle__track" /><span className="tl-toggle__label">Land</span>
+                </label>
+              </div>
+            </aside>
+            <aside {...panel('bl', ['map'], 'Reading', 'tl-panel--secondary')}>
+              <div className="tl-panel__hd"><span className="tl-panel__title">Reading</span></div>
+              <div className="tl-panel__bd"><div className="caption" id="capsule" /></div>
+            </aside>
+            <aside {...panel('bl', ['pop'], 'Reading', 'tl-panel--secondary')}>
+              <div className="tl-panel__hd"><span className="tl-panel__title">Reading</span></div>
+              <div className="tl-panel__bd"><div className="caption" id="popCap" /></div>
+            </aside>
+            <aside {...panel('bl', ['horizon'], 'Reading', 'tl-panel--secondary')}>
+              <div className="tl-panel__hd"><span className="tl-panel__title">Reading</span></div>
+              <div className="tl-panel__bd"><div className="caption" id="hzCap" /></div>
+            </aside>
+            <aside {...panel('bl', ['flow'], 'Reading', 'tl-panel--secondary')}>
+              <div className="tl-panel__hd"><span className="tl-panel__title">Reading</span></div>
+              <div className="tl-panel__bd"><div className="caption" id="flowCap" /></div>
+            </aside>
+            <aside {...panel('bl', ['conn'], 'Reading', 'tl-panel--secondary')}>
+              <div className="tl-panel__hd"><span className="tl-panel__title">Reading</span></div>
+              <div className="tl-panel__bd"><div className="caption" id="connCap" /></div>
+            </aside>
+            <aside {...panel('bl', ['cube'], 'Reading', 'tl-panel--secondary')}>
+              <div className="tl-panel__hd"><span className="tl-panel__title">Reading</span></div>
+              <div className="tl-panel__bd"><div className="caption" id="cubeCap" /></div>
+            </aside>
+          </div>
+
+          <div className="tl-col tl-col--r">
+            <aside {...panel('tr', ['horizon'], 'In transit', 'tl-panel--secondary')}>
+              <div className="tl-panel__hd"><span className="tl-panel__title">In transit</span></div>
+              <div className="tl-panel__bd"><div className="newsfeed" id="hzFeed" /></div>
+            </aside>
+            <aside {...panel('tr', ['conn'], 'Related', 'tl-panel--secondary')}>
+              <div className="tl-panel__hd"><span className="tl-panel__title">Related</span></div>
+              <div className="tl-panel__bd"><div className="relpanel" id="connPanel" /></div>
+            </aside>
+            <aside {...panel('br', ['zoom', 'vertical'], 'Grammar', 'tl-panel--secondary')}>
+              <div className="tl-panel__hd"><span className="tl-panel__title">Grammar</span></div>
+              <div className="tl-panel__bd"><div className="grammar" id="grammarRow" /></div>
+            </aside>
+            <aside {...panel('br', ['conn'], 'Grammar', 'tl-panel--secondary')}>
+              <div className="tl-panel__hd"><span className="tl-panel__title">Grammar</span></div>
+              <div className="tl-panel__bd"><div className="grammar" id="connGrammar" /></div>
+            </aside>
+          </div>
+
+
+          {/* The index, continued up from the rail. A stub on the map — a
+              full-height red meridian across a world map reads as a line of
+              longitude, which is exactly the mistake DESIGN.md §6 calls out. */}
+          <div className={'tl-index-line' + (meta.rail === 'span' ? ' tl-index-line--full' : '')}
+            id="indexLine" aria-hidden="true" />
+
+          {/* ══ FIELD NOTES ═══════════════════════════════════════════════ */}
+          <aside className="tl-pop" id="fieldNotes" role="dialog" aria-label="Field notes"
+            hidden={!notesOpen} style={{ top: 12, right: 12 }}>
+            <span className="tl-pop__arrow" style={{ right: 48 }} aria-hidden="true" />
+            <div className="tl-pop__hd">
+              <div style={{ flex: 1, minWidth: 0 }}>
+                <div className="tl-pop__eyebrow">Field notes</div>
+                <h2 className="tl-pop__title">{meta.name}</h2>
+              </div>
+              <button className="tl-iconbtn" id="notesClose" aria-label="Close field notes"
+                onClick={() => { setNotesOpen(false); document.getElementById('notesBtn')?.focus(); }}>
+                {I.close}
+              </button>
+            </div>
+            <div className="tl-pop__bd">
+              {NOTES[view].body}
+              {NOTES[view].src && <p className="tl-pop__src">{NOTES[view].src}</p>}
+            </div>
+            <div className="tl-pop__ft">
+              <span className="tl-pop__key"><kbd className="tl-kbd">←</kbd><kbd className="tl-kbd">→</kbd> step</span>
+              <span className="tl-pop__key"><kbd className="tl-kbd">Space</kbd> play</span>
+              <span className="tl-pop__key"><kbd className="tl-kbd">⌘K</kbd> search</span>
+              <span className="tl-pop__key"><kbd className="tl-kbd">?</kbd> these notes</span>
+              <button className="tl-pop__link" onClick={() => { go('concepts'); setNotesOpen(false); }}>
+                Concepts, rated →
+              </button>
+            </div>
+          </aside>
+        </main>
+
+        {/* ══ TIME RAIL ════════════════════════════════════════════════════
+            Shared chrome, but "time" means three things across eleven views, so
+            each cell holds a stack of per-view children, all present from boot.
+            That is what lets #yearLabel, #yearSlider and #btnPlay keep working
+            untouched while other views drive the same rail differently. */}
+        <footer className="tl-timerail" id="timerail">
+          <div className="tl-timerail__year" data-legend={String(meta.rail === 'legend')}>
+            <div data-railcell="year-map" data-on={String(yearCell === 'map')}>
+              <span className="tl-year" id="yearLabel">1783</span>
+              <span className="tl-year__era" id="mapEra">CE · 12/18</span>
+            </div>
+            <div data-railcell="year-pop" data-on={String(yearCell === 'pop')}>
+              <span className="tl-year" id="popYear">1700</span>
+              <span className="tl-year__era" id="popEra">CE</span>
+            </div>
+            <div data-railcell="year-rail" data-on={String(yearCell === 'rail')}>
+              <span className="tl-year" id="railYear">—</span>
+              <span className="tl-year__era" id="railEra" />
+            </div>
+          </div>
+
+          <div className="tl-scale" id="railScale" data-inert={String(meta.rail === 'legend')}>
+            <div className="tl-scale__bands" aria-hidden="true" />
+            <span className="tl-scale__label tl-scale__label--start" data-edge>3000 BCE</span>
+            {([[-1000, '1000 BCE', true], [1, '1 CE', false], [500, '500', true], [1000, '1000', true],
+            [1500, '1500', true], [1800, '1800', false], [1900, '1900', true]] as [number, string, boolean][])
+              .map(([y, lab, minor]) => (
+                <span key={lab} className="tl-scale__label" style={{ left: railPos(y) + '%' }}
+                  {...(minor ? { 'data-minor': true } : {})}>{lab}</span>
+              ))}
+            <span className="tl-scale__label tl-scale__label--end" data-edge>2000</span>
+
+            <div className="tl-scale__ticks" aria-hidden="true" />
+            <div className="tl-scale__ticks tl-scale__ticks--major" aria-hidden="true" />
+
+            {/* The 18 world snapshots, engraved. The generic 2%/10% ruling
+                underneath stays as the ruler. */}
+            {stopYears.map(y => (
+              <i key={y} className="tl-scale__stop" data-year={y} style={{ left: railPos(y) + '%' }} aria-hidden="true" />
+            ))}
+
+            <div className="tl-scale__span" id="railSpan" aria-hidden="true" hidden />
+            <div className="tl-index" id="railIndex" aria-hidden="true"><span className="tl-index__flag" id="railFlag" /></div>
+
+            <input className="tl-range" type="range" id="yearSlider" min="0" max="17" step="1" defaultValue="11"
+              aria-label="Year" data-railcell="scale-map" data-on={String(scaleCell === 'yearSlider')} />
+            <input className="tl-range" type="range" id="popSlider" min="0" max="15" step="1" defaultValue="10"
+              aria-label="Year" data-railcell="scale-pop" data-on={String(scaleCell === 'popSlider')} />
+            <input className="tl-range" type="range" id="railRange" min="0" max="1000" step="1" defaultValue="745"
+              aria-label="Year" data-railcell="scale-generic" data-on={String(scaleCell === 'railRange')}
+              onInput={onRailRange} />
+          </div>
+
+          <div className="tl-transport" id="railTransport" data-empty={String(tpCell === 'none')}>
+            <div data-railcell="tp-map" data-on={String(tpCell === 'map')}>
+              <button className="tl-iconbtn" id="railPrev" aria-label="Previous snapshot" title="Previous  ←"
+                onClick={() => step(-1)}>{I.prev}</button>
+              {/* map.ts overwrites #btnPlay's textContent, so it must stay a TEXT button. */}
+              <button className="btn" id="btnPlay" aria-label="Play through time">▶ Play</button>
+              <button className="tl-iconbtn" id="railNext" aria-label="Next snapshot" title="Next  →"
+                onClick={() => step(1)}>{I.next}</button>
+            </div>
+            <div data-railcell="tp-pop" data-on={String(tpCell === 'pop')}>
+              <button className="tl-iconbtn" id="railPrevP" aria-label="Previous slice" title="Previous  ←"
+                onClick={() => step(-1)}>{I.prev}</button>
+              {/* population.ts writes this button's label, but only while it has no
+                  element child — so it must stay a TEXT button, never an icon. */}
+              <button className="btn" id="popPlay" aria-label="Play through time" aria-pressed="false">Play</button>
+              <button className="tl-iconbtn" id="railNextP" aria-label="Next slice" title="Next  →"
+                onClick={() => step(1)}>{I.next}</button>
+            </div>
+          </div>
+        </footer>
+      </div>
+
+      {/* #tip stays OUTSIDE .tl-app: shared.ts showTip clamps against
+          innerWidth / innerHeight, so it must not be reparented into a
+          positioned ancestor. */}
+      <div className="tooltip" id="tip" />
+
+      {/* ⌘K — required, not optional: five of eleven views sit behind a seg. */}
+      <div className="tl-cmdk" hidden={!palette} onClick={e => { if (e.target === e.currentTarget) openPalette(false); }}>
+        <div className="tl-cmdk__box" role="dialog" aria-label="Go to a view">
+          <input className="tl-cmdk__in" placeholder="Go to a view…" ref={pinput}
+            value={pq} onChange={e => { setPq(e.target.value); setPsel(0); }} />
+          <div className="tl-cmdk__list">
+            {hits.length === 0 && <div className="tl-cmdk__empty">Nothing matches that.</div>}
+            {hits.map((v, i) => (
+              <button key={v} className="tl-cmdk__row" data-sel={String(i === psel)}
+                onMouseEnter={() => setPsel(i)} onClick={() => { go(v); openPalette(false); }}>
+                <span>{VIEWS[v].name}</span>
+                <em>{GROUPS.find(g => g.members.includes(v))?.label || 'Concepts'}</em>
+              </button>
+            ))}
+          </div>
+        </div>
+      </div>
+
+      {!ready && (
+        <div className="bootstate" role="status">
+          {error ? <><b>Could not load the data.</b> {error}</> : <>Loading 18 world snapshots…</>}
+        </div>
+      )}
+    </>
+  );
+}

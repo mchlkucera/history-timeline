@@ -1,0 +1,395 @@
+/* GENERATED COPY — source of truth is /design/tokens.css; edit there and re-run npm run design:sync */
+/* =============================================================================
+   Timeline — tokens.css
+   Design system "Survey". Every colour, space, radius, shadow, type step and
+   duration in the shell. Nothing here selects an element; only shell.css does.
+
+   ---------------------------------------------------------------------------
+   FONTS — tokens.css cannot load them (@import blocks render). Paste these
+   three tags into the host document <head> or all three faces fall back
+   silently, which is the classic invisible design bug:
+
+   <link rel="preconnect" href="https://fonts.googleapis.com">
+   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+   <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500;600&family=Instrument+Sans:wght@400;500;600;700&family=Instrument+Serif&display=swap">
+   ---------------------------------------------------------------------------
+
+   THEME STRUCTURE — three blocks, in this order, no exceptions:
+     1. :root                                   complete LIGHT palette
+     2. @media (prefers-color-scheme: dark)
+          :root:not([data-theme="light"])       dark overrides only
+     3. :root[data-theme="dark"]                dark overrides only
+
+   A colour must NEVER be declared only inside 2 or 3. The un-stamped
+   light-OS state reads block 1 alone; anything missing there is invisible.
+   ============================================================================= */
+
+:root {
+  color-scheme: light;
+
+  /* ── Named palette — light: "Chart film" ───────────────────────────────── */
+  --tl-plate:        #12181A;   /* engraved-plate blue-black                  */
+  --tl-graphite:     #505E63;   /* secondary ink                              */
+  --tl-chalk:        #6D7B7F;   /* tertiary ink, ticks, disabled              */
+  --tl-film:         #F5F7F6;   /* chrome surface — rails, panels             */
+  --tl-chart:        #E3E8E6;   /* app ground, canvas backdrop                */
+  --tl-rule-c:       #C7D0CD;   /* the one hairline colour                    */
+  --tl-minium:       #B4382A;   /* THE INDEX. current year, playhead, focus   */
+  --tl-rubric:       #8E2C21;   /* deep step of the SAME hue — hover, pressed */
+
+  /* ── Surfaces ──────────────────────────────────────────────────────────── */
+  --tl-ground:       var(--tl-chart);
+  --tl-canvas-bg:    #E7ECEA;
+  --tl-surface:      var(--tl-film);
+  --tl-surface-2:    #EDF0EF;   /* inset wells, track backgrounds            */
+  --tl-surface-3:    #E4E9E7;   /* pressed / active control fill             */
+  --tl-surface-over: rgba(245, 247, 246, 0.88);   /* floats over the canvas  */
+  --tl-scrim:        rgba(18, 24, 26, 0.34);
+  --tl-hover:        rgba(18, 24, 26, 0.045);
+  --tl-press:        rgba(18, 24, 26, 0.085);
+  --tl-selected:     rgba(18, 24, 26, 0.07);
+
+  /* ── Ink ───────────────────────────────────────────────────────────────── */
+  --tl-ink:          var(--tl-plate);
+  --tl-ink-2:        var(--tl-graphite);
+  --tl-ink-3:        var(--tl-chalk);
+  --tl-ink-invert:   #F5F7F6;
+  --tl-ink-on-accent:#FFFFFF;
+
+  /* ── Lines ─────────────────────────────────────────────────────────────── */
+  --tl-rule:         var(--tl-rule-c);
+  --tl-rule-soft:    #D6DEDB;
+  --tl-rule-strong:  #ADB9B6;
+  --tl-graticule:    rgba(18, 24, 26, 0.055);
+  --tl-graticule-5:  rgba(18, 24, 26, 0.10);
+  --tl-tick:         rgba(18, 24, 26, 0.30);
+  --tl-tick-major:   rgba(18, 24, 26, 0.55);
+
+  /* ── THE CHROME ACCENT — one hue, one meaning ──────────────────────────────
+     The chrome has EXACTLY ONE accent hue and it means WHERE YOU ARE: the
+     current year, the playhead, the index needle, keyboard focus.
+
+     There is deliberately no --tl-accent-2. If a state seems to need a second
+     hue, it does not — express it with the neutral ramp (ink / ink-2 / ink-3),
+     with fill vs outline, or with form. A second chrome hue reads as a second
+     meaning and there is only one meaning here.
+
+     Steps of the one hue, not new hues:
+       --tl-accent        the index
+       --tl-accent-hover  = Rubric, the deep step (lighter in dark)
+       --tl-accent-soft   12-16% wash for tinted grounds
+       --tl-accent-line   the hairline where it crosses the canvas          */
+  --tl-accent:       var(--tl-minium);
+  --tl-accent-hover: var(--tl-rubric);
+  --tl-accent-soft:  rgba(180, 56, 42, 0.12);
+  --tl-accent-line:  rgba(180, 56, 42, 0.45);
+  --tl-focus-ring:   var(--tl-minium);
+
+  /* Destructive is the same hue, distinguished by FORM: a bordered button
+     with a word on it, never a bare mark. The atlas is read-only, so this
+     surface is tiny. If destructive actions ever multiply, separate them with
+     a filled accent button — not with a second hue. */
+  --tl-danger:       var(--tl-accent);
+  --tl-danger-soft:  var(--tl-accent-soft);
+
+  /* ── Confidence — encoded by FORM, never by hue ────────────────────────────
+     How much we actually know is the real semantic axis in an atlas, and it
+     is deliberately hue-free for three reasons: the chrome has one accent;
+     these marks sit beside eight categorical data colours and must never be
+     mistaken for one of them; and form survives colour-blindness and a
+     greyscale print.
+
+       chrome  .tl-conf  solid disc / half disc / slashed ring
+       canvas            stroke pattern ON TOP of the domain colour, so hue
+                         still says WHAT and stroke says HOW SURE            */
+  --tl-conf-mark:    var(--tl-ink-2);
+  --tl-dash-attested: none;
+  --tl-dash-approx:  4px 3px;
+  --tl-dash-contest: 1px 3px;
+
+  /* ── DATA HUES — a SEPARATE system from the chrome accent ──────────────────
+     Eight categorical hues, drawn by the renderer on the canvas. Eight
+     distinguishable hues is a hard requirement of the visual grammar
+     (shape = what kind of thing, colour = which domain).
+
+     These two systems must never be confused:
+       chrome accent   ONE hue      = where you are          (--tl-accent)
+       data hues       EIGHT hues   = which domain a mark is (--tl-cat-*)
+
+     Two crossings are allowed, and only these two:
+       - the index is chrome drawn OVER the canvas (--tl-accent-line);
+       - a legend key or chip dot QUOTES a data hue so the reader can match it
+         to the canvas. That is what --tl-dot is for, and it is the only way a
+         --tl-cat-* value may appear in chrome. Never use one to colour a
+         control, a border, a label or a state.
+     Never paint canvas data with --tl-accent.
+
+     No pure red in this set — red belongs to the index alone, which is why
+     `war` is iron oxide rather than the red it would otherwise want to be. */
+  --tl-cat-power:    #2C4E8F;   /* indigo       */
+  --tl-cat-war:      #8B4A31;   /* iron oxide   */
+  --tl-cat-belief:   #6B3F79;   /* aubergine    */
+  --tl-cat-sci:      #1F6E63;   /* verdigris    */
+  --tl-cat-art:      #A33A63;   /* madder rose  */
+  --tl-cat-nature:   #4F6B2B;   /* terre verte  */
+  --tl-cat-society:  #8A6B15;   /* ochre        */
+  --tl-cat-reach:    #16657E;   /* sea blue     */
+
+  /* Map fills, tuned to sit under the data palette without competing */
+  --tl-sea:          #DCE4E3;
+  --tl-land:         #EDEFE9;
+  --tl-coast:        rgba(18, 24, 26, 0.30);
+
+  /* Era wash on the time rail — 5% alpha, never more */
+  --tl-era-a:        rgba(18, 24, 26, 0.055);
+  --tl-era-b:        rgba(18, 24, 26, 0.000);
+
+  /* ── Typography ────────────────────────────────────────────────────────── */
+  --tl-font-ui:    "Instrument Sans", "Helvetica Neue", -apple-system, BlinkMacSystemFont, "Segoe UI", system-ui, sans-serif;
+  --tl-font-mono:  "IBM Plex Mono", ui-monospace, "SF Mono", SFMono-Regular, Menlo, Consolas, monospace;
+  --tl-font-mark:  "Instrument Serif", "Iowan Old Style", Charter, Georgia, "Times New Roman", serif;
+
+  --tl-text-2xs:   10px;
+  --tl-text-xs:    11px;
+  --tl-text-sm:    12px;
+  --tl-text-base:  13px;
+  --tl-text-md:    15px;
+  --tl-text-lg:    18px;
+  --tl-text-xl:    24px;
+  --tl-text-2xl:   32px;
+  --tl-text-3xl:   44px;
+  --tl-text-prose: 14px;
+
+  --tl-lh-tight:   1.2;
+  --tl-lh-ui:      1.45;
+  --tl-lh-prose:   1.6;
+  --tl-lh-flat:    1.05;
+
+  --tl-track-caps: 0.08em;    /* uppercase micro-labels */
+  --tl-track-xs:   0.02em;
+  --tl-track-0:    0em;
+  --tl-track-tight:-0.01em;
+  --tl-track-num:  -0.03em;   /* the big year readout   */
+
+  --tl-w-regular:  400;
+  --tl-w-medium:   500;
+  --tl-w-semi:     600;
+  --tl-w-bold:     700;
+
+  --tl-measure:    62ch;      /* field-notes prose cap  */
+
+  /* ── Space — 4px grid ──────────────────────────────────────────────────── */
+  --tl-space-0:   0px;
+  --tl-space-1:   2px;
+  --tl-space-2:   4px;
+  --tl-space-3:   6px;
+  --tl-space-4:   8px;
+  --tl-space-5:   12px;
+  --tl-space-6:   16px;
+  --tl-space-7:   20px;
+  --tl-space-8:   24px;
+  --tl-space-9:   32px;
+  --tl-space-10:  40px;
+  --tl-space-11:  48px;
+  --tl-space-12:  64px;
+
+  /* ── Radius — machined, not pill ───────────────────────────────────────── */
+  --tl-radius-xs:   3px;   /* inputs, chips        */
+  --tl-radius-sm:   4px;   /* buttons              */
+  --tl-radius-md:   6px;   /* panels               */
+  --tl-radius-lg:   8px;   /* popovers, tooltips   */
+  --tl-radius-sheet:12px;  /* mobile sheet, top corners only */
+  --tl-radius-full: 999px; /* status dots ONLY     */
+
+  /* ── Elevation — only things that genuinely float ──────────────────────── */
+  --tl-shadow-panel: 0 1px 2px rgba(18, 24, 26, 0.05), 0 8px 24px -10px rgba(18, 24, 26, 0.20);
+  --tl-shadow-pop:   0 2px 4px rgba(18, 24, 26, 0.06), 0 16px 40px -12px rgba(18, 24, 26, 0.28);
+  --tl-shadow-sheet: 0 -2px 24px -8px rgba(18, 24, 26, 0.22);
+  --tl-shadow-none:  none;
+
+  /* ── Layout ────────────────────────────────────────────────────────────── */
+  --tl-rail-top:    44px;
+  --tl-rail-time:   64px;
+  --tl-switch-row:  0px;    /* becomes 34px below 760px */
+  --tl-panel-w:     264px;
+  --tl-gutter:      12px;
+  --tl-ctl-sm:      28px;
+  --tl-ctl:         32px;
+  --tl-tap:         32px;   /* raised to 36px on coarse pointers */
+  --tl-border:      1px;
+  --tl-scale-base:  16px;   /* height of the ruled baseline above the rail floor */
+
+  /* Runtime inputs — set by the app, not by the palette.
+     --tl-index-pos  percentage of the SCALE. Drives the rail index.
+     --tl-index-x    that same point in stage pixels, so the canvas index
+                     lines up with the rail index across the year readout
+                     inset. Set it as: scale.offsetLeft + pct * scale.offsetWidth
+     --tl-dot        per-element swatch colour on chips and legend rows;
+                     falls back to currentColor. Set it inline, e.g.
+                     style="--tl-dot: var(--tl-cat-power)" */
+  --tl-index-pos:   76%;
+
+  /* ── Motion ────────────────────────────────────────────────────────────── */
+  --tl-dur-instant: 80ms;
+  --tl-dur-fast:    120ms;
+  --tl-dur-base:    180ms;
+  --tl-dur-slow:    260ms;
+  --tl-ease:        cubic-bezier(.2, .7, .3, 1);
+  --tl-ease-in:     cubic-bezier(.5, 0, .9, .4);
+
+  /* ── Layers ────────────────────────────────────────────────────────────── */
+  --tl-z-canvas:   0;
+  --tl-z-index:    5;
+  --tl-z-panel:    20;
+  --tl-z-rail:     40;
+  --tl-z-sheet:    50;
+  --tl-z-pop:      60;
+  --tl-z-tip:      70;
+}
+
+/* =============================================================================
+   2. DARK — system preference, unless an explicit light choice overrides it.
+      Overrides only. Everything else inherits from :root above.
+   ============================================================================= */
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) {
+    color-scheme: dark;
+
+    /* Named palette — dark: "Bathymetric" */
+    --tl-plate:        #DEE6E4;
+    --tl-graphite:     #8D9A9C;
+    --tl-chalk:        #6E7D82;
+    --tl-film:         #0E1416;
+    --tl-chart:        #080C0D;
+    --tl-rule-c:       #242E31;
+    --tl-minium:       #E4644B;
+    --tl-rubric:       #F07A62;
+
+    --tl-canvas-bg:    #0A1012;
+    --tl-surface-2:    #131B1D;
+    --tl-surface-3:    #1B2427;
+    --tl-surface-over: rgba(14, 20, 22, 0.86);
+    --tl-scrim:        rgba(0, 0, 0, 0.56);
+    --tl-hover:        rgba(222, 230, 228, 0.055);
+    --tl-press:        rgba(222, 230, 228, 0.10);
+    --tl-selected:     rgba(222, 230, 228, 0.08);
+
+    --tl-ink-invert:   #0E1416;
+    --tl-ink-on-accent:#140A08;
+
+    --tl-rule-soft:    #1B2427;
+    --tl-rule-strong:  #354246;
+    --tl-graticule:    rgba(222, 230, 228, 0.05);
+    --tl-graticule-5:  rgba(222, 230, 228, 0.09);
+    --tl-tick:         rgba(222, 230, 228, 0.28);
+    --tl-tick-major:   rgba(222, 230, 228, 0.52);
+
+    --tl-accent-soft:  rgba(228, 100, 75, 0.16);
+    --tl-accent-line:  rgba(228, 100, 75, 0.46);
+
+
+    --tl-cat-power:    #7098DC;
+    --tl-cat-war:      #C98058;
+    --tl-cat-belief:   #B287C0;
+    --tl-cat-sci:      #45B39D;
+    --tl-cat-art:      #E0789F;
+    --tl-cat-nature:   #92B85C;
+    --tl-cat-society:  #D2A63C;
+    --tl-cat-reach:    #4FAFC9;
+
+    --tl-sea:          #0B1416;
+    --tl-land:         #1E2A2C;
+    --tl-coast:        rgba(222, 230, 228, 0.26);
+
+    --tl-era-a:        rgba(222, 230, 228, 0.05);
+    --tl-era-b:        rgba(222, 230, 228, 0.000);
+
+    --tl-shadow-panel: 0 1px 2px rgba(0, 0, 0, 0.5), 0 10px 28px -10px rgba(0, 0, 0, 0.7);
+    --tl-shadow-pop:   0 2px 6px rgba(0, 0, 0, 0.55), 0 20px 48px -14px rgba(0, 0, 0, 0.8);
+    --tl-shadow-sheet: 0 -2px 28px -8px rgba(0, 0, 0, 0.7);
+  }
+}
+
+/* =============================================================================
+   3. DARK — explicit choice. Identical override set, so the toggle wins in
+      both directions (dark stamp on a light OS, light stamp on a dark OS).
+   ============================================================================= */
+:root[data-theme="dark"] {
+  color-scheme: dark;
+
+  --tl-plate:        #DEE6E4;
+  --tl-graphite:     #8D9A9C;
+  --tl-chalk:        #6E7D82;
+  --tl-film:         #0E1416;
+  --tl-chart:        #080C0D;
+  --tl-rule-c:       #242E31;
+  --tl-minium:       #E4644B;
+  --tl-rubric:       #F07A62;
+
+  --tl-canvas-bg:    #0A1012;
+  --tl-surface-2:    #131B1D;
+  --tl-surface-3:    #1B2427;
+  --tl-surface-over: rgba(14, 20, 22, 0.86);
+  --tl-scrim:        rgba(0, 0, 0, 0.56);
+  --tl-hover:        rgba(222, 230, 228, 0.055);
+  --tl-press:        rgba(222, 230, 228, 0.10);
+  --tl-selected:     rgba(222, 230, 228, 0.08);
+
+  --tl-ink-invert:   #0E1416;
+  --tl-ink-on-accent:#140A08;
+
+  --tl-rule-soft:    #1B2427;
+  --tl-rule-strong:  #354246;
+  --tl-graticule:    rgba(222, 230, 228, 0.05);
+  --tl-graticule-5:  rgba(222, 230, 228, 0.09);
+  --tl-tick:         rgba(222, 230, 228, 0.28);
+  --tl-tick-major:   rgba(222, 230, 228, 0.52);
+
+  --tl-accent-soft:  rgba(228, 100, 75, 0.16);
+  --tl-accent-line:  rgba(228, 100, 75, 0.46);
+
+
+  --tl-cat-power:    #7098DC;
+  --tl-cat-war:      #C98058;
+  --tl-cat-belief:   #B287C0;
+  --tl-cat-sci:      #45B39D;
+  --tl-cat-art:      #E0789F;
+  --tl-cat-nature:   #92B85C;
+  --tl-cat-society:  #D2A63C;
+  --tl-cat-reach:    #4FAFC9;
+
+  --tl-sea:          #0B1416;
+  --tl-land:         #1E2A2C;
+  --tl-coast:        rgba(222, 230, 228, 0.26);
+
+  --tl-era-a:        rgba(222, 230, 228, 0.05);
+  --tl-era-b:        rgba(222, 230, 228, 0.000);
+
+  --tl-shadow-panel: 0 1px 2px rgba(0, 0, 0, 0.5), 0 10px 28px -10px rgba(0, 0, 0, 0.7);
+  --tl-shadow-pop:   0 2px 6px rgba(0, 0, 0, 0.55), 0 20px 48px -14px rgba(0, 0, 0, 0.8);
+  --tl-shadow-sheet: 0 -2px 28px -8px rgba(0, 0, 0, 0.7);
+}
+
+/* ── Touch targets follow the pointer, not the width ─────────────────────── */
+@media (pointer: coarse) {
+  :root { --tl-tap: 36px; --tl-ctl: 36px; --tl-ctl-sm: 32px; }
+}
+
+/* ── Narrow: the switcher earns its own row; the rail gets shorter ───────── */
+@media (max-width: 759px) {
+  :root {
+    --tl-switch-row: 34px;
+    --tl-rail-time:  56px;
+    --tl-gutter:     8px;
+  }
+}
+
+/* ── Reduced motion is a token change, not a per-component override ──────── */
+@media (prefers-reduced-motion: reduce) {
+  :root {
+    --tl-dur-instant: 0.01ms;
+    --tl-dur-fast:    0.01ms;
+    --tl-dur-base:    0.01ms;
+    --tl-dur-slow:    0.01ms;
+  }
+}

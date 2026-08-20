@@ -1,0 +1,1327 @@
+/* GENERATED COPY — source of truth is /design/shell.css; edit there and re-run npm run design:sync */
+/* =============================================================================
+   Timeline — shell.css
+   The application chrome for design system "Survey". Requires tokens.css.
+
+   Every class is namespaced tl-* so it cannot collide with the existing
+   prototype styles (.card, .btn, .chip, .controls, .tooltip ...).
+   Nothing here declares a raw colour: every value comes from a token, so both
+   themes and any future theme are handled in tokens.css alone.
+
+   ONE ACCENT. The chrome uses a single accent hue (--tl-accent, Minium) and it
+   means WHERE YOU ARE: the index, the playhead, the needle, focus. Every other
+   state — on/off, pressed, selected, emphasis, confidence — is carried by the
+   neutral ramp or by form. Do not add a second chrome hue; see tokens.css.
+
+   Contents
+     00  Base + reset            06  Chips, toggles, segments
+     01  App frame               07  Range slider
+     02  Top rail                08  Time rail  (the signature)
+     03  View switcher           09  Tooltip
+     04  Stage + canvas          10  Popover — field notes
+     05  Floating panels         11  Legend, badges, keycaps
+                                 12  Focus, scrollbars, motion, a11y
+   ============================================================================= */
+
+
+/* ── 00  Base ─────────────────────────────────────────────────────────────── */
+
+.tl-app *,
+.tl-app *::before,
+.tl-app *::after { box-sizing: border-box; }
+
+/* Opt-in body class. The shell is viewport-sized, so the page must not scroll. */
+body.tl-body {
+  margin: 0;
+  height: 100%;
+  overflow: hidden;
+  background: var(--tl-ground);
+  color: var(--tl-ink);
+  font-family: var(--tl-font-ui);
+  font-size: var(--tl-text-base);
+  line-height: var(--tl-lh-ui);
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+  text-rendering: optimizeLegibility;
+}
+html:has(body.tl-body) { height: 100%; overflow: hidden; }
+
+/* Zero-specificity resets: :where() keeps them from ever beating a component
+   class. (An :is() version of this block silently overrode .tl-btn--primary.) */
+:where(.tl-app) :where(h1, h2, h3, h4, p, ul, ol, figure) { margin: 0; }
+:where(.tl-app) :where(ul, ol) { padding: 0; list-style: none; }
+:where(.tl-app) :where(button, input, select, textarea) { font: inherit; color: inherit; }
+:where(.tl-app) :where(a) { color: var(--tl-ink); text-decoration-color: var(--tl-rule-strong); text-underline-offset: 2px; }
+:where(.tl-app) :where(a):hover { text-decoration-color: var(--tl-accent); }
+
+/* Doctrine: measurements are mono and tabular. Language is sans. */
+.tl-num, .tl-app :is(.tl-year, .tl-kbd, .tl-scale__label, .tl-meta, .tl-count) {
+  font-family: var(--tl-font-mono);
+  font-variant-numeric: tabular-nums;
+  font-feature-settings: "ss01" 1;
+}
+
+.tl-label {
+  font-size: var(--tl-text-2xs);
+  font-weight: var(--tl-w-semi);
+  letter-spacing: var(--tl-track-caps);
+  text-transform: uppercase;
+  color: var(--tl-ink-2);
+}
+
+
+/* ── 01  App frame ────────────────────────────────────────────────────────── */
+
+.tl-app {
+  display: grid;
+  grid-template-rows: auto minmax(0, 1fr) var(--tl-rail-time);
+  height: 100vh;
+  height: 100dvh;
+  width: 100%;
+  overflow: hidden;
+  background: var(--tl-ground);
+  color: var(--tl-ink);
+  font-family: var(--tl-font-ui);
+  font-size: var(--tl-text-base);
+  line-height: var(--tl-lh-ui);
+  isolation: isolate;
+}
+
+
+/* ── 02  Top rail ─────────────────────────────────────────────────────────── */
+
+.tl-rail {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr) auto;
+  align-items: center;
+  column-gap: var(--tl-space-5);
+  min-height: var(--tl-rail-top);
+  padding: 0 var(--tl-space-5);
+  background: var(--tl-surface);
+  border-bottom: var(--tl-border) solid var(--tl-rule);
+  z-index: var(--tl-z-rail);
+}
+
+/* The mark. 15px. The only place the serif appears in the entire system. */
+.tl-mark {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--tl-space-4);
+  white-space: nowrap;
+  text-decoration: none;
+}
+.tl-mark__glyph {
+  display: grid;
+  place-items: center;
+  width: 22px; height: 22px;
+  border: var(--tl-border) solid var(--tl-rule-strong);
+  border-radius: var(--tl-radius-xs);
+  color: var(--tl-ink);          /* identity, not index — demoted from accent */
+  flex: none;
+}
+.tl-mark__glyph svg { display: block; width: 14px; height: 14px; }
+.tl-mark__word {
+  font-family: var(--tl-font-mark);
+  font-size: var(--tl-text-md);
+  line-height: 1;
+  letter-spacing: 0.01em;
+  color: var(--tl-ink);
+}
+
+.tl-rail__mid {
+  display: flex;
+  align-items: center;
+  gap: var(--tl-space-6);
+  min-width: 0;
+  height: var(--tl-rail-top);
+}
+
+/* One line of gist — the essay itself lives in the field-notes popover. */
+.tl-gist {
+  font-size: var(--tl-text-xs);
+  color: var(--tl-ink-2);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  min-width: 0;
+}
+
+.tl-rail__end {
+  display: flex;
+  align-items: center;
+  gap: var(--tl-space-3);
+}
+
+.tl-meta {
+  font-size: var(--tl-text-2xs);
+  letter-spacing: var(--tl-track-xs);
+  color: var(--tl-ink-3);
+  white-space: nowrap;
+  padding-right: var(--tl-space-3);
+  border-right: var(--tl-border) solid var(--tl-rule-soft);
+  margin-right: var(--tl-space-1);
+}
+
+.tl-divider-v {
+  width: var(--tl-border);
+  align-self: stretch;
+  margin: var(--tl-space-3) var(--tl-space-2);
+  background: var(--tl-rule-soft);
+}
+
+
+/* ── 03  View switcher ────────────────────────────────────────────────────── */
+
+.tl-switch {
+  display: flex;
+  align-items: stretch;
+  height: var(--tl-rail-top);
+  min-width: 0;
+}
+.tl-switch__item {
+  position: relative;
+  display: inline-flex;
+  align-items: center;
+  gap: var(--tl-space-3);
+  padding: 0 var(--tl-space-5);
+  border: 0;
+  background: none;
+  cursor: pointer;
+  white-space: nowrap;
+  font-size: var(--tl-text-xs);
+  font-weight: var(--tl-w-semi);
+  letter-spacing: var(--tl-track-caps);
+  text-transform: uppercase;
+  color: var(--tl-ink-3);
+  transition: color var(--tl-dur-fast) var(--tl-ease);
+}
+.tl-switch__item:hover { color: var(--tl-ink-2); }
+.tl-switch__item[aria-selected="true"] { color: var(--tl-ink); }
+/* A 2px ink underline sitting over the rail's own hairline — not a pill. */
+.tl-switch__item[aria-selected="true"]::after {
+  content: "";
+  position: absolute;
+  left: var(--tl-space-4);
+  right: var(--tl-space-4);
+  bottom: -1px;
+  height: 2px;
+  background: var(--tl-ink);
+}
+.tl-switch__item svg { width: 13px; height: 13px; display: block; opacity: .75; }
+.tl-switch__item[aria-selected="true"] svg { opacity: 1; }
+
+
+/* ── 04  Stage + canvas ───────────────────────────────────────────────────── */
+
+.tl-stage {
+  position: relative;
+  min-height: 0;
+  overflow: hidden;
+  background: var(--tl-canvas-bg);
+  z-index: var(--tl-z-canvas);
+}
+
+/*
+   THE DOCK.
+
+   A floating panel is honest over a MAP: the panel sits on ocean and the map
+   has no furniture there. It is not honest over a CHART. The timeline family
+   draws its row furniture in a fixed left gutter of the canvas — timeline band
+   names at x=20, connections lane names at x=22, and the earliest ribbons in
+   Flow start at x=0 — none of which the renderer can move. A 264px panel over
+   that strip does not cover "some map", it covers the legend: all six band
+   names on the horizontal timeline, three of four lane headers on Connections.
+
+   So those views hand the panel column a strip of its own and the canvas takes
+   the rest. Nothing is hidden in any state, the panel keeps its glass and its
+   corner radius (it is still an instrument overlay, not a form column), and
+   .tl-view padding is the whole mechanism: fitCanvas() reads canvas
+   clientWidth, so the canvas re-fits to the remaining width by itself.
+
+   Views whose canvas has no fixed left furniture — Map, People, Horizon, Cube —
+   keep the floating panels they were designed for. --dock is set per view.
+*/
+.tl-app { --tl-dock-w: calc(var(--tl-panel-w) + var(--tl-gutter) * 2); }
+
+@media (min-width: 760px) {
+  .tl-stage[data-dock="left"] .tl-view { padding-left: var(--tl-dock-w); }
+  /*
+     The strip is chrome, not canvas: it takes the app ground and a hairline,
+     and the chart-film graticule stops at its edge. Left as canvas it read as
+     a piece of the chart that had simply been left blank.
+
+     z-index sits above the index line (5) and below the panels (20), so the
+     accent index stops at the dock instead of running under the controls.
+  */
+  .tl-stage[data-dock="left"]::before {
+    content: "";
+    position: absolute;
+    left: 0; top: 0; bottom: 0;
+    width: var(--tl-dock-w);
+    background: var(--tl-ground);
+    border-right: var(--tl-border) solid var(--tl-rule-soft);
+    pointer-events: none;
+    z-index: calc(var(--tl-z-index) + 1);
+  }
+  .tl-stage[data-dock="left"] .tl-graticule { left: var(--tl-dock-w); }
+}
+
+.tl-canvas { position: absolute; inset: 0; display: block; }
+.tl-canvas > canvas {
+  display: block;
+  width: 100%; height: 100%;
+  cursor: crosshair;
+  touch-action: none;
+}
+
+/* Chart-film graticule. Pure CSS, no asset, every 5th line stronger. */
+.tl-graticule {
+  position: absolute; inset: 0;
+  pointer-events: none;
+  background-image:
+    repeating-linear-gradient(90deg, var(--tl-graticule-5) 0 1px, transparent 1px 200px),
+    repeating-linear-gradient(0deg,  var(--tl-graticule-5) 0 1px, transparent 1px 200px),
+    repeating-linear-gradient(90deg, var(--tl-graticule)   0 1px, transparent 1px 40px),
+    repeating-linear-gradient(0deg,  var(--tl-graticule)   0 1px, transparent 1px 40px);
+}
+
+/* Placeholder for review only — the real canvas replaces this. */
+.tl-canvas--empty {
+  display: grid;
+  place-items: center;
+  background: var(--tl-canvas-bg);
+}
+.tl-canvas__note {
+  display: flex; flex-direction: column; align-items: center; gap: var(--tl-space-2);
+  color: var(--tl-ink-3);
+  text-align: center;
+  padding: var(--tl-space-6);
+}
+.tl-canvas__note b {
+  font-family: var(--tl-font-mono);
+  font-size: var(--tl-text-sm);
+  font-weight: var(--tl-w-medium);
+  letter-spacing: var(--tl-track-caps);
+  text-transform: uppercase;
+  color: var(--tl-ink-2);
+}
+.tl-canvas__note span { font-size: var(--tl-text-xs); max-width: 34ch; }
+
+/*
+   The index, continued up from the time rail into the canvas.
+
+   Alignment: --tl-index-pos is a percentage of the SCALE, which is inset by
+   the year readout and the transport. The canvas is not, so the two would not
+   line up. The renderer therefore sets --tl-index-x, a length in px measured
+   from the stage's left edge:
+
+     scale.offsetLeft + pct * scale.offsetWidth
+
+   Default is a 22px stub rising out of the rail — honest on the map, where the
+   canvas has no time axis and a full-height line would read as a meridian.
+   Time-axis views (Timeline, Flow, Cube) add --full to run it the whole way.
+*/
+.tl-index-line {
+  position: absolute;
+  left: var(--tl-index-x, var(--tl-index-pos));
+  bottom: 0;
+  width: 1px;
+  height: 22px;
+  background: linear-gradient(to top, var(--tl-accent), transparent);
+  pointer-events: none;
+  z-index: var(--tl-z-index);
+}
+.tl-index-line--full {
+  top: 0;
+  height: auto;
+  background: var(--tl-accent-line);
+}
+
+/* Crosshair readout pinned to the canvas corner — coordinates, always mono. */
+.tl-readout {
+  position: absolute;
+  left: var(--tl-gutter);
+  bottom: var(--tl-gutter);
+  display: flex; gap: var(--tl-space-5);
+  padding: var(--tl-space-2) var(--tl-space-4);
+  background: var(--tl-surface-over);
+  -webkit-backdrop-filter: blur(10px);
+  backdrop-filter: blur(10px);
+  border: var(--tl-border) solid var(--tl-rule);
+  border-radius: var(--tl-radius-xs);
+  font-family: var(--tl-font-mono);
+  font-size: var(--tl-text-2xs);
+  letter-spacing: var(--tl-track-xs);
+  color: var(--tl-ink-3);
+  font-variant-numeric: tabular-nums;
+  z-index: var(--tl-z-panel);
+}
+.tl-readout b { color: var(--tl-ink-2); font-weight: var(--tl-w-medium); }
+
+
+/* ── 05  Floating panels ──────────────────────────────────────────────────── */
+
+.tl-panel {
+  position: absolute;
+  width: var(--tl-panel-w);
+  max-height: calc(100% - var(--tl-gutter) * 2);
+  display: flex;
+  flex-direction: column;
+  background: var(--tl-surface-over);
+  -webkit-backdrop-filter: blur(14px) saturate(1.3);
+  backdrop-filter: blur(14px) saturate(1.3);
+  border: var(--tl-border) solid var(--tl-rule);
+  border-radius: var(--tl-radius-md);
+  box-shadow: var(--tl-shadow-panel);
+  z-index: var(--tl-z-panel);
+  overflow: hidden;
+}
+.tl-panel--tl { top: var(--tl-gutter); left: var(--tl-gutter); }
+.tl-panel--tr { top: var(--tl-gutter); right: var(--tl-gutter); }
+.tl-panel--bl { bottom: var(--tl-gutter); left: var(--tl-gutter); }
+.tl-panel--br { bottom: var(--tl-gutter); right: var(--tl-gutter); }
+
+/*
+   THE PANEL COLUMNS.
+
+   Four independently-anchored corner boxes cannot see one another, so on a
+   short viewport a tall bottom-left panel simply grew up underneath the
+   top-left one: at 900x700 the People view's "Reading" (top 238) swallowed the
+   bottom of "Controls" (bottom 273) and the Names toggle stopped answering
+   clicks — covered, not merely ugly.
+
+   One flex column per side gives the two panels a shared height budget that
+   they physically cannot exceed. Free space collects between them (auto
+   margin), so a short pair still reads as "one at the top, one at the bottom";
+   a tall pair shrinks instead of overlapping, and whichever panel is too tall
+   scrolls its own body. The secondary panel — always prose, never controls —
+   yields its height first and keeps only a floor.
+*/
+@media (min-width: 760px) {
+  .tl-col {
+    position: absolute;
+    top: var(--tl-gutter);
+    bottom: var(--tl-gutter);
+    width: var(--tl-panel-w);
+    display: flex;
+    flex-direction: column;
+    gap: var(--tl-gutter);
+    z-index: var(--tl-z-panel);
+    /* The gaps stay canvas: scroll-to-zoom and drag-to-pan pass through. */
+    pointer-events: none;
+  }
+  .tl-col--l { left: var(--tl-gutter); }
+  .tl-col--r { right: var(--tl-gutter); }
+
+  .tl-col > .tl-panel {
+    position: static;
+    width: 100%;
+    max-height: none;
+    min-height: 0;
+    flex: 0 1 auto;
+    pointer-events: auto;
+  }
+  /* Bottom-anchored members are pushed down by whatever space is left over. */
+  .tl-col > .tl-panel--bl,
+  .tl-col > .tl-panel--br { margin-top: auto; }
+  /* Prose yields to controls, down to a floor of a header plus two lines. */
+  .tl-col > .tl-panel--secondary { flex-shrink: 999; min-height: 92px; }
+}
+/* Below 760 the panels are fixed bottom sheets and the column must not exist. */
+@media (max-width: 759px) { .tl-col { display: contents; } }
+
+.tl-panel__hd {
+  display: flex;
+  align-items: center;
+  gap: var(--tl-space-4);
+  height: 30px;
+  padding: 0 var(--tl-space-2) 0 var(--tl-space-5);
+  border-bottom: var(--tl-border) solid var(--tl-rule-soft);
+  flex: none;
+}
+.tl-panel__title {
+  font-size: var(--tl-text-2xs);
+  font-weight: var(--tl-w-semi);
+  letter-spacing: var(--tl-track-caps);
+  text-transform: uppercase;
+  color: var(--tl-ink-2);
+  margin-right: auto;
+}
+.tl-panel__count {
+  font-family: var(--tl-font-mono);
+  font-size: var(--tl-text-2xs);
+  color: var(--tl-ink-3);
+  font-variant-numeric: tabular-nums;
+}
+/*
+   The body is the scroller — the panel itself is overflow:hidden so that the
+   header never scrolls away. That worked, and nothing said so:
+
+   · a scroll shadow. macOS overlay scrollbars are invisible until you already
+     know to scroll, which is precisely the knowledge the user lacks. The
+     local/scroll background pair is the standard trick: the two `local` layers
+     ride the content and cover the fade at the ends of the scroll, the two
+     `scroll` layers are pinned to the box and show a shadow wherever there is
+     more content in that direction.
+*/
+.tl-panel__bd {
+  display: flex;
+  flex-direction: column;
+  gap: var(--tl-space-5);
+  padding: var(--tl-space-5);
+  overflow-y: auto;
+  min-height: 0;
+  background:
+    linear-gradient(var(--tl-surface-over) 34%, transparent) top    / 100% 22px no-repeat local,
+    linear-gradient(transparent, var(--tl-surface-over) 66%) bottom / 100% 22px no-repeat local,
+    radial-gradient(farthest-side at 50% 0,    var(--tl-scrim), transparent) top    / 100% 8px no-repeat scroll,
+    radial-gradient(farthest-side at 50% 100%, var(--tl-scrim), transparent) bottom / 100% 8px no-repeat scroll;
+}
+.tl-panel[data-collapsed="true"] .tl-panel__bd { display: none; }
+.tl-panel[data-collapsed="true"] .tl-panel__hd { border-bottom-color: transparent; }
+.tl-panel__grip { display: none; }
+
+.tl-field-group { display: flex; flex-direction: column; gap: var(--tl-space-3); }
+.tl-field-group > .tl-label { margin-bottom: var(--tl-space-1); }
+.tl-cluster { display: flex; flex-wrap: wrap; gap: var(--tl-space-3); }
+.tl-row { display: flex; align-items: center; gap: var(--tl-space-4); }
+.tl-row--between { justify-content: space-between; }
+.tl-hr { height: var(--tl-border); background: var(--tl-rule-soft); border: 0; margin: 0; }
+
+
+/* ── 06  Buttons, fields, chips, toggles, segments ────────────────────────── */
+
+.tl-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: var(--tl-space-3);
+  height: var(--tl-ctl);
+  padding: 0 var(--tl-space-5);
+  border: var(--tl-border) solid var(--tl-rule);
+  border-radius: var(--tl-radius-sm);
+  background: var(--tl-surface);
+  color: var(--tl-ink);
+  font-size: var(--tl-text-sm);
+  font-weight: var(--tl-w-medium);
+  letter-spacing: var(--tl-track-xs);
+  white-space: nowrap;
+  cursor: pointer;
+  transition: background var(--tl-dur-fast) var(--tl-ease),
+              border-color var(--tl-dur-fast) var(--tl-ease),
+              color var(--tl-dur-fast) var(--tl-ease);
+}
+.tl-btn svg { width: 13px; height: 13px; display: block; flex: none; }
+.tl-btn:hover  { background: var(--tl-surface-3); border-color: var(--tl-rule-strong); }
+.tl-btn:active { background: var(--tl-press); }
+.tl-btn[disabled], .tl-btn[aria-disabled="true"] {
+  color: var(--tl-ink-3); background: var(--tl-surface-2);
+  cursor: not-allowed; pointer-events: none;
+}
+
+/* Primary is ink, not accent. Accent is reserved for the index. */
+.tl-btn--primary {
+  background: var(--tl-ink);
+  border-color: var(--tl-ink);
+  color: var(--tl-ink-invert);
+  font-weight: var(--tl-w-semi);
+}
+/* Neutral overlay: darkens a light button, lightens a dark one. Theme-agnostic. */
+.tl-btn--primary:hover  { background: var(--tl-ink); box-shadow: inset 0 0 0 999px rgba(128, 128, 128, .16); }
+.tl-btn--primary:active { box-shadow: inset 0 0 0 999px rgba(128, 128, 128, .26); }
+
+.tl-btn--quiet { background: transparent; border-color: transparent; color: var(--tl-ink-2); }
+.tl-btn--quiet:hover { background: var(--tl-hover); border-color: transparent; color: var(--tl-ink); }
+
+.tl-btn--danger { color: var(--tl-danger); }
+.tl-btn--danger:hover { background: var(--tl-danger-soft); border-color: var(--tl-danger); }
+
+.tl-btn--sm { height: var(--tl-ctl-sm); padding: 0 var(--tl-space-4); font-size: var(--tl-text-xs); }
+.tl-btn--wide { width: 100%; }
+
+.tl-iconbtn {
+  display: inline-grid;
+  place-items: center;
+  width: var(--tl-tap); height: var(--tl-tap);
+  padding: 0;
+  border: var(--tl-border) solid transparent;
+  border-radius: var(--tl-radius-sm);
+  background: transparent;
+  color: var(--tl-ink-2);
+  cursor: pointer;
+  position: relative;
+  transition: background var(--tl-dur-fast) var(--tl-ease), color var(--tl-dur-fast) var(--tl-ease);
+}
+.tl-iconbtn svg { width: 15px; height: 15px; display: block; }
+.tl-iconbtn:hover { background: var(--tl-hover); color: var(--tl-ink); }
+.tl-iconbtn[aria-expanded="true"], .tl-iconbtn[aria-pressed="true"] {
+  background: var(--tl-selected); color: var(--tl-ink); border-color: var(--tl-rule);
+}
+/* Unread field notes for this view */
+.tl-iconbtn[data-unread="true"]::after {
+  content: "";
+  position: absolute;
+  top: 5px; right: 5px;
+  width: 5px; height: 5px;
+  border-radius: var(--tl-radius-full);
+  background: var(--tl-accent);
+  box-shadow: 0 0 0 2px var(--tl-surface);
+}
+
+/* Joined group — shared hairlines, square middles. */
+.tl-btngroup { display: inline-flex; }
+.tl-btngroup > * { border-radius: 0; margin-left: calc(var(--tl-border) * -1); }
+.tl-btngroup > *:first-child { border-radius: var(--tl-radius-sm) 0 0 var(--tl-radius-sm); margin-left: 0; }
+.tl-btngroup > *:last-child  { border-radius: 0 var(--tl-radius-sm) var(--tl-radius-sm) 0; }
+.tl-btngroup > .tl-iconbtn { border-color: var(--tl-rule); background: var(--tl-surface); }
+.tl-btngroup > .tl-iconbtn:hover { background: var(--tl-surface-3); z-index: 1; }
+.tl-btngroup > *:focus-visible { z-index: 2; }
+
+/* Field */
+.tl-field {
+  display: flex;
+  align-items: center;
+  gap: var(--tl-space-3);
+  height: var(--tl-ctl);
+  padding: 0 var(--tl-space-3) 0 var(--tl-space-4);
+  background: var(--tl-surface-2);
+  border: var(--tl-border) solid var(--tl-rule);
+  border-radius: var(--tl-radius-xs);
+  color: var(--tl-ink-3);
+  transition: border-color var(--tl-dur-fast) var(--tl-ease);
+}
+.tl-field svg { width: 13px; height: 13px; flex: none; }
+.tl-field input {
+  flex: 1 1 auto;
+  min-width: 0;
+  border: 0;
+  background: none;
+  outline: none;
+  color: var(--tl-ink);
+  font-size: var(--tl-text-sm);
+}
+.tl-field input::placeholder { color: var(--tl-ink-3); }
+.tl-field:focus-within { border-color: var(--tl-rule-strong); }
+.tl-field:focus-within { outline: 2px solid var(--tl-focus-ring); outline-offset: 1px; }
+
+/* Select — wrapper draws the chevron so it stays token-driven in both themes. */
+.tl-select { position: relative; display: inline-flex; }
+.tl-select select {
+  appearance: none;
+  -webkit-appearance: none;
+  height: var(--tl-ctl);
+  width: 100%;
+  padding: 0 var(--tl-space-8) 0 var(--tl-space-4);
+  background: var(--tl-surface-2);
+  border: var(--tl-border) solid var(--tl-rule);
+  border-radius: var(--tl-radius-xs);
+  color: var(--tl-ink);
+  font-size: var(--tl-text-sm);
+  cursor: pointer;
+}
+.tl-select::after {
+  content: "";
+  position: absolute;
+  right: var(--tl-space-4);
+  top: 50%;
+  width: 6px; height: 6px;
+  margin-top: -4px;
+  border-right: 1.5px solid var(--tl-ink-3);
+  border-bottom: 1.5px solid var(--tl-ink-3);
+  transform: rotate(45deg);
+  pointer-events: none;
+}
+.tl-select select:hover { border-color: var(--tl-rule-strong); }
+
+/* Chips — machined rectangles, 3px. Never pills. */
+.tl-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--tl-space-3);
+  height: var(--tl-ctl-sm);
+  padding: 0 var(--tl-space-4);
+  border: var(--tl-border) solid var(--tl-rule);
+  border-radius: var(--tl-radius-xs);
+  background: transparent;
+  color: var(--tl-ink-3);
+  font-size: var(--tl-text-xs);
+  font-weight: var(--tl-w-medium);
+  letter-spacing: var(--tl-track-xs);
+  white-space: nowrap;
+  cursor: pointer;
+  transition: background var(--tl-dur-fast) var(--tl-ease), color var(--tl-dur-fast) var(--tl-ease);
+}
+.tl-chip:hover { background: var(--tl-hover); color: var(--tl-ink-2); }
+.tl-chip[aria-pressed="true"] {
+  background: var(--tl-selected);
+  border-color: var(--tl-rule-strong);
+  color: var(--tl-ink);
+}
+.tl-chip__dot {
+  width: 7px; height: 7px;
+  flex: none;
+  border-radius: var(--tl-radius-full);
+  background: var(--tl-dot, currentColor);
+  opacity: .45;
+  transition: opacity var(--tl-dur-fast) var(--tl-ease);
+}
+.tl-chip[aria-pressed="true"] .tl-chip__dot { opacity: 1; }
+.tl-chip__n {
+  font-family: var(--tl-font-mono);
+  font-size: var(--tl-text-2xs);
+  color: var(--tl-ink-3);
+  font-variant-numeric: tabular-nums;
+}
+
+/* Segmented control */
+.tl-seg {
+  display: inline-flex;
+  gap: 2px;
+  padding: 2px;
+  background: var(--tl-surface-2);
+  border: var(--tl-border) solid var(--tl-rule);
+  border-radius: var(--tl-radius-sm);
+}
+.tl-seg__item {
+  height: calc(var(--tl-ctl) - 8px);
+  padding: 0 var(--tl-space-4);
+  border: 0;
+  border-radius: 2px;
+  background: transparent;
+  color: var(--tl-ink-3);
+  font-family: var(--tl-font-mono);
+  font-size: var(--tl-text-xs);
+  font-variant-numeric: tabular-nums;
+  cursor: pointer;
+  transition: background var(--tl-dur-fast) var(--tl-ease), color var(--tl-dur-fast) var(--tl-ease);
+}
+.tl-seg__item:hover { color: var(--tl-ink-2); }
+.tl-seg__item[aria-pressed="true"] {
+  background: var(--tl-surface);
+  color: var(--tl-ink);
+  box-shadow: 0 1px 1px rgba(0, 0, 0, .07);
+}
+
+/* Toggle */
+.tl-toggle {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--tl-space-4);
+  cursor: pointer;
+  font-size: var(--tl-text-sm);
+  color: var(--tl-ink-2);
+}
+.tl-toggle input { position: absolute; opacity: 0; width: 0; height: 0; }
+.tl-toggle__track {
+  position: relative;
+  width: 26px; height: 15px;
+  flex: none;
+  border-radius: var(--tl-radius-full);
+  background: var(--tl-surface-3);
+  border: var(--tl-border) solid var(--tl-rule-strong);
+  transition: background var(--tl-dur-fast) var(--tl-ease), border-color var(--tl-dur-fast) var(--tl-ease);
+}
+.tl-toggle__track::after {
+  content: "";
+  position: absolute;
+  top: 1px; left: 1px;
+  width: 11px; height: 11px;
+  border-radius: var(--tl-radius-full);
+  background: var(--tl-ink-2);
+  transition: transform var(--tl-dur-fast) var(--tl-ease), background var(--tl-dur-fast) var(--tl-ease);
+}
+/* "On" is ink, not accent. The accent means where you are, and a row of
+   toggles is not a row of playheads. Fill and travel carry the state. */
+.tl-toggle input:checked + .tl-toggle__track {
+  background: var(--tl-ink);
+  border-color: var(--tl-ink);
+}
+.tl-toggle input:checked + .tl-toggle__track::after {
+  transform: translateX(11px);
+  background: var(--tl-ink-invert);
+}
+.tl-toggle input:checked ~ .tl-toggle__label { color: var(--tl-ink); }
+.tl-toggle input:focus-visible + .tl-toggle__track { outline: 2px solid var(--tl-focus-ring); outline-offset: 2px; }
+
+
+/* ── 07  Range slider ─────────────────────────────────────────────────────── */
+/* The thumb is a needle, not a knob — same object as the rail index. */
+
+.tl-range {
+  appearance: none;
+  -webkit-appearance: none;
+  width: 100%;
+  height: var(--tl-tap);
+  margin: 0;
+  background: transparent;
+  cursor: ew-resize;
+}
+.tl-range::-webkit-slider-runnable-track {
+  height: 2px;
+  background: var(--tl-rule-strong);
+  border-radius: 1px;
+}
+.tl-range::-webkit-slider-thumb {
+  -webkit-appearance: none;
+  width: 4px; height: 18px;
+  margin-top: -8px;
+  border: 0;
+  border-radius: 1px;
+  background: var(--tl-accent);
+  box-shadow: 0 0 0 1px var(--tl-surface);
+}
+.tl-range::-moz-range-track {
+  height: 2px;
+  background: var(--tl-rule-strong);
+  border-radius: 1px;
+}
+.tl-range::-moz-range-thumb {
+  width: 4px; height: 18px;
+  border: 0;
+  border-radius: 1px;
+  background: var(--tl-accent);
+  box-shadow: 0 0 0 1px var(--tl-surface);
+}
+.tl-range::-moz-range-progress { height: 2px; background: var(--tl-ink-3); }
+.tl-range:focus { outline: none; }
+.tl-range:focus-visible::-webkit-slider-thumb {
+  box-shadow: 0 0 0 2px var(--tl-surface), 0 0 0 4px var(--tl-focus-ring);
+}
+.tl-range:focus-visible::-moz-range-thumb {
+  box-shadow: 0 0 0 2px var(--tl-surface), 0 0 0 4px var(--tl-focus-ring);
+}
+@media (pointer: coarse) {
+  .tl-range::-webkit-slider-thumb { width: 6px; height: 22px; margin-top: -10px; }
+  .tl-range::-moz-range-thumb { width: 6px; height: 22px; }
+}
+
+
+/* ── 08  Time rail — the signature ────────────────────────────────────────── */
+/*
+   Not a slider in a card: the bottom edge of the application, ruled. Present
+   in every view, so it is the one object that makes five views feel like one
+   instrument. Engraving only — 1px marks at graded opacity, no bevels, no
+   metal gradients, no drop shadows.
+*/
+
+.tl-timerail {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr) auto;
+  align-items: stretch;
+  background: var(--tl-surface);
+  border-top: var(--tl-border) solid var(--tl-rule);
+  z-index: var(--tl-z-rail);
+  min-width: 0;
+}
+
+/* The index window — where the measurement is read off the scale. */
+.tl-timerail__year {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-end;
+  justify-content: center;
+  gap: 1px;
+  min-width: 122px;
+  padding: 0 var(--tl-space-5);
+  border-right: var(--tl-border) solid var(--tl-rule-soft);
+}
+.tl-year {
+  font-family: var(--tl-font-mono);
+  font-size: var(--tl-text-2xl);
+  font-weight: var(--tl-w-medium);
+  line-height: var(--tl-lh-flat);
+  letter-spacing: var(--tl-track-num);
+  font-variant-numeric: tabular-nums;
+  color: var(--tl-ink);
+}
+.tl-year__era {
+  font-family: var(--tl-font-mono);
+  font-size: var(--tl-text-2xs);
+  letter-spacing: 0.16em;
+  text-transform: uppercase;
+  color: var(--tl-ink-3);
+}
+
+/* The ruled scale */
+.tl-scale {
+  position: relative;
+  overflow: hidden;
+  min-width: 0;
+}
+.tl-scale__bands {
+  position: absolute; inset: 0;
+  background: linear-gradient(90deg,
+    var(--tl-era-a) 0 32%,
+    var(--tl-era-b) 32% 58%,
+    var(--tl-era-a) 58% 78%,
+    var(--tl-era-b) 78% 100%);
+}
+.tl-scale__era {
+  position: absolute;
+  top: var(--tl-space-3);
+  transform: translateX(-50%);
+  font-size: var(--tl-text-2xs);
+  letter-spacing: var(--tl-track-caps);
+  text-transform: uppercase;
+  color: var(--tl-ink-3);
+  white-space: nowrap;
+  pointer-events: none;
+}
+.tl-scale__label {
+  position: absolute;
+  top: 22px;
+  transform: translateX(-50%);
+  font-family: var(--tl-font-mono);
+  font-size: var(--tl-text-2xs);
+  font-variant-numeric: tabular-nums;
+  letter-spacing: var(--tl-track-xs);
+  color: var(--tl-ink-2);
+  white-space: nowrap;
+  pointer-events: none;
+}
+/* End-cap labels name the EXTENT of the scale rather than one tick, so they
+   are anchored to its ends. Centring them on a percentage makes them hang off
+   the end and get clipped by the readout as soon as the scale gets short. */
+.tl-scale__label--start { left: var(--tl-space-4); transform: none; }
+.tl-scale__label--end   { left: auto; right: var(--tl-space-4); transform: none; }
+
+/* Minor ticks every 2%, major every 10%. Both anchored to the bottom edge. */
+.tl-scale__ticks {
+  position: absolute;
+  left: 0; right: 0;
+  bottom: var(--tl-scale-base, 16px);
+  height: 6px;
+  background-image: repeating-linear-gradient(90deg, var(--tl-tick) 0 1px, transparent 1px 2%);
+  pointer-events: none;
+}
+.tl-scale__ticks--major {
+  height: 12px;
+  background-image: repeating-linear-gradient(90deg, var(--tl-tick-major) 0 1px, transparent 1px 10%);
+}
+/* The rule the ticks are engraved on. */
+.tl-scale::after {
+  content: "";
+  position: absolute;
+  left: 0; right: 0;
+  bottom: var(--tl-scale-base, 16px);
+  height: 1px;
+  background: var(--tl-rule-strong);
+  pointer-events: none;
+}
+/* The whole scale is the drag surface. */
+.tl-scale .tl-range {
+  position: absolute;
+  inset: 0;
+  width: 100%; height: 100%;
+}
+.tl-scale .tl-range::-webkit-slider-runnable-track { background: transparent; }
+.tl-scale .tl-range::-moz-range-track { background: transparent; }
+.tl-scale .tl-range::-webkit-slider-thumb { opacity: 0; }
+.tl-scale .tl-range::-moz-range-thumb { opacity: 0; }
+.tl-scale .tl-range:focus-visible { outline: 2px solid var(--tl-focus-ring); outline-offset: -2px; }
+
+/* The minium index. Also drawn into the canvas by .tl-index-line. */
+.tl-index {
+  position: absolute;
+  top: 0; bottom: 0;
+  left: var(--tl-index-pos);
+  width: 1px;
+  background: var(--tl-accent);
+  pointer-events: none;
+  z-index: 2;
+}
+.tl-index::before {
+  content: "";
+  position: absolute;
+  top: 0; left: 50%;
+  width: 9px; height: 7px;
+  transform: translateX(-50%);
+  background: var(--tl-accent);
+  clip-path: polygon(0 0, 100% 0, 50% 100%);
+}
+.tl-index__flag {
+  position: absolute;
+  bottom: 2px;
+  left: 4px;
+  padding: 1px var(--tl-space-2);
+  border-radius: 2px;
+  background: var(--tl-accent);
+  color: var(--tl-ink-on-accent);
+  font-family: var(--tl-font-mono);
+  font-size: var(--tl-text-2xs);
+  font-variant-numeric: tabular-nums;
+  letter-spacing: var(--tl-track-xs);
+  white-space: nowrap;
+}
+
+/* Transport */
+.tl-transport {
+  display: flex;
+  align-items: center;
+  gap: var(--tl-space-4);
+  padding: 0 var(--tl-space-5);
+  border-left: var(--tl-border) solid var(--tl-rule-soft);
+}
+
+
+/* ── 09  Tooltip ──────────────────────────────────────────────────────────── */
+
+.tl-tip {
+  position: absolute;
+  z-index: var(--tl-z-tip);
+  min-width: 152px;
+  max-width: 280px;
+  padding: var(--tl-space-4) var(--tl-space-5) var(--tl-space-5);
+  background: var(--tl-surface);
+  border: var(--tl-border) solid var(--tl-rule);
+  border-radius: var(--tl-radius-lg);
+  box-shadow: var(--tl-shadow-pop);
+  pointer-events: none;
+}
+.tl-tip__t {
+  font-size: var(--tl-text-base);
+  font-weight: var(--tl-w-semi);
+  letter-spacing: var(--tl-track-tight);
+  color: var(--tl-ink);
+}
+.tl-tip__s { font-size: var(--tl-text-sm); color: var(--tl-ink-2); margin-top: 1px; }
+.tl-tip__m {
+  display: flex; align-items: center; gap: var(--tl-space-3);
+  margin-top: var(--tl-space-4);
+  padding-top: var(--tl-space-3);
+  border-top: var(--tl-border) solid var(--tl-rule-soft);
+  font-family: var(--tl-font-mono);
+  font-size: var(--tl-text-2xs);
+  letter-spacing: var(--tl-track-caps);
+  text-transform: uppercase;
+  color: var(--tl-ink-3);
+  font-variant-numeric: tabular-nums;
+}
+
+/*
+   Confidence — how sure the source is, encoded by FORM and never by hue.
+
+   Reads as one gauge running full -> half -> empty, in a single neutral ink:
+     attested      solid disc        sourced and dated
+     approximate   half disc         scholarly estimate
+     contested     slashed ring      sources disagree
+
+   Hue-free on purpose. These marks sit inches from eight categorical data
+   colours, so a coloured status dot would read as a ninth domain; and form
+   survives colour-blindness, a greyscale print and a dimmed screen.
+*/
+.tl-conf { display: inline-flex; align-items: center; gap: var(--tl-space-3); }
+.tl-conf::before {
+  content: "";
+  width: 9px; height: 9px;
+  flex: none;
+  border-radius: var(--tl-radius-full);
+  background: var(--tl-conf-mark);
+  box-shadow: inset 0 0 0 1px var(--tl-conf-mark);
+}
+.tl-conf--attested::before { background: var(--tl-conf-mark); }
+.tl-conf--approximate::before {
+  background: linear-gradient(90deg, var(--tl-conf-mark) 0 50%, transparent 50%);
+}
+.tl-conf--contested::before {
+  background: linear-gradient(45deg,
+    transparent 0 40%, var(--tl-conf-mark) 40% 60%, transparent 60%);
+}
+
+
+/* ── 10  Popover — field notes ────────────────────────────────────────────── */
+/*
+   Where the long explanatory paragraph went. Onboarding is read once; a docked
+   strip taxes every session after that and costs 8-10% of the viewport.
+*/
+
+.tl-pop {
+  position: absolute;
+  z-index: var(--tl-z-pop);
+  width: 364px;
+  max-width: calc(100vw - var(--tl-space-8));
+  background: var(--tl-surface);
+  border: var(--tl-border) solid var(--tl-rule);
+  border-radius: var(--tl-radius-lg);
+  box-shadow: var(--tl-shadow-pop);
+  overflow: hidden;
+}
+.tl-pop[hidden] { display: none; }
+.tl-pop__hd {
+  display: flex;
+  align-items: flex-start;
+  gap: var(--tl-space-4);
+  padding: var(--tl-space-5) var(--tl-space-3) var(--tl-space-4) var(--tl-space-6);
+  border-bottom: var(--tl-border) solid var(--tl-rule-soft);
+}
+/* A label, not a location — demoted from accent so the popover never competes
+   with the index for the eye. */
+.tl-pop__eyebrow {
+  font-size: var(--tl-text-2xs);
+  font-weight: var(--tl-w-semi);
+  letter-spacing: var(--tl-track-caps);
+  text-transform: uppercase;
+  color: var(--tl-ink-3);
+}
+.tl-pop__title {
+  font-size: var(--tl-text-lg);
+  font-weight: var(--tl-w-semi);
+  letter-spacing: var(--tl-track-tight);
+  line-height: var(--tl-lh-tight);
+  color: var(--tl-ink);
+  text-wrap: balance;
+  margin-top: 2px;
+}
+.tl-pop__bd {
+  padding: var(--tl-space-5) var(--tl-space-6);
+  font-size: var(--tl-text-prose);
+  line-height: var(--tl-lh-prose);
+  color: var(--tl-ink-2);
+  max-width: var(--tl-measure);
+  display: flex;
+  flex-direction: column;
+  gap: var(--tl-space-5);
+  max-height: 46vh;
+  overflow-y: auto;
+}
+.tl-pop__bd strong { color: var(--tl-ink); font-weight: var(--tl-w-semi); }
+.tl-pop__bd em { color: var(--tl-ink); font-style: italic; }
+.tl-pop__src {
+  font-size: var(--tl-text-xs);
+  line-height: 1.5;
+  color: var(--tl-ink-3);
+  padding-top: var(--tl-space-4);
+  border-top: var(--tl-border) solid var(--tl-rule-soft);
+}
+.tl-pop__ft {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--tl-space-3) var(--tl-space-6);
+  padding: var(--tl-space-4) var(--tl-space-6);
+  border-top: var(--tl-border) solid var(--tl-rule-soft);
+  background: var(--tl-surface-2);
+}
+.tl-pop__key {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--tl-space-3);
+  font-size: var(--tl-text-xs);
+  color: var(--tl-ink-3);
+}
+/* Arrow */
+.tl-pop__arrow {
+  position: absolute;
+  top: -5px;
+  width: 9px; height: 9px;
+  background: var(--tl-surface);
+  border-left: var(--tl-border) solid var(--tl-rule);
+  border-top: var(--tl-border) solid var(--tl-rule);
+  transform: rotate(45deg);
+}
+
+
+/* ── 11  Legend, badges, keycaps ──────────────────────────────────────────── */
+
+.tl-legend { display: flex; flex-direction: column; gap: var(--tl-space-1); }
+.tl-legend__row {
+  display: grid;
+  grid-template-columns: 10px 1fr auto;
+  align-items: center;
+  gap: var(--tl-space-4);
+  padding: var(--tl-space-1) 0;
+  font-size: var(--tl-text-xs);
+  color: var(--tl-ink-2);
+}
+.tl-legend__sw {
+  width: 10px; height: 10px;
+  border-radius: 2px;
+  background: var(--tl-dot, var(--tl-ink-3));
+}
+.tl-legend__n {
+  font-family: var(--tl-font-mono);
+  font-size: var(--tl-text-2xs);
+  color: var(--tl-ink-3);
+  font-variant-numeric: tabular-nums;
+}
+
+.tl-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--tl-space-2);
+  height: 18px;
+  padding: 0 var(--tl-space-3);
+  border: var(--tl-border) solid var(--tl-rule);
+  border-radius: 2px;
+  font-family: var(--tl-font-mono);
+  font-size: var(--tl-text-2xs);
+  letter-spacing: var(--tl-track-xs);
+  text-transform: uppercase;
+  color: var(--tl-ink-3);
+}
+/* Emphasis without hue. --index is the ONLY accent-tinted badge, because it
+   is the only one that names a position in time. */
+.tl-badge--strong { color: var(--tl-ink); border-color: var(--tl-rule-strong); }
+.tl-badge--index { color: var(--tl-accent); border-color: var(--tl-accent); background: var(--tl-accent-soft); }
+
+.tl-kbd {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 18px; height: 18px;
+  padding: 0 var(--tl-space-3);
+  border: var(--tl-border) solid var(--tl-rule);
+  border-bottom-width: 2px;
+  border-radius: var(--tl-radius-xs);
+  background: var(--tl-surface-2);
+  font-family: var(--tl-font-mono);
+  font-size: var(--tl-text-2xs);
+  line-height: 1;
+  color: var(--tl-ink-2);
+}
+
+
+/* ── 12  Focus, scrollbars, motion, a11y ──────────────────────────────────── */
+
+:where(.tl-app) :is(button, [role="button"], a[href], input, select, textarea, summary, [tabindex]):focus-visible {
+  outline: 2px solid var(--tl-focus-ring);
+  outline-offset: 2px;
+}
+/* Rail children keep the ring inside so it is never clipped by the edge. */
+.tl-switch__item:focus-visible,
+.tl-timerail :is(button, input):focus-visible { outline-offset: -2px; }
+.tl-app :focus:not(:focus-visible) { outline: none; }
+
+.tl-app ::-webkit-scrollbar { width: 8px; height: 8px; }
+.tl-app ::-webkit-scrollbar-track { background: transparent; }
+.tl-app ::-webkit-scrollbar-thumb {
+  background: var(--tl-rule-strong);
+  border-radius: var(--tl-radius-full);
+  border: 2px solid transparent;
+  background-clip: padding-box;
+}
+.tl-app ::-webkit-scrollbar-thumb:hover { background: var(--tl-ink-3); background-clip: padding-box; }
+.tl-app ::-webkit-scrollbar-corner { background: transparent; }
+.tl-app * { scrollbar-width: thin; scrollbar-color: var(--tl-rule-strong) transparent; }
+
+.tl-sr {
+  position: absolute;
+  width: 1px; height: 1px;
+  margin: -1px; padding: 0;
+  overflow: hidden;
+  clip: rect(0 0 0 0);
+  clip-path: inset(50%);
+  white-space: nowrap;
+  border: 0;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .tl-app *, .tl-app *::before, .tl-app *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+    scroll-behavior: auto !important;
+  }
+}
+
+
+/* ── 13  Responsive ───────────────────────────────────────────────────────── */
+
+/* Gist line is the first thing to go. */
+@media (max-width: 1179px) { .tl-gist { display: none; } }
+@media (max-width: 1099px) { .tl-meta { display: none; } }
+
+/*
+   1023 and down: the switcher takes its own row.
+
+   The top rail is one flex line of mark + switcher + seg + gist + end, and the
+   switcher and the seg are both flex:none, so below about 980px the line simply
+   overflowed its grid column: the seg's right edge crossed the search field
+   (652 vs 626 at 900px) and "Horizontal" was sliced in half; by iPad portrait
+   the seg was off the end of the rail entirely, with nothing on screen to say
+   that a second projection existed. Everything was still technically reachable
+   through ⌘K, which is not the same as being findable.
+
+   Giving the switcher its own scrolling row costs 34px of stage and is the
+   same treatment the phone already got — the 760–1023 band was the only one
+   left without it. Panels stay panels here; only the rail changes.
+*/
+@media (max-width: 1023px) {
+  :root { --tl-panel-w: 232px; --tl-switch-row: 34px; }
+  .tl-switch__item { padding: 0 var(--tl-space-4); }
+  .tl-transport .tl-seg { display: none; }
+
+  .tl-rail {
+    grid-template-columns: auto minmax(0, 1fr) auto;
+    grid-template-rows: var(--tl-rail-top) var(--tl-switch-row);
+    padding: 0;
+    align-items: center;
+  }
+  .tl-mark      { grid-row: 1; grid-column: 1; padding-left: var(--tl-space-5); }
+  .tl-rail__end { grid-row: 1; grid-column: 3; padding-right: var(--tl-space-4); }
+  .tl-rail__mid {
+    grid-row: 2;
+    grid-column: 1 / -1;
+    height: var(--tl-switch-row);
+    overflow-x: auto;
+    overflow-y: hidden;
+    scrollbar-width: none;
+    scroll-snap-type: x proximity;
+    -webkit-overflow-scrolling: touch;
+    padding: 0 var(--tl-space-5);
+    /* The fade IS the affordance: it says the row runs on past the edge. */
+    mask-image: linear-gradient(90deg, #000 0, #000 calc(100% - 28px), transparent 100%);
+    -webkit-mask-image: linear-gradient(90deg, #000 0, #000 calc(100% - 28px), transparent 100%);
+  }
+  .tl-rail__mid::-webkit-scrollbar { display: none; }
+  .tl-switch { height: var(--tl-switch-row); }
+  .tl-switch__item { scroll-snap-align: start; }
+  /* app.css owns .tl-rail__mid's flex children (it loads later and had to stop
+     the switcher from stealing the gist's shrinkage); the matching overrides
+     for this row live there. */
+}
+
+/* Narrow: panels become a bottom sheet. */
+@media (max-width: 759px) {
+  .tl-panel {
+    position: fixed;
+    left: 0; right: 0; top: auto;
+    bottom: var(--tl-rail-time);
+    width: auto;
+    max-height: 46dvh;
+    border-radius: var(--tl-radius-sheet) var(--tl-radius-sheet) 0 0;
+    border-bottom: 0;
+    border-left: 0; border-right: 0;
+    box-shadow: var(--tl-shadow-sheet);
+    z-index: var(--tl-z-sheet);
+  }
+  .tl-panel--secondary { display: none; }
+  .tl-panel__grip {
+    display: block;
+    width: 32px; height: 3px;
+    margin: var(--tl-space-3) auto 0;
+    border-radius: var(--tl-radius-full);
+    background: var(--tl-rule-strong);
+    flex: none;
+  }
+  .tl-panel__hd { height: 34px; }
+
+  .tl-readout { display: none; }
+
+  .tl-timerail__year { min-width: 86px; padding: 0 var(--tl-space-4); }
+  .tl-year { font-size: var(--tl-text-xl); }
+  .tl-scale { --tl-scale-base: 14px; }
+  .tl-scale__era { display: none; }
+  .tl-scale__label { top: 9px; }
+  /* Only two anchors survive; the year readout carries the rest. */
+  .tl-scale__label[data-minor], .tl-scale__label[data-edge] { display: none; }
+  .tl-index__flag { display: none; }
+  .tl-transport { padding: 0 var(--tl-space-3); gap: var(--tl-space-2); }
+
+  .tl-pop {
+    left: var(--tl-space-4) !important;
+    right: var(--tl-space-4);
+    width: auto;
+  }
+  .tl-pop__arrow { display: none; }
+  .tl-pop__bd { max-height: 40dvh; }
+}

@@ -1,0 +1,18 @@
+{"spreads":[
+{"id":"printing","name":"Printing technology","kind":"technology","start":1439,"end":2026,"sharpness":0.25,
+ "weight":[[1439,0.2],[1470,1.2],[1500,3],[1600,4.5],[1800,7],[1900,9],[2026,8]],
+ "footprint":[{"year":1439,"lat":50.00,"lon":8.27,"radius":60,"intensity":0.2},
+              {"year":1470,"lat":48.80,"lon":9.20,"radius":420,"intensity":0.4},
+              {"year":1500,"lat":48.50,"lon":9.50,"radius":900,"intensity":0.6},
+              {"year":1600,"lat":48.00,"lon":8.00,"radius":1600,"intensity":0.75},
+              {"year":1900,"lat":40.00,"lon":0.00,"radius":9000,"intensity":0.95}],
+ "from":[],"to":[],"note":"Mainz 1439, then a diffusion frontier across Europe within 60 years"},
+{"id":"industrial-revolution","name":"Industrial Revolution","kind":"economy","start":1760,"end":1914,"sharpness":0.3,
+ "weight":[[1760,0.5],[1800,2.5],[1840,5],[1870,7.5],[1914,9]],
+ "footprint":[{"year":1760,"lat":53.40,"lon":-2.20,"radius":180,"intensity":0.3},
+              {"year":1800,"lat":53.00,"lon":-1.80,"radius":420,"intensity":0.55},
+              {"year":1850,"lat":50.50,"lon":3.00,"radius":1200,"intensity":0.7},
+              {"year":1914,"lat":48.00,"lon":-10.00,"radius":6000,"intensity":0.85}],
+ "from":[],"to":[],"note":"Lancashire outward; the reason the 19th century looks the way it does"}
+],
+"_note":"SEED ONLY — 2 of ~18 expected. The curation agent replaces this file with the full set."}
