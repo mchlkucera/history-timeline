@@ -38,11 +38,15 @@ export async function loadRelations(): Promise<Relations> {
   return REL;
 }
 
-export const KIND_ORDER = ['origin', 'part-of', 'enabled-by', 'caused', 'about', 'opposed-to', 'lineage'];
+// 'same-as' leads: it is not a relation between two things, it is the SAME thing
+// seen through two lanes — "Renaissance" in Arts and "The Renaissance" in Europe.
+// Both stay on screen because the lens is the information; selecting either has
+// to light the other at full strength, which a 0.6 "about" link would not do.
+export const KIND_ORDER = ['same-as', 'origin', 'part-of', 'enabled-by', 'caused', 'about', 'opposed-to', 'lineage'];
 // Relation kinds take DATA hues. 'part-of' used to be T.accent, i.e. minium, which by
 // doctrine means only "where you are" — it takes belief aubergine instead.
 export const kindColor = (k: string, T: Tokens): string => ({
-  'origin': T.accent2, 'part-of': T.s[6], 'enabled-by': T.s[2], 'caused': T.s[1],
+  'same-as': T.ink2, 'origin': T.accent2, 'part-of': T.s[6], 'enabled-by': T.s[2], 'caused': T.s[1],
   'about': T.s[0], 'opposed-to': T.s[7], 'lineage': T.ink3,
 } as Record<string, string>)[k] || T.ink2;
 
@@ -115,13 +119,31 @@ export function relOf(id: string): Map<string, { w: number; kind: string }> {
 }
 
 // ---------- the graded dimming ----------
-// unrelated is heavily dimmed but never gone; a relation's prominence is its weight.
-export function dimAlpha(id: string, sel: string | null, rels: Map<string, { w: number; kind: string }> | null): number {
+// Unrelated is dimmed but never gone; a relation's prominence is its weight.
+//
+// THE FLOOR IS PER VIEW, and that is the whole argument. Connections is a dense
+// mat of overlapping ribbons where 0.1 is what makes a selection readable at
+// all. The TIMELINE is not: there, the founder's whole reason for selecting
+// something is "what else was going on" — "I want to see Cubism in perspective:
+// what wars, what technology, what was going on in other spheres of my
+// interests" — and 0.1 answers that question by blanking the answer. Worse, a
+// thing with NO curated links (most of the Arts lane) dimmed the entire world
+// to 10% to light up nothing at all.
+//
+// The curve is rescaled off the floor rather than clamped to it, so the grading
+// stays monotone: at floor 0.42 a w=0.3 link is 0.55, still brighter than the
+// 0.42 context it sits in. At the default 0.1 this is the original curve to
+// within a few thousandths.
+export function dimAlpha(
+  id: string, sel: string | null,
+  rels: Map<string, { w: number; kind: string }> | null,
+  floor = 0.1,
+): number {
   if (!sel) return 1;
   if (id === sel) return 1;
   const r = rels && rels.get(id);
-  if (!r) return 0.1;                               // context, not erased
-  return 0.14 + 0.86 * Math.pow(r.w, 1.15);
+  if (!r) return floor;                             // context, not erased
+  return floor + (1 - floor) * Math.pow(r.w, 1.15);
 }
 /** The selection and its relations bypass level of detail — clicking a thing must
  *  never be able to hide one of its own relations. */

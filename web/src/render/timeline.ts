@@ -16,6 +16,8 @@ import {
 import {
   REL, SPREADCAT, peakOf, lvlOfWeight, regionOf, relOf, dimAlpha, lit, renderRelatedPanel,
 } from './relations';
+import { FOLD, roleWord } from './fold';
+import { SelCard } from './selcard';
 
 // ── projections of this state ───────────────────────────────────────────────
 // The Timeline group is ONE instrument shown two ways. vertical.ts reads d0/d1, log,
@@ -40,13 +42,76 @@ interface LEvent { ev: any[]; id: string; x0: number; row: number; lodA: number;
 interface LaneLayout {
   key: string; label: string; si: number | null; isCur: boolean;
   spreads: LSpread[]; events: LEvent[];
-  ns: number; ne: number; more: number;
+  ns: number; ne: number; more: number; exp: boolean;
+  isRegion: boolean; era: LSpread[]; eraRow: number; eraOut: string[];
   top: number; h: number; evTop: number;
 }
 interface Layout {
   lanes: LaneLayout[]; H: number; G: number; Wp: number;
   sel: string | null; rels: Map<string, { w: number; kind: string }> | null; q: string;
 }
+
+/* ── THE ERA ROW ──────────────────────────────────────────────────────────────
+
+   Biggest-first packing has one structural blind spot, and it is exactly the
+   thing the founder asks for by name: "what did the world look like, WHAT WARS
+   WERE THERE, what technology, what was going on in other spheres".
+
+   Rows are assigned ONCE per corpus, in (level, peak, duration) order, and that
+   last key is the trap: a four-year world war at level 1 is placed after
+   Farming, Printing, Railways and Electrification — level 1 and centuries long —
+   and lands in Europe's SEVENTH row, permanently. Promoting the wars to level 1
+   does not help, because the burial happens inside the level. Neither would a
+   peak proxy. Frame Cubism at 1875-1955 and Europe shows empires and technology
+   and no war at all.
+
+   So each REGION lane reserves at most one row for the window's own EPISODES.
+   "Episode" is not a new idea invented for this: it is the grammar's own word
+   for a bounded happening, and in the region lanes the hand-authored corpus is
+   exactly two types — 11 zones (long, territorial, already deduped against the
+   polities) and 17 episodes. The episodes ARE the buried class, and they are
+   the wars, the revolutions and the plagues: World War I and II, the Punic and
+   Thirty Years' Wars, the French, Haitian and Latin American revolutions, the
+   Black Death, the Opium War, the US Civil War.
+
+   An episode qualifies for the row when it is
+     · mostly inside the window            (≥ 80% of ITSELF is on screen),
+     · an episode OF this window, not the backdrop it sits on
+                                           (3% ≤ its extent ≤ 50% of the span),
+     · wide enough to read as a bar        (≥ 8px), and
+     · not already drawn.
+   The lowest level wins; ties go war-category first, then peak, then duration.
+
+   THE ROW IS THE LANE'S LOWEST-PRIORITY VISIBLE ROW, given right of way rather
+   than cleared: an episode takes only the space it actually collides with, so
+   whatever else was in that row and does not overlap it simply stays. Nothing is
+   added, so lane heights, the global height budget and the trim are all
+   untouched, and a window with no qualifying episode gets no reserved row at all.
+
+   AND IT MAY NOT OUTRANK ITS WAY IN. An episode evicts only things at its own
+   level or below. Without that guard the rule cheerfully traded Asia's Silk Road
+   (level 1, sixteen centuries) for Zheng He's treasure fleets (level 3, twenty-
+   eight years) at an 800–1500 window — the importance ladder inverted in the name
+   of surfacing an episode. World War I and II are level 1, so they still take the
+   marginal row from Telegraph and telecommunications, which is level 1 too.
+
+   Rows 0..n−2 never move, so zooming inside an era still cannot reshuffle what
+   you were looking at — the stability rule survives intact. */
+const ERA_MIN_PX = 8;          // narrower than this it is a tick, not a bar
+const ERA_MIN_FRAC = 0.03;     // an episode OF this window…
+const ERA_MAX_FRAC = 0.5;      // …not the backdrop it sits on
+const ERA_INSIDE = 0.8;        // and mostly on screen, not clipped by an edge
+const eraRank = (a: LSpread, b: LSpread) =>
+  a.it.lvl - b.it.lvl
+  || (a.it.cat === 'war' ? 0 : 1) - (b.it.cat === 'war' ? 0 : 1)
+  || b.it.peak - a.it.peak
+  || (b.it.end - b.it.start) - (a.it.end - a.it.start)
+  || a.it.start - b.it.start;
+
+// How dark the rest of the world goes when something is selected. NOT 0.1:
+// selection here means "frame this thing AGAINST the lanes", and the relation
+// links are secondary garnish — see the note on dimAlpha in relations.ts.
+const DIM_FLOOR = 0.42;
 
 // rectangle height by importance tier — the ONLY height variation permitted;
 // never a weight curve (founder decision 2).
@@ -65,6 +130,12 @@ export const TL = {
   // but never (except at the trim floor) past this.
   HMAX: 760,
   SP_PITCH: 24, EV_PITCH: 17, SPREAD_CAP: 6, EVENT_CAP: 3,
+  // Lanes the reader has opened past their row cap by pressing "+N more".
+  // Pressing it used to zoom one level of detail in, which could RAISE the
+  // number it had just named: more items pass the LOD threshold while the rows
+  // stay capped, so "+7 more" answered a click by saying "+11 more". It now
+  // does what it says — the lane keeps every row it has and the band grows.
+  expanded: new Set<string>(),
 
   // ---- the lane registry: bands and lenses unified -------------------------
   // Fixed order: CO deep time, then ON curated lanes in registry order, then the four
@@ -141,6 +212,15 @@ export const TL = {
       arr.push({
         id: evId(e), name: e[2], start: e[0], end: e[1], cat: e[6] || 'power',
         type: e[7] || 'episode', lvl: e[4] || 3, sharpness: sharpnessOf(e[7], e[9]),
+        // NOTE (not changed here, deliberately — it is the founder's call): a
+        // hand-authored spread has an importance LEVEL and no weight curve, so
+        // peak is 0, and the packer breaks ties inside a level by peak. Every
+        // curated polity therefore outranks every era, war and lifespan at the
+        // same level. Giving these a level-derived proxy (11 − 2·lvl, the exact
+        // inverse of lvlOfWeight's thresholds) was tried and does interleave
+        // them sensibly — but it does NOT lift World War I into Europe's first
+        // rows, because WWI is level 2 and fourteen level-1 spreads fill them
+        // first. See the report; the row cap is the real constraint.
         note: '', tags: e[5] || '', peak: 0, row: -1, ev: e,
       });
     }
@@ -204,7 +284,11 @@ export const TL = {
     const byLane = this.ensureCorpus();
     const lanes: LaneLayout[] = [];
     for (const def of this.laneDefs()) {
+      const laneId = def['key'];
       const isCur = def.kind === 'curated';
+      const isExp = this.expanded.has(laneId);
+      const spreadCap = isExp ? 999 : this.SPREAD_CAP;
+      const eventCap = isExp ? 10 : this.EVENT_CAP;
       // spreads: visible iff LOD alpha > 0.02 (lit items bypass LOD) and on screen
       const vis: LSpread[] = [];
       for (const it of (byLane.get(def.key) || [])) {
@@ -225,7 +309,7 @@ export const TL = {
       for (const v of vis) {
         const cr = rowMap.get(v.row)!;
         // the row cap spares search matches and the selection — neither may be hidden
-        if (cr >= this.SPREAD_CAP && !v.isMatch && v.it.id !== sel) { more++; continue; }
+        if (cr >= spreadCap && !v.isMatch && v.it.id !== sel) { more++; continue; }
         spreads.push({ ...v, row: cr });
       }
       // second compaction: capped-away rows close up under any spared rows above them
@@ -233,21 +317,37 @@ export const TL = {
       const rowMap2 = new Map(keptRows.map((r, i) => [r, i] as [number, number]));
       for (const v of spreads) v.row = rowMap2.get(v.row)!;
       const ns = keptRows.length;
+      // THE ZONE-CAP FOLD (fold.ts). A founding or dissolution event that
+      // duplicates a spread's cap is not a second fact: "Qin unifies China, 221
+      // BCE" IS the left edge of the Qin dynasty rectangle two rows above it.
+      // Two marks, one fact, and the dot is the weaker of the two. So the dot
+      // folds into the spread, which names it in its tooltip and its card.
+      //
+      // PER FRAME, and against what this lane is ACTUALLY DRAWING: zoom out
+      // until the Qin's fifteen years fall below the level of detail and the dot
+      // returns, because at that zoom it is the only mark carrying the fact.
+      const drawn = new Set(spreads.map(v => v.it.id));
+      const foldedMatch = new Set<string>();
       // events: per-frame pixel packing, today's laneEnd algorithm, end==0 only;
       // when no row is free the event is DROPPED to the overflow count.
       ctx.font = fontUI(11.5);
-      const evs = EVENTS.filter(e => e[3] === def.key && !e[1] && !this.off.has(e[6])).sort((a, b) => a[0] - b[0]);
-      const laneEnd = new Array(this.EVENT_CAP).fill(-1e18);
+      const evs = EVENTS.filter(e => e[3] === laneId && !e[1] && !this.off.has(e[6])).sort((a, b) => a[0] - b[0]);
+      const laneEnd = new Array(eventCap).fill(-1e18);
       const events: LEvent[] = [];
       let usedRows = 0;
       for (const ev of evs) {
         const id = evId(ev);
+        const title = ev[2];
+        const isMatch = !!q && (title.toLowerCase().includes(q) || ev[5].includes(q));
+        const fold = FOLD[title];
+        if (fold && drawn.has(fold.spread)) {
+          if (isMatch) foldedMatch.add(fold.spread);   // a search for it lands on its parent
+          continue;
+        }
         const lodA = lit(id, sel, rels) ? 1 : this.alphaFor(ev[4], span, isCur);
         if (lodA <= 0.02) continue;
         const x0 = this.x(ev[0], G, Wp);
         if (x0 < G - 40 || x0 > cw) continue;
-        const title = ev[2];
-        const isMatch = !!q && (title.toLowerCase().includes(q) || ev[5].includes(q));
         const labelW = ctx.measureText(title).width;
         let lane = laneEnd.findIndex(le => le < x0 - 4);
         let mode: 'right' | 'left' | 'none' = 'right';
@@ -263,7 +363,23 @@ export const TL = {
         usedRows = Math.max(usedRows, lane + 1);
         events.push({ ev, id, x0, row: lane, lodA, mode, labelW, isMatch });
       }
-      lanes.push({ key: def.key, label: def.label, si: def.si, isCur, spreads, events, ns, ne: usedRows, more, top: 0, h: 0, evTop: 0 });
+      if (foldedMatch.size) for (const v of spreads) if (foldedMatch.has(v.it.id)) v.isMatch = true;
+      // era-row candidates, gathered from everything VISIBLE (not just what
+      // survived the cap) — whether they are already drawn is decided after the
+      // global trim, which is the only point at which that is finally known.
+      const era = def.kind === 'region'
+        ? (byLane.get(laneId) || [])
+          .filter(it => it.type === 'episode')
+          .map(it => vis.find(v => v.it.id === it.id))
+          .filter((v): v is LSpread => !!v && this.isEraEpisode(v, span))
+          .sort(eraRank)
+        : [];
+      lanes.push({
+        key: laneId, label: def.label, si: def.si, isCur, spreads, events,
+        ns, ne: usedRows, more, exp: isExp,
+        isRegion: def.kind === 'region', era, eraRow: -1, eraOut: [],
+        top: 0, h: 0, evTop: 0,
+      });
     }
     // per-lane height; a lane with no visible content collapses to a 20px strip
     const hOf = (L: LaneLayout) => (L.ns || L.ne)
@@ -274,7 +390,11 @@ export const TL = {
     // even if still over (the canvas may exceed HMAX slightly, accepted).
     const SPREAD_FLOOR = 3;                            // a lane keeps up to 3 spread rows
     let rr = 0, guard = 400;
-    const noTrim = new Set<LaneLayout>();
+    // A lane the reader deliberately opened is not a trim candidate. The budget
+    // still governs every OTHER lane and the floor below is untouched, so the
+    // canvas grows and the section scrolls exactly as it already does whenever
+    // the content cannot be squeezed under HMAX.
+    const noTrim = new Set<LaneLayout>(lanes.filter(L => L.exp));
     while (lanes.reduce((a, L) => a + hOf(L), 0) + 34 > this.HMAX && guard-- > 0) {
       let m = SPREAD_FLOOR;
       for (const L of lanes) if (!noTrim.has(L) && L.ns > m) m = L.ns;
@@ -289,9 +409,9 @@ export const TL = {
         pick.ns = last;
         continue;
       }
-      let me = 1; for (const L of lanes) if (L.ne > me) me = L.ne;
+      let me = 1; for (const L of lanes) if (!L.exp && L.ne > me) me = L.ne;
       if (me > 1) {
-        const cands = lanes.filter(L => L.ne === me);
+        const cands = lanes.filter(L => !L.exp && L.ne === me);
         const pick = cands[(rr++) % cands.length];
         const last = pick.ne - 1;
         pick.more += pick.events.filter(e2 => e2.row === last).length;
@@ -303,6 +423,41 @@ export const TL = {
                   // HMAX slightly and the section scrolls; never loop on an
                   // unsatisfiable target
     }
+    // ---- THE ERA ROW (see the note above the constants) --------------------
+    // After the trim, because "is it already drawn" is only finally true here.
+    const clash = (c: LSpread, arr: LSpread[]) =>
+      arr.filter(o => c.it.start < o.it.end && o.it.start < c.it.end);
+    for (const L of lanes) {
+      if (!L.isRegion || L.ns < 2 || !L.era.length) continue;
+      const drawn = new Set(L.spreads.map(v => v.it.id));
+      const cands = L.era.filter(v => !drawn.has(v.it.id));
+      if (!cands.length) continue;
+      const best = cands[0].it.lvl;                   // era is pre-sorted by level
+      const victim = L.ns - 1;
+      const row = L.spreads.filter(v => v.row === victim);
+      // the same sparing the row cap already gives: a row holding the selection
+      // or a search hit is never disturbed
+      if (row.some(v => v.isMatch || v.it.id === sel)) continue;
+      let keep = row.slice();
+      const placed: LSpread[] = [];
+      const out: string[] = [];
+      for (const c of cands) {
+        if (c.it.lvl !== best) break;
+        if (clash(c, placed).length) continue;        // one row: no self-overlap
+        const evict = clash(c, keep);
+        if (evict.some(o => o.it.lvl < c.it.lvl)) continue;   // never outrank its way in
+        keep = keep.filter(o => !evict.includes(o));
+        out.push(...evict.map(o => o.it.name));
+        placed.push(c);
+      }
+      if (!placed.length) continue;
+      L.spreads = L.spreads.filter(v => v.row !== victim)
+        .concat(keep, placed.map(p => ({ ...p, row: victim })));
+      L.eraOut = out;                                  // the trade, kept inspectable
+      L.more = Math.max(0, L.more + out.length - placed.length);
+      L.eraRow = victim;
+    }
+
     let top = 0;
     for (const L of lanes) {
       L.top = top; L.h = hOf(L);
@@ -310,6 +465,18 @@ export const TL = {
       top += L.h;
     }
     return { lanes, H: top + 34, G, Wp, sel, rels, q };
+  },
+
+  /** Does this visible spread read as an EPISODE OF the current window? */
+  isEraEpisode(v: LSpread, span: number): boolean {
+    const it = v.it;
+    const ext = it.end - it.start;
+    if (ext <= 0) return false;
+    const ov = Math.min(it.end, this.d1) - Math.max(it.start, this.d0);
+    if (ov <= 0 || ov / ext < ERA_INSIDE) return false;   // clipped by an edge
+    const f = ext / span;
+    if (f < ERA_MIN_FRAC || f > ERA_MAX_FRAC) return false;
+    return (v.x1 - v.x0) >= ERA_MIN_PX;                   // legible as a bar
   },
 
   _lay: null as Layout | null,
@@ -322,6 +489,18 @@ export const TL = {
     return d ? { cw: d.cw, H: lay.H, ctx: d.ctx, lay } : null;
   },
   boxes: [] as any[],
+  /**
+   * What is under the cursor — LAST box wins, except that a SEARCH MATCH wins
+   * over everything. At a five-thousand-year span, Cubism (1907-22) is seven
+   * pixels wide and Surrealism (1924-66) starts three pixels into it: search
+   * for "cubism", get one hit, click the one thing lit on screen, and the plain
+   * last-wins test hands you Surrealism. If you searched for it, you meant it.
+   */
+  hitAt(mx: number, my: number) {
+    const inside = (b: any) => mx >= b.x && mx <= b.x + b.w && my >= b.y && my <= b.y + b.h;
+    if (this.q) { const m = this.boxes.findLast((b: any) => b.isMatch && inside(b)); if (m) return m; }
+    return this.boxes.findLast(inside);
+  },
   /** Register another projection of this state (vertical.ts). Repainted by paint(). */
   onProjection(fn: () => void) { PROJECTIONS.push(fn); },
   /** Register a projection that has to bring a named band into view (vertical.ts). */
@@ -390,7 +569,7 @@ export const TL = {
           const s = rowItems[i], it = s.it;
           const searchDim = q ? (s.isMatch ? 1 : 0.12) : 1;
           if (q && s.isMatch) hitCount++;
-          const dimA = dimAlpha(it.id, sel, rels) * searchDim;
+          const dimA = dimAlpha(it.id, sel, rels, DIM_FLOOR) * searchDim;
           const h = TIER_H[it.lvl] || 12;
           const [col, colL] = varyColor(catColor(it.cat, T), it.id);
           const fillA = clamp(0.75 * s.lodA * dimA, 0, 1);
@@ -443,7 +622,7 @@ export const TL = {
             x: mode === 'left' ? s.x0 - 11 - labelW : s.x0 - 2,
             y: yC - h / 2 - 2,
             w: (s.x1 - s.x0) + 4 + (mode === 'right' ? 10 + labelW : mode === 'left' ? 12 + labelW : 0),
-            h: h + 4, kind: 'spread', id: it.id, it, band: L.label,
+            h: h + 4, kind: 'spread', id: it.id, it, band: L.label, isMatch: s.isMatch,
           });
         }
       }
@@ -454,7 +633,7 @@ export const TL = {
         const title = E.ev[2];
         const searchDim = q ? (E.isMatch ? 1 : 0.12) : 1;
         if (q && E.isMatch) hitCount++;
-        const a = clamp(E.lodA * dimAlpha(E.id, sel, rels) * searchDim, 0, 1);
+        const a = clamp(E.lodA * dimAlpha(E.id, sel, rels, DIM_FLOOR) * searchDim, 0, 1);
         const yy = L.evTop + 8.5 + E.row * this.EV_PITCH;
         ctx.globalAlpha = a; ctx.fillStyle = catColor(E.ev[6], T);
         ctx.beginPath(); ctx.arc(E.x0, yy, 3.2, 0, 7); ctx.fill();
@@ -473,27 +652,44 @@ export const TL = {
         ctx.globalAlpha = 1;
         this.boxes.push({
           x: E.mode === 'left' ? E.x0 - 11 - E.labelW : E.x0 - 8, y: yy - 9,
-          w: 16 + (E.mode === 'none' ? 4 : E.labelW), h: 18, kind: 'ev', id: E.id, ev: E.ev, band: L.label,
+          w: 16 + (E.mode === 'none' ? 4 : E.labelW), h: 18, kind: 'ev', id: E.id, ev: E.ev,
+          band: L.label, isMatch: E.isMatch,
         });
       }
 
-      // ---- the "+N more" affordance: one LOD step in, anchored at the cursor ----
-      if (L.more > 0) {
+      // ---- the row-cap affordance: it OPENS the lane, it does not zoom ----
+      if (L.more > 0 || L.exp) {
         ctx.font = fontMono(10); ctx.fillStyle = T.ink3; ctx.textAlign = 'right';
-        const txt = `+${L.more} more · zoom`;
+        const txt = L.exp ? '− less' : `+${L.more} more`;
         ctx.fillText(txt, cw - 12, L.top + L.h - 6);
         const tw = ctx.measureText(txt).width;
-        this.boxes.push({ x: cw - 14 - tw, y: L.top + L.h - 17, w: tw + 8, h: 15, kind: 'more' });
+        this.boxes.push({
+          x: cw - 14 - tw, y: L.top + L.h - 17, w: tw + 8, h: 15,
+          kind: 'more', lane: L.key, band: L.label, exp: L.exp, more: L.more,
+        });
         ctx.textAlign = 'left';
       }
     }
 
-    // ---- the global time index: the one persistent accent mark --------------
+    // ---- the global time index: A STUB, NOT A MERIDIAN ----------------------
+    // This ran the full height in minium. So does the hover crosshair. And the
+    // shell's own .tl-index-line continued up from the rail in a THIRD place —
+    // the rail's scale is not this canvas's, so the two "set year" lines sat at
+    // different x while claiming the same year. His words: "let's not make the
+    // red line from the bottom go all the way to top — there's two lines
+    // battling now."
+    //
+    // So the set year is a short stub rising off the axis with its year above
+    // it, and the hover crosshair is the ONLY full-height vertical on the
+    // canvas. Red stub = the year you set. Crosshair = where your cursor is.
     const xg = this.x(TimeStore.year, G, Wp);
     if (xg >= G && xg <= cw - 4) {
-      ctx.strokeStyle = T.accent; ctx.globalAlpha = .9; ctx.lineWidth = 1.5;
-      ctx.beginPath(); ctx.moveTo(xg, 0); ctx.lineTo(xg, H - 30); ctx.stroke(); ctx.globalAlpha = 1;
-      yearPill(ctx, T, xg, 2, fmtBig(TimeStore.year));
+      const base = H - 30, tip = base - 34;
+      const gr = ctx.createLinearGradient(0, base, 0, tip);
+      gr.addColorStop(0, T.accent); gr.addColorStop(1, withA(T.accent, 0));
+      ctx.strokeStyle = gr; ctx.lineWidth = 1.5;
+      ctx.beginPath(); ctx.moveTo(xg, base); ctx.lineTo(xg, tip); ctx.stroke();
+      yearPill(ctx, T, xg, tip - 20, fmtBig(TimeStore.year));
     }
 
     // hover crosshair + year readout (the hover pill keeps the bottom edge)
@@ -523,10 +719,56 @@ export const TL = {
   },
   /** If the global moment is outside the window, centre the window on it. */
   ensureYearVisible() {
+    // …unless a deliberate framing is in flight. "In perspective" on Cubism
+    // asks for 1874-1954 while the global moment is still 1783, and this would
+    // otherwise yank the window straight back to 1783 the instant the tab
+    // switch repaints — the framing losing an argument with a courtesy.
+    if (this._holdYear) { this._holdYear = false; return; }   // one-shot: consumed here
     const y = TimeStore.year;
     if (y >= this.d0 && y <= this.d1) return;
     const s = this.span();
     this.animTo(y - s / 2, y + s / 2);
+  },
+  _holdYear: false,
+  /**
+   * THE CORE LOOP'S ONE MOVE: frame the window on something, WITHOUT touching
+   * the moment. animTo writes d0/d1 and nothing else, which is the whole
+   * contract — "In perspective" changes what you can see, never where you are.
+   */
+  frameTo(a: number, b: number) {
+    this._holdYear = true;
+    // Cleared on a macrotask, never synchronously: with prefers-reduced-motion
+    // animTo calls done() in the same tick as the click, which is BEFORE React
+    // has flushed the tab switch — so a synchronous clear would hand the flag
+    // back just in time for renderTab() to undo the framing.
+    this.animTo(Math.max(a, YMIN), Math.min(b, YMAX), () => {
+      SelCard.reanchor();
+      setTimeout(() => { this._holdYear = false; }, 0);
+    });
+  },
+
+  /**
+   * Empty the search. Pressing "In perspective" means "now show me its world",
+   * and a live query dims everything that is not a hit to 12% — which is the
+   * exact opposite. You searched to FIND the thing; you found it; the box
+   * visibly empties and the world comes back.
+   */
+  clearSearch() {
+    if (!this.q) return;
+    this.q = '';
+    const box = $<HTMLInputElement>('#searchBox'); if (box) box.value = '';
+    const cnt = $('#searchCnt'); if (cnt) cnt.textContent = '';
+  },
+  /** A hit box in canvas CSS pixels, as a viewport rect the card can dodge. */
+  rectOf(b: { x: number; y: number; w: number; h: number }): DOMRect {
+    const r = this.cv.getBoundingClientRect();
+    return new DOMRect(r.left + b.x, r.top + b.y, b.w, b.h);
+  },
+  /** Where a selected id is on screen right now, or null if it is not drawn. */
+  anchorOf(id: string): DOMRect | null {
+    if (!this.cv || !this.cv.clientWidth) return null;
+    const b = this.boxes.find(bx => bx.id === id);
+    return b ? this.rectOf(b) : null;
   },
 
   _storesBound: false,
@@ -585,15 +827,21 @@ export const TL = {
         if (nv0 < lo) { nv1 += (lo - nv0); nv0 = lo; if (nv1 > hi) nv1 = hi; }
         this.d0 = ty(nv0); this.d1 = ty(nv1); this.paint(); return;
       }
-      const b = this.boxes.findLast(b => mx >= b.x && mx <= b.x + b.w && my >= b.y && my <= b.y + b.h);
+      const b = this.hitAt(mx, my);
       this.render();
-      if (b && b.kind === 'more') { hideTip(); cv.style.cursor = 'pointer'; return; }
+      if (b && b.kind === 'more') {
+        showTip(e.clientX, e.clientY, b.exp
+          ? `<div class=t>${b.band}</div><div class=m>Collapse this lane back to its row cap.</div>`
+          : `<div class=t>${b.band}</div><div class=m>${b.more} more row${b.more === 1 ? '' : 's'} in this lane. Click to open the lane — the band grows, the zoom does not move.</div>`);
+        cv.style.cursor = 'pointer'; return;
+      }
       if (b && b.kind === 'spread') {
         const it = b.it; const cat = CATBY[it.cat];
         showTip(e.clientX, e.clientY, `<div class=t>${it.name}</div><div class=m>${fmtBig(it.start)} – ${fmtY(it.end)} · ${b.band}</div>` +
           `<div class=m>${cat ? cat.name : ''} · ${it.type}</div>` +
           (it.note ? `<div class=m>${it.note}</div>` : '') +
-          `<div class=m>importance ${'●'.repeat(6 - it.lvl)}${'○'.repeat(it.lvl - 1)} (${it.lvl}) · click to select · Wikipedia in the Related panel</div>`);
+          foldLines(it.id) +
+          `<div class=m>importance ${'●'.repeat(6 - it.lvl)}${'○'.repeat(it.lvl - 1)} (${it.lvl}) · click to select</div>`);
         cv.style.cursor = 'pointer';
       } else if (b) {
         const [y0, y1, t, , lvl] = b.ev; const cat = CATBY[b.ev[6]], typ = b.ev[7], pl = b.ev[8];
@@ -612,13 +860,18 @@ export const TL = {
         TimeStore.set(Math.round(this.ix(mx, G, Wp)), 'tl');
         return;
       }
-      const b = this.boxes.findLast(b => mx >= b.x && mx <= b.x + b.w && my >= b.y && my <= b.y + b.h);
-      if (b && b.kind === 'more') {                    // one LOD step in, anchored at the cursor
-        this.zoomBy(this.ix(mx, G, Wp), 0.42);
+      const b = this.hitAt(mx, my);
+      if (b && b.kind === 'more') {                    // open (or close) the lane — never zoom
+        if (b.lane) {
+          if (this.expanded.has(b.lane)) this.expanded.delete(b.lane); else this.expanded.add(b.lane);
+        }
+        hideTip();
         this.paint();
         return;
       }
-      SelStore.set(b ? b.id : null);                   // click means select; empty canvas clears
+      // Click means select, and the card appears BESIDE the mark — never over
+      // it. Empty canvas clears the selection, exactly as before.
+      SelCard.select(b ? b.id : null, b ? this.rectOf(b) : null);
     });
     cv.addEventListener('pointerleave', () => { hideTip(); this.hoverX = null; this.render(); });
     this.syncChips();
@@ -754,6 +1007,18 @@ export const TL = {
     if (cnt) cnt.textContent = `${CATS.length - this.off.size} of ${CATS.length}`;
   },
 };
+
+/** The founding/dissolution events a spread has swallowed, as tooltip lines. */
+function foldLines(id: string): string {
+  let out = '';
+  for (const t in FOLD) {
+    if (FOLD[t].spread !== id) continue;
+    const ev = EVENTS.find(e => !e[1] && e[2] === t);
+    if (!ev) continue;
+    out += `<div class=m><b>${roleWord(FOLD[t].role)}</b> — ${t}, ${fmtY(ev[0])}</div>`;
+  }
+  return out;
+}
 
 // ONE container, shared by both projections (#grammarRowV, in the disclosure at the
 // foot of the Timeline panel). Two visual categories now: spreads (rectangles, sharp

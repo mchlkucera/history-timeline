@@ -19,7 +19,7 @@
    IntersectionObserver in init() for why, and for what actually stops the frame
    loop when you leave.
    ============================================================================= */
-import { $, repaintOnFonts, tokens, fmtY } from './shared';
+import { $, repaintOnFonts, tokens, fmtY, SelStore } from './shared';
 import type {
   CubeEngine, CubeState, CutInfo, MeshRes, Projection, SliceInfo,
   SolidMode, Spacing, CubeStats, TraceInfo, ViewName,
@@ -168,6 +168,24 @@ export const Cube = {
         }
       }).observe(cv);
     }
+
+    /**
+     * SELECTION IS GLOBAL, so a polity chosen on the timeline means something
+     * here too — but only while the block is on screen. Retracing costs a
+     * 100–400 ms remesh, and paying it for every click on a timeline the reader
+     * is currently looking at, into a canvas they are not, would be a tax with
+     * no beneficiary. Off screen the id is remembered instead (S.polity), so
+     * arriving here later still lands on the right trace; and the card's
+     * "Trace in cube" is the explicit route that always works.
+     */
+    SelStore.subscribe(() => {
+      const id = SelStore.id;
+      if (!id || !id.startsWith('polity:')) return;
+      const pid = id.slice(7);
+      if (pid === this.S.polity) return;
+      if (!cv.clientWidth) { this.S.polity = pid; return; }   // hidden — remember only
+      this.select(pid);
+    });
 
     this.paint();
     this.busy(null);

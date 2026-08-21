@@ -425,6 +425,16 @@ html:has(body.tl-body) { height: 100%; overflow: hidden; }
   .tl-col > .tl-panel--br { margin-top: auto; }
   /* Prose yields to controls, down to a floor of a header plus two lines. */
   .tl-col > .tl-panel--secondary { flex-shrink: 999; min-height: 92px; }
+
+  /*
+     …EXCEPT a panel the reader went and ASKED FOR, which outranks a panel that
+     is simply always there. The timeline's "Related" list is opened on purpose,
+     from the selection card's "All connections →", and under the rule above it
+     opened into a 60px window holding an 868px list — thirteen ranked relations
+     behind a scrollbar nobody can see. Standing controls scroll instead; their
+     body is a scroller already, and they are not what you just clicked.
+  */
+  .tl-col > .tl-panel--request { flex-shrink: 1; min-height: min(44vh, 320px); }
 }
 /* Below 760 the panels are fixed bottom sheets and the column must not exist. */
 @media (max-width: 759px) { .tl-col { display: contents; } }
@@ -551,6 +561,189 @@ html:has(body.tl-body) { height: 100%; overflow: hidden; }
   gap: var(--tl-space-5);
   padding-top: var(--tl-space-5);
 }
+
+
+/* ── 05b  The selection card ──────────────────────────────────────────────────
+
+   A reading of the current selection, placed BESIDE the thing that was clicked.
+   It is not a modal and must not behave like one: no backdrop, no focus trap,
+   no scroll lock. The canvas underneath stays live — you can keep panning and
+   zooming while it is open, which is the whole reason it is a card and not a
+   dialog. selcard.ts positions it (right / left / below / above the anchor,
+   clamped into the viewport) and guarantees it never covers its own subject.
+
+   NO ACCENT IN HERE. Minium means "where you are" — the index, the playhead,
+   the set year. A card about a THING is not a place in time, so it is built
+   from the panel's own surface, rule and ink, exactly like the docked panel it
+   replaces. The primary action borrows .btn.hero's ink block for weight.
+*/
+.tl-selcard {
+  position: fixed;
+  z-index: var(--tl-z-pop);
+  width: 288px;
+  max-height: min(72vh, 560px);
+  overflow-y: auto;
+  overscroll-behavior: contain;
+  display: flex;
+  flex-direction: column;
+  gap: var(--tl-space-4);
+  padding: var(--tl-space-5);
+  background: var(--tl-surface-over);
+  -webkit-backdrop-filter: blur(14px) saturate(1.3);
+  backdrop-filter: blur(14px) saturate(1.3);
+  border: var(--tl-border) solid var(--tl-rule);
+  border-radius: var(--tl-radius-md);
+  box-shadow: var(--tl-shadow-pop);
+  color: var(--tl-ink);
+  font-family: var(--tl-font-ui);
+}
+.tl-selcard[hidden] { display: none; }
+
+.tl-selcard__hd { display: flex; align-items: flex-start; gap: var(--tl-space-4); }
+.tl-selcard__name {
+  margin: 0 auto 0 0;
+  font-size: var(--tl-text-lg);
+  font-weight: var(--tl-w-semi);
+  letter-spacing: var(--tl-track-tight);
+  line-height: var(--tl-lh-tight);
+  color: var(--tl-ink);
+}
+.tl-selcard__x {
+  flex: none;
+  width: 22px; height: 22px;
+  margin: -2px -2px 0 0;
+  display: grid; place-items: center;
+  padding: 0;
+  border: 0; border-radius: var(--tl-radius-xs);
+  background: transparent;
+  color: var(--tl-ink-3);
+  cursor: pointer;
+}
+.tl-selcard__x:hover { background: var(--tl-hover); color: var(--tl-ink); }
+.tl-selcard__x svg { width: 13px; height: 13px; }
+
+/* A DATE IS A MEASUREMENT. */
+.tl-selcard__dates {
+  margin-top: -2px;
+  font-family: var(--tl-font-mono);
+  font-size: var(--tl-text-xs);
+  font-variant-numeric: tabular-nums;
+  letter-spacing: var(--tl-track-num);
+  color: var(--tl-ink-2);
+}
+.tl-selcard__note {
+  font-size: var(--tl-text-sm);
+  line-height: var(--tl-lh-ui);
+  color: var(--tl-ink-2);
+}
+.tl-selcard__tags { display: flex; align-items: center; flex-wrap: wrap; gap: var(--tl-space-3); }
+.tl-selcard__chip {
+  display: inline-flex; align-items: center; gap: var(--tl-space-3);
+  padding: 2px var(--tl-space-3);
+  border: var(--tl-border) solid var(--tl-rule);
+  border-radius: 3px;
+  font-size: var(--tl-text-2xs);
+  letter-spacing: var(--tl-track-caps);
+  text-transform: uppercase;
+  color: var(--tl-ink-2);
+  white-space: nowrap;
+}
+.tl-selcard__chip i { width: 7px; height: 7px; border-radius: var(--tl-radius-full); flex: none; }
+.tl-selcard__kind {
+  font-size: var(--tl-text-2xs);
+  letter-spacing: var(--tl-track-caps);
+  text-transform: uppercase;
+  color: var(--tl-ink-3);
+}
+
+/* A folded zone cap: the founding or dissolution event this spread swallowed. */
+.tl-selcard__fold {
+  font-size: var(--tl-text-xs);
+  line-height: var(--tl-lh-tight);
+  color: var(--tl-ink-2);
+  padding-left: var(--tl-space-4);
+  border-left: 2px solid var(--tl-rule-strong);
+}
+.tl-selcard__fold b { font-weight: var(--tl-w-semi); color: var(--tl-ink); }
+
+/* The honest line — "not on the map in 1776". Stated, never accented: an
+   absence is information, not an error. */
+.tl-selcard__honest {
+  font-family: var(--tl-font-mono);
+  font-size: var(--tl-text-2xs);
+  letter-spacing: var(--tl-track-xs);
+  color: var(--tl-ink-3);
+  padding: var(--tl-space-3) var(--tl-space-4);
+  background: var(--tl-surface-2);
+  border-radius: var(--tl-radius-xs);
+}
+
+.tl-selcard__acts { display: flex; flex-wrap: wrap; gap: var(--tl-space-3); }
+.tl-selcard__acts > .btn { flex: 1 1 auto; }
+
+.tl-selcard__rels {
+  display: flex; flex-direction: column;
+  border-top: var(--tl-border) solid var(--tl-rule-soft);
+  padding-top: var(--tl-space-3);
+}
+.tl-selcard__rels--none {
+  font-size: var(--tl-text-xs);
+  color: var(--tl-ink-3);
+  padding-top: var(--tl-space-4);
+}
+.tl-selcard__rel {
+  display: flex; align-items: baseline; gap: var(--tl-space-4);
+  width: 100%;
+  padding: var(--tl-space-2) 0;
+  border: 0; background: transparent;
+  text-align: left;
+  cursor: pointer;
+  color: inherit;
+}
+.tl-selcard__rel .n {
+  flex: 1 1 auto;
+  min-width: 0;
+  overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+  font-size: var(--tl-text-sm);
+  color: var(--tl-ink-2);
+}
+.tl-selcard__rel:hover .n { color: var(--tl-ink); }
+.tl-selcard__rel .k {
+  flex: none;
+  font-family: var(--tl-font-mono);
+  font-size: var(--tl-text-2xs);
+  color: var(--tl-ink-3);
+}
+.tl-selcard__all {
+  align-self: flex-start;
+  padding: 0;
+  border: 0; background: transparent;
+  font-size: var(--tl-text-xs);
+  color: var(--tl-ink-2);
+  text-decoration: underline;
+  text-decoration-color: var(--tl-rule-strong);
+  text-underline-offset: 2px;
+  cursor: pointer;
+}
+.tl-selcard__all:hover { color: var(--tl-ink); text-decoration-color: var(--tl-ink-3); }
+
+/* Narrow: the card becomes the same bottom sheet the panels become, so there is
+   ONE sheet grammar on a phone rather than two competing ones. */
+@media (max-width: 759px) {
+  .tl-selcard {
+    left: 0 !important; right: 0;
+    top: auto !important;
+    bottom: var(--tl-rail-time);
+    width: auto;
+    max-height: 52dvh;
+    border-radius: var(--tl-radius-sheet) var(--tl-radius-sheet) 0 0;
+    border-bottom: 0; border-left: 0; border-right: 0;
+    box-shadow: var(--tl-shadow-sheet);
+    z-index: var(--tl-z-sheet);
+    padding-bottom: var(--tl-space-6);
+  }
+}
+
 
 
 /* ── 06  Buttons, fields, chips, toggles, segments ────────────────────────── */

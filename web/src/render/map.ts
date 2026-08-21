@@ -3,10 +3,11 @@
 // Ported from prototypes/partB.html. Only change: `cv` is resolved in init() instead of
 // at module load, because in Next the module is evaluated before the DOM exists.
 import {
-  $, GEO, YEARS, CAPSULES, TimeStore, clamp, fitCanvas, fmtY, featureAt, fontUI, repaintOnFonts, showTip, hideTip, sovColor,
-  tokens, gotoTab,
+  $, GEO, YEARS, CAPSULES, SelStore, TimeStore, clamp, fitCanvas, fmtY, featureAt, fontUI,
+  repaintOnFonts, showTip, hideTip, sovColor, tokens, gotoTab,
 } from './shared';
 import { Core } from './core';
+import { describe, territoryAt } from './subject';
 
 export const WorldMap = {
   cv: null as unknown as HTMLCanvasElement, ix: 11, k: 1, tx: 0, ty: 0, playing: null as any,
@@ -29,6 +30,37 @@ export const WorldMap = {
     });
   },
   year() { return YEARS[this.ix]; },
+
+  /**
+   * THE SELECTED POLITY'S TERRITORY IN THIS SNAPSHOT — or nothing at all.
+   *
+   * The join runs through the time-gated alias table in public/data/
+   * polities.json (subject.ts), the same one the cube traces with: polity id →
+   * snapshot year → the sovereign strings the border data actually uses that
+   * year. Looked up PER SNAPSHOT and never pooled across them, because the
+   * whole value of the table is that "Egypt" means Ancient Egypt in 3000 BCE
+   * and nothing whatsoever in 1994.
+   *
+   * null means "nothing is selected, draw the world as it is". An EMPTY SET
+   * means "something is selected and it is honestly not here" — and in that
+   * case the map dims nothing and the Reading capsule says so, because dimming
+   * the whole world to highlight nothing is a map telling you it found
+   * something.
+   */
+  highlight(): Set<string> | null {
+    const s = describe(SelStore.id);
+    if (!s || !s.polity) return null;
+    const hit = territoryAt(s.polity, this.year());
+    return hit.size ? hit : null;
+  },
+
+  /** Move to the snapshot nearest a year WITHOUT writing TimeStore — the map
+   *  follows the global moment here, it does not set it. */
+  syncToYear(year: number) {
+    let best = 0, bd = Infinity;
+    for (let i = 0; i < YEARS.length; i++) { const d = Math.abs(YEARS[i] - year); if (d < bd) { bd = d; best = i; } }
+    this.ix = best;
+  },
   size() {
     if (!this.cv) return null;
     const cw = this.cv.clientWidth || this.cv.parentElement!.clientWidth; if (!cw) return null;
@@ -48,10 +80,24 @@ export const WorldMap = {
     for (let lat = -60; lat <= 85; lat += 30) { ctx.moveTo(0, this.py(lat)); ctx.lineTo(this.MW, this.py(lat)); }
     ctx.stroke(); ctx.globalAlpha = 1;
     const paths = this.buildPaths(y);
+    const hi = this.highlight();
+    const onSel = (f: any) => !!hi && (hi.has(f.sov) || hi.has(f.name));
     ctx.lineWidth = 0.7 / (this.k * s0);
     for (const { f, p } of paths) {
-      ctx.fillStyle = sovColor(f.sov); ctx.globalAlpha = .82;
-      ctx.fill(p, 'evenodd'); ctx.globalAlpha = .9; ctx.strokeStyle = T.stroke; ctx.stroke(p);
+      const on = !hi || onSel(f);
+      ctx.fillStyle = sovColor(f.sov);
+      ctx.globalAlpha = hi ? (on ? .95 : .35) : .82;
+      ctx.fill(p, 'evenodd');
+      ctx.globalAlpha = hi && !on ? .28 : .9;
+      ctx.strokeStyle = T.stroke; ctx.stroke(p);
+    }
+    // the selection outline, drawn last so it is never cut by a neighbour
+    if (hi) {
+      ctx.globalAlpha = 1;
+      ctx.lineWidth = 1.7 / (this.k * s0);
+      ctx.strokeStyle = T.ink;
+      for (const { f, p } of paths) if (onSel(f)) ctx.stroke(p);
+      ctx.lineWidth = 0.7 / (this.k * s0);
     }
     ctx.globalAlpha = 1;
     const scale = this.k * s0;
@@ -72,7 +118,19 @@ export const WorldMap = {
     ($('#yearSlider') as HTMLInputElement).value = String(this.ix);
     $('#yearSlider')!.setAttribute('aria-valuetext', fmtY(y));
     const near = TimeStore.year !== y ? `Nearest snapshot to <b>${fmtY(TimeStore.year)}</b> — ` : '';
-    $('#capsule')!.innerHTML = `${near}<b>The world in ${fmtY(y)}.</b> ${CAPSULES[String(y)] || ''}`;
+    // The selection's own line comes FIRST: if you pressed "See on map", the
+    // answer to "where is it" outranks the capsule prose about the year.
+    const sel = describe(SelStore.id);
+    let lede = '';
+    if (sel && sel.polity) {
+      const when = TimeStore.year === y ? fmtY(y) : `${fmtY(TimeStore.year)} (nearest snapshot ${fmtY(y)})`;
+      const n = hi ? hi.size : 0;
+      const span = `${fmtY(sel.start)} – ${fmtY(sel.end)}`;
+      lede = n
+        ? `<b>${sel.name}</b> · ${span} · ${n} ${n === 1 ? 'territory' : 'territories'} highlighted in ${when}.<br>`
+        : `<b>${sel.name}</b> · ${span} · <b>not on the map in ${when}</b>.<br>`;
+    }
+    $('#capsule')!.innerHTML = `${lede}${near}<b>The world in ${fmtY(y)}.</b> ${CAPSULES[String(y)] || ''}`;
   },
   screenToLonLat(sx: number, sy: number) {
     const dim = this.size()!; const s0 = dim.s0;
@@ -89,6 +147,9 @@ export const WorldMap = {
       this.ix = best;
       this.render();
     });
+    // SelStore is global, so the map has to answer it too — this is what makes
+    // a selection made on the timeline still mean something over here.
+    SelStore.subscribe(() => this.render());
     $('#yearSlider')!.addEventListener('input', (e: any) => { this.ix = +e.target.value; this.render(); TimeStore.set(YEARS[this.ix], 'map'); });
     $('#btn1776')!.addEventListener('click', () => { this.stop(); this.ix = YEARS.indexOf(1783); this.render(); TimeStore.set(1776, 'ui'); });
     $('#btnReset')!.addEventListener('click', () => { this.k = 1; this.tx = 0; this.ty = 0; this.render(); });

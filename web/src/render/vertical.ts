@@ -43,6 +43,7 @@ import {
   withA, type Tokens,
 } from './shared';
 import { dimAlpha, relOf } from './relations';
+import { SelCard } from './selcard';
 import { TL } from './timeline';
 
 // year pill at the cursor — rotated: sits on the left axis, vertically centred on the
@@ -344,7 +345,7 @@ export const VT = {
         const [y0, y1, title, , lvl] = ev; const cat = ev[6], typ = ev[7];
         let a = this.alphaOf(ev, isLens, key, GY, Hp, PB);
         if (!a) continue;
-        a *= dimAlpha(evId(ev), SelStore.id, rels);   // graded selection dimming
+        a *= dimAlpha(evId(ev), SelStore.id, rels, 0.42);   // graded selection dimming, timeline floor
         const ya = this.y(y0, GY, Hp), yb = y1 ? this.y(y1, GY, Hp) : ya;
         const top = Math.min(ya, yb), bot = Math.max(ya, yb);
         const isMatch = q && ((title.toLowerCase().includes(q)) || ev[5].includes(q));
@@ -584,6 +585,17 @@ export const VT = {
   },
 
   hit(mx: number, my: number) { return this.boxes.findLast(b => b.vw > 0 && mx >= b.vx && mx <= b.vx + b.vw && my >= b.y && my <= b.y + b.h); },
+  /** A hit box in canvas CSS pixels, as a viewport rect the card can dodge. */
+  rectOf(b: any): DOMRect {
+    const r = this.cv.getBoundingClientRect();
+    return new DOMRect(r.left + (b.vx ?? b.x), r.top + b.y, b.vw ?? b.w, b.h);
+  },
+  /** Where a selected id is drawn right now, or null if it is not on screen. */
+  anchorOf(id: string): DOMRect | null {
+    if (!this.cv || !this.cv.clientWidth) return null;
+    const b = this.boxes.find((bx: any) => bx.vw > 0 && evId(bx.ev) === id);
+    return b ? this.rectOf(b) : null;
+  },
   panTo(x: number) { this.panX = x; this.render(); },
   pillAt(mx: number, my: number) { return (this._pills || []).find(p => mx >= p.x && mx <= p.x + p.w && my >= p.y - 2 && my <= p.y + p.h + 2); },
   panAnim(to: number) {
@@ -673,7 +685,9 @@ export const VT = {
         return;
       }
       const b = this.hit(mx, my);
-      SelStore.set(b ? evId(b.ev) : null);             // click means select; empty clears
+      // Click means select, and the card opens beside the mark — never over it.
+      // Empty canvas clears the selection, exactly as before.
+      SelCard.select(b ? evId(b.ev) : null, b ? this.rectOf(b) : null);
     });
     cv.addEventListener('pointerleave', () => { hideTip(); this.hoverY = null; this.render(); });
     cv.style.cursor = 'grab';

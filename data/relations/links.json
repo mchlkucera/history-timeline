@@ -2033,6 +2033,60 @@
    "b": "event:Dvořák born",
    "w": 1.0,
    "kind": "part-of"
+  },
+  {
+   "a": "lane:AR:renaissance",
+   "b": "spread:renaissance",
+   "w": 1.0,
+   "kind": "same-as"
+  },
+  {
+   "a": "lane:DS:iphone-unveiled",
+   "b": "event:iPhone",
+   "w": 1.0,
+   "kind": "same-as"
+  },
+  {
+   "a": "event:Indus Valley civilization",
+   "b": "polity:indus-valley-civilization",
+   "w": 1.0,
+   "kind": "same-as"
+  },
+  {
+   "a": "event:Shang dynasty — Chinese writing",
+   "b": "polity:shang-dynasty",
+   "w": 1.0,
+   "kind": "same-as"
+  },
+  {
+   "a": "event:Maurya Empire unites India",
+   "b": "polity:maurya-empire",
+   "w": 1.0,
+   "kind": "same-as"
+  },
+  {
+   "a": "event:Gupta golden age of India",
+   "b": "polity:gupta-empire",
+   "w": 1.0,
+   "kind": "same-as"
+  },
+  {
+   "a": "event:Tang dynasty — cosmopolitan China",
+   "b": "polity:tang-dynasty",
+   "w": 1.0,
+   "kind": "same-as"
+  },
+  {
+   "a": "event:Song dynasty — paper money, gunpowder",
+   "b": "polity:song-dynasty",
+   "w": 1.0,
+   "kind": "same-as"
+  },
+  {
+   "a": "event:Olmec — first American civilization",
+   "b": "polity:olmec-civilization",
+   "w": 1.0,
+   "kind": "same-as"
   }
  ]
 }

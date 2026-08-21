@@ -24,6 +24,8 @@
 import { useCallback, useEffect, useRef, useState, useSyncExternalStore } from 'react';
 import { initData, setGotoTab, setLanes, SelStore, TimeStore, YMAX, YMIN, type Datasets } from '@/render/shared';
 import { buildRelIndex } from '@/render/relations';
+import { setPolityAliases } from '@/render/subject';
+import { SelCard } from '@/render/selcard';
 import { WorldMap } from '@/render/map';
 import { TL } from '@/render/timeline';
 import { VT } from '@/render/vertical';
@@ -249,11 +251,12 @@ function boot() {
   // vertical projection reads its state off TL and registers itself with TL.paint(),
   // and TL owns every shared control.
   buildRelIndex();
+  SelCard.init();                    // before the renderers: they call SelCard.select()
   WorldMap.init(); TL.init(); VT.init(); initFlow(); Cube.init(); Core.init(); initBraid(); Horizon.init(); Pop.init(); buildGallery();
   initConn();
   WorldMap.render();
   // diagnostic handle for acceptance probes and console debugging — reads only
-  (window as any).__tl = { TL, VT, Conn, WorldMap, TimeStore, SelStore };
+  (window as any).__tl = { TL, VT, Conn, WorldMap, Cube, TimeStore, SelStore, SelCard };
 }
 
 
@@ -358,6 +361,11 @@ export default function Lab() {
   const [pq, setPq] = useState('');
   const [psel, setPsel] = useState(0);
   const [collapsedBy, setCollapsedBy] = useState<boolean | null>(null);
+  // THE DOCKED "RELATED" PANEL IS CLOSED BY DEFAULT. The selection card carries
+  // the top three or four relations already; the dock exists for the moment you
+  // want the whole ranked list, and it is reached from the card's
+  // "All connections →". Opening it costs 92px of a shared column otherwise.
+  const [relOpen, setRelOpen] = useState(false);
   const booted = useRef(false);
   const pinput = useRef<HTMLInputElement>(null);
   // Coming back to a group should return you to where you were in it. Seeded
@@ -405,22 +413,55 @@ export default function Lab() {
         const grab = async (u: string) => {
           const r = await fetch(u); if (!r.ok) throw new Error(`${u} → HTTP ${r.status}`); return r.json();
         };
-        const [worlds, datasets, lanes] = await Promise.all([
+        const [worlds, datasets, lanes, polities] = await Promise.all([
           grab('/data/worlds.json'), grab('/data/datasets.json') as Promise<Datasets>,
           grab('/data/lanes.json').catch(() => ({ lanes: [] })),   // curated lanes; tolerant
+          // The time-gated polity → sovereign alias table. The cube already
+          // fetches this from inside its own chunk; the map's territory
+          // highlight needs it WITHOUT paying for three.js, so it is loaded
+          // here and handed to subject.ts. Same posture as the rest: tolerant.
+          grab('/data/polities.json').catch(() => ({ polities: [] })),
           loadRelations(),                       // Connections; a miss must not stop the boot
           loadPopulation(),                      // Map · People; same posture
         ]);
         initData(worlds, datasets);
         setLanes(lanes);                         // AFTER initData: lane members append to EVENTS pre-classified
+        setPolityAliases(polities);
         boot();
+        // WHAT THE SELECTION CARD CAN DO. Lab is the only module that knows all
+        // eleven views, so the card's verbs are injected from here rather than
+        // imported — which is also why selcard.ts can be imported BY the
+        // renderers without a cycle.
+        SelCard.wire({
+          // THE CORE LOOP. Frames the window and shows the horizontal
+          // projection. It does not touch TimeStore, and TL.frameTo holds off
+          // the tab-entry ensureYearVisible() so the framing is not undone by a
+          // courtesy meant for a different situation.
+          perspective: (a, b) => { TL.clearSearch(); TL.frameTo(a, b); go('zoom'); },
+          // AT THE CURRENT GLOBAL YEAR — syncToYear moves the map to the nearest
+          // snapshot without writing TimeStore back.
+          seeOnMap: () => { WorldMap.syncToYear(TimeStore.year); go('map'); },
+          traceInCube: (pid) => { Cube.select(pid); go('cube'); },
+          allConnections: () => setRelOpen(true),
+          mapYear: () => (WorldMap as any).year(),
+          anchorOf: (id) => {
+            const v = viewRef.current;
+            if (v === 'zoom') return TL.anchorOf(id);
+            if (v === 'vertical') return VT.anchorOf(id);
+            return null;
+          },
+        });
+        SelCard.setView(viewRef.current);
         setReady(true);
       } catch (e: any) {
         console.error(e);
         setError(String(e?.message || e));
       }
     })();
-  }, []);
+    // `go` is a useCallback([]) — stable, so listing it cannot re-run the boot
+    // (and booted.current would refuse a second run anyway). It is listed
+    // because the card's wiring closes over it.
+  }, [go]);
 
   // ═══ THE TIME RAIL ═══════════════════════════════════════════════════════
   // One scale mapping (rail.ts) drives the index, the snapshot ticks and the
@@ -527,8 +568,12 @@ export default function Lab() {
     const g = groupOf(view);
     if (view !== 'concepts') lastMember.current[g] = view;
     paintUnread(seen.current, view);
-    if (ready) { renderTab(view); syncRail(); }
+    if (ready) { renderTab(view); syncRail(); SelCard.setView(view); }
   }, [view, ready, syncRail]);
+
+  // Selecting something else closes the full list again — the dock is a place
+  // you go on purpose, not a panel that latches open for the rest of the session.
+  useEffect(() => SelStore.subscribe(() => setRelOpen(false)), []);
 
   // Below 1024 the switcher takes its own scrolling row (shell.css §13). On a
   // phone that row is wider than the screen, and the .tl-seg — the whole reason
@@ -970,8 +1015,15 @@ export default function Lab() {
                 Click a spread or an event on either projection and relations.ts
                 renders the ranked, grouped relation list (plus the Wikipedia link,
                 which moved here from the old click-through) into #tlRelPanel. */}
-            <aside {...panel('tl', ['zoom', 'vertical'], 'Related', 'tl-panel--secondary')}>
-              <div className="tl-panel__hd"><span className="tl-panel__title">Related</span></div>
+            <aside {...panel('tl', ['zoom', 'vertical'], 'Related', 'tl-panel--secondary tl-panel--request')}
+              hidden={!(view === 'zoom' || view === 'vertical') || !relOpen}>
+              <div className="tl-panel__hd">
+                <span className="tl-panel__title">Related</span>
+                <button className="tl-iconbtn" style={{ width: 24, height: 24 }}
+                  aria-label="Close the full connection list" onClick={() => setRelOpen(false)}>
+                  {I.close}
+                </button>
+              </div>
               <div className="tl-panel__bd"><div className="relpanel" id="tlRelPanel" /></div>
             </aside>
             {/* flow */}
@@ -1273,15 +1325,19 @@ export default function Lab() {
           </div>
 
 
-          {/* The index, continued up from the rail. A stub on the map — a
-              full-height red meridian across a world map reads as a line of
-              longitude, which is exactly the mistake DESIGN.md §6 calls out. */}
-          {/* Full height only where the canvas's X AXIS IS TIME. In the vertical
-              projection X is columns, so a meridian continued up from the time
-              rail would be pointing at Asia and claiming to mean a year. It
-              keeps the 22px stub, which reads as part of the rail. */}
-          <div className={'tl-index-line' + (meta.rail === 'span' && view !== 'vertical' ? ' tl-index-line--full' : '')}
-            id="indexLine" aria-hidden="true" />
+          {/* THE INDEX IS A STUB. ALWAYS.
+
+              It used to run the full height of the stage on the time-axis views,
+              and there it was one of THREE red verticals: this line (positioned
+              on the RAIL's scale), the canvas's own set-year line (positioned on
+              the CANVAS's scale, so at a different x for the same year), and the
+              hover crosshair. His words: "let's not make the red line from the
+              bottom go all the way to top — there's two lines battling now."
+
+              So it keeps the 22px stub the map views always used, which reads as
+              part of the rail rather than as a claim about the canvas. The
+              crosshair is now the only full-height vertical anywhere. */}
+          <div className="tl-index-line" id="indexLine" aria-hidden="true" />
 
           {/* ══ FIELD NOTES ═══════════════════════════════════════════════ */}
           <aside className="tl-pop" id="fieldNotes" role="dialog" aria-label="Field notes"
@@ -1392,6 +1448,12 @@ export default function Lab() {
           innerWidth / innerHeight, so it must not be reparented into a
           positioned ancestor. */}
       <div className="tooltip" id="tip" />
+
+      {/* THE SELECTION CARD. Ships EMPTY — selcard.ts fills and positions it —
+          and lives out here for the same reason as #tip: it is placed in
+          viewport coordinates against the anchor the renderer measured, so a
+          positioned ancestor would silently shift every one of them. */}
+      <div className="tl-selcard" id="selCard" role="dialog" aria-label="Selection" hidden />
 
       {/* ⌘K — required, not optional: five of eleven views sit behind a seg. */}
       <div className="tl-cmdk" hidden={!palette} onClick={e => { if (e.target === e.currentTarget) openPalette(false); }}>

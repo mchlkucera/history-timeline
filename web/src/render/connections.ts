@@ -484,8 +484,14 @@ export const Conn = {
     // weight drives opacity far harder than it drives anything else: w=0.3 is a whisper
     // you find only by looking, w=1.0 is plainly drawn. The ranking is in the panel; the
     // canvas only has to hint that a tie exists.
-    if (this.sel && rels) {
-      const sn = this.nodes.get(this.sel)!;
+    // THE SELECTION IS GLOBAL, and this corpus is not. SelStore can now be
+    // written by the timeline and by the selection card, so `sel` may be an id
+    // this view has no node for — a curated lane member, say. It has nothing to
+    // draw here, which is fine; the non-null assertion that used to be on this
+    // line was not (`Cannot read properties of undefined (reading 'ribbon')`,
+    // twenty lines down, taking the whole React tree with it).
+    const sn = this.sel ? this.nodes.get(this.sel) : null;
+    if (this.sel && rels && sn) {
       const hub = this.homeAnchor(this.sel);
       if (hub) {
         // the selection's own echoes in the other lanes it matches — barely there
