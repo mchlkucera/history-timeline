@@ -3,7 +3,7 @@
 // Ported from prototypes/partB.html. Only change: `cv` is resolved in init() instead of
 // at module load, because in Next the module is evaluated before the DOM exists.
 import {
-  $, GEO, YEARS, CAPSULES, clamp, fitCanvas, fmtY, featureAt, fontUI, repaintOnFonts, showTip, hideTip, sovColor,
+  $, GEO, YEARS, CAPSULES, TimeStore, clamp, fitCanvas, fmtY, featureAt, fontUI, repaintOnFonts, showTip, hideTip, sovColor,
   tokens, gotoTab,
 } from './shared';
 import { Core } from './core';
@@ -71,7 +71,8 @@ export const WorldMap = {
     $('#yearLabel')!.textContent = fmtY(y);
     ($('#yearSlider') as HTMLInputElement).value = String(this.ix);
     $('#yearSlider')!.setAttribute('aria-valuetext', fmtY(y));
-    $('#capsule')!.innerHTML = `<b>The world in ${fmtY(y)}.</b> ${CAPSULES[String(y)] || ''}`;
+    const near = TimeStore.year !== y ? `Nearest snapshot to <b>${fmtY(TimeStore.year)}</b> — ` : '';
+    $('#capsule')!.innerHTML = `${near}<b>The world in ${fmtY(y)}.</b> ${CAPSULES[String(y)] || ''}`;
   },
   screenToLonLat(sx: number, sy: number) {
     const dim = this.size()!; const s0 = dim.s0;
@@ -80,8 +81,16 @@ export const WorldMap = {
   },
   init() {
     const cv = this.cv = $<HTMLCanvasElement>('#mapCanvas')!;
-    $('#yearSlider')!.addEventListener('input', (e: any) => { this.ix = +e.target.value; this.render(); });
-    $('#btn1776')!.addEventListener('click', () => { this.stop(); this.ix = YEARS.indexOf(1783); this.render(); });
+    TimeStore.subscribe(() => {
+      if (TimeStore.source === 'map') return;          // our own write — no-op (anti-loop)
+      this.stop();
+      let best = 0, bd = Infinity;
+      for (let i = 0; i < YEARS.length; i++) { const d = Math.abs(YEARS[i] - TimeStore.year); if (d < bd) { bd = d; best = i; } }
+      this.ix = best;
+      this.render();
+    });
+    $('#yearSlider')!.addEventListener('input', (e: any) => { this.ix = +e.target.value; this.render(); TimeStore.set(YEARS[this.ix], 'map'); });
+    $('#btn1776')!.addEventListener('click', () => { this.stop(); this.ix = YEARS.indexOf(1783); this.render(); TimeStore.set(1776, 'ui'); });
     $('#btnReset')!.addEventListener('click', () => { this.k = 1; this.tx = 0; this.ty = 0; this.render(); });
     $('#btnPlay')!.addEventListener('click', () => { this.playing ? this.stop() : this.play(); });
     this.setPlayLabel(false);                        // strips the shell's placeholder glyph on mount
@@ -137,7 +146,7 @@ export const WorldMap = {
   },
   play() {
     this.setPlayLabel(true);
-    this.playing = setInterval(() => { this.ix = (this.ix + 1) % YEARS.length; this.render(); }, 1400);
+    this.playing = setInterval(() => { this.ix = (this.ix + 1) % YEARS.length; this.render(); TimeStore.set(YEARS[this.ix], 'map'); }, 1400);
   },
   stop() { this.setPlayLabel(false); clearInterval(this.playing); this.playing = null; },
 };

@@ -6,11 +6,18 @@
 // be one.
 //
 // WHAT IS VERBATIM from the prototype (which is itself verbatim from the horizontal
-// view): the importance ladder — THR, levelFor, alphaFor, the log branch and LMAX; the
-// band list; the five shapes and their magic numbers; the era thresholds; the axis step
-// table; the lane packer; the content-driven column bidding in layout(); the label
-// placement search with its leader hairlines; the two-axis drag; the wheel-zoom maths;
-// the pan rail and the edge chips; the tooltip contents.
+// view): the importance ladder — THR, levelFor, alphaFor; the band list; the five
+// shapes and their magic numbers; the lane packer; the content-driven column bidding
+// in layout(); the label placement search with its leader hairlines; the two-axis
+// drag; the pan rail and the edge chips; the tooltip contents. The axis and the wheel
+// now go through the SHARED piecewise scale (shared.ts tv/ty/timeTicks, TL.zoomBy) —
+// the old log branch, the era wash and the inline step table are gone, and clicking
+// selects app-wide (SelStore) instead of opening Wikipedia.
+//
+// THIS PROJECTION STILL DRAWS THE OLDER SHAPE GRAMMAR and only the hand-curated
+// corpus: the new spread lanes, sharpness fades, constant-height tiers and the
+// polity/spreads.json rows land here next round. Its time-pixel track packer already
+// guarantees no visual overlap, so the founder's core complaint does not regress.
 //
 // WHAT IS ADAPTED for the app:
 //  · STATE IS NOT OWNED HERE. Vertical and horizontal are two projections of ONE
@@ -31,24 +38,12 @@
 //    measured off the document, because there is no page scroll in the shell.
 
 import {
-  $, EVENTS, CATBY, catColor, clamp, fitCanvas, fmtBig, fmtY, fontMono, fontUI, hideTip,
-  reduceMotion, repaintOnFonts, showTip, tokens, type Tokens,
+  $, EVENTS, CATBY, SelStore, TimeStore, catColor, clamp, evId, fitCanvas, fmtBig, fmtSpan, fmtY,
+  fontMono, fontUI, hideTip, reduceMotion, repaintOnFonts, showTip, timeTicks, tokens, tv, ty,
+  withA, type Tokens,
 } from './shared';
+import { dimAlpha, relOf } from './relations';
 import { TL } from './timeline';
-
-// ---------- same colour at a given alpha ----------
-// Canvas gradients interpolate in straight RGBA, so fading a hex to `transparent` runs it
-// through grey — always fade to the colour's own zero-alpha form instead.
-function withA(c: string, a: number) {
-  let m = /^#([0-9a-f]{3,8})$/i.exec(c);
-  if (m) {
-    let h = m[1]; if (h.length === 3) h = h[0] + h[0] + h[1] + h[1] + h[2] + h[2];
-    return `rgba(${parseInt(h.slice(0, 2), 16)},${parseInt(h.slice(2, 4), 16)},${parseInt(h.slice(4, 6), 16)},${a})`;
-  }
-  m = /rgba?\(([^)]+)\)/.exec(c);
-  if (m) { const p = m[1].split(',').map(s => s.trim()); return `rgba(${p[0]},${p[1]},${p[2]},${a})`; }
-  return c;
-}
 
 // year pill at the cursor — rotated: sits on the left axis, vertically centred on the
 // crosshair. shared.ts's yearPill() centres on x and hangs below y, which is the
@@ -146,15 +141,16 @@ export const VT = {
   // ellipsise. Widths quantise to STEPW so a zoom does not make the columns shiver.
   LABMIN: 96, LABMAX: 192, LABNEED: 144, STEPW: 16, PITCH: 9,
 
-  // screen pixel for a year (past at top, monotonically increasing)
+  // screen pixel for a year (past at top, monotonically increasing) — the shared
+  // piecewise scale, same as the horizontal projection
   y(t: number, G: number, Hp: number) {
-    if (!this.log) return G + (t - this.d0) / this.span() * Hp;
-    const ya = Math.max(2026.5 - t, 0.6); return G + (1 - Math.log10(ya) / this.LMAX) * Hp;
+    const v0 = tv(TL.d0), v1 = tv(TL.d1);
+    return G + (tv(t) - v0) / ((v1 - v0) || 1) * Hp;
   },
   // inverse: year at a screen pixel
   it(py: number, G: number, Hp: number) {
-    if (!this.log) return this.d0 + (py - G) / Hp * this.span();
-    return 2026.5 - Math.pow(10, (1 - (py - G) / Hp) * this.LMAX);
+    const v0 = tv(TL.d0), v1 = tv(TL.d1);
+    return ty(v0 + (py - G) / Hp * (v1 - v0));
   },
 
   // Is this event drawn in this column, and at what alpha? The importance ramp and the
@@ -162,7 +158,7 @@ export const VT = {
   // never disagree about what is on screen. `pad` widens the window for the measuring
   // pass only (see layout).
   alphaOf(ev: any[], isLens: boolean, key: string, GY: number, Hp: number, PB: number, pad?: number) {
-    const a = this.log ? (key === 'CO' ? 1 : (ev[4] <= 2 ? 1 : 0)) : this.alphaFor(ev[4], this.span(), isLens);
+    const a = this.alphaFor(ev[4], this.span(), isLens);
     if (a <= 0.02) return 0;
     const p = pad || 0;
     const ya = this.y(ev[0], GY, Hp), yb = ev[1] ? this.y(ev[1], GY, Hp) : ya;
@@ -222,7 +218,7 @@ export const VT = {
     const cols: Col[] = [];
     for (const [key, label, bw, si] of bands) {
       const { maxTracks, railW } = this.railWidth(bw);
-      const isLens = ['MU', 'SC', 'MZ'].includes(key);
+      const isLens = TL.isCurated(key);
       ctx.font = labFont();
       let want = 0, n = 0;
       for (const ev of bandEvs[key]) {
@@ -301,60 +297,26 @@ export const VT = {
       }
     }
 
-    // ---- era wash (same thresholds; the stripes are now horizontal) ----
-    this._eras = [];
-    if (!this.log) {
-      const eras: [number, number, string][] = [[-800, 476, 'Antiquity'], [476, 1453, 'Middle Ages'], [1453, 1789, 'Early Modern'], [1789, 2026, 'Modern']];
-      ctx.textAlign = 'left'; ctx.font = fontUI(10);              // an era name is language
-      for (const [a, b, n] of eras) {
-        let ya = this.y(a, GY, Hp), yb = this.y(b, GY, Hp);
-        if (ya > yb) { const t = ya; ya = yb; yb = t; }
-        ya = clamp(ya, GY, PB); yb = clamp(yb, GY, PB);
-        if (yb - ya < 4) continue;
-        // INK, not accent — the wash is a background, and the accent means "where you
-        // are". timeline.ts made the same correction to the same stripes.
-        ctx.fillStyle = T.ink; ctx.globalAlpha = .055; ctx.fillRect(GX, ya, CW, yb - ya);
-        if (yb - ya > 22) { ctx.globalAlpha = .75; ctx.fillStyle = T.ink3; ctx.fillText(n, GX + 6, ya + 12); this._eras.push([n, ya + 12]); }
-        ctx.globalAlpha = 1;
-      }
-    }
-
-    // ---- time axis. Same step table, same ≤14 rule. Lives in a fixed gutter and spans
-    // the window, not the surface: panning sideways never loses it.
+    // ---- time axis. The SHARED bounded tick engine (timeTicks) — the old inline step
+    // table would iterate ~7 million times at the full deep-time span. Lives in a fixed
+    // gutter and spans the window, not the surface: panning sideways never loses it.
     ctx.strokeStyle = T.line; ctx.lineWidth = 1;
     ctx.font = fontMono(11); ctx.fillStyle = T.ink2; ctx.textAlign = 'right';   // years are measurements
-    if (!this.log) {
-      const steps = [2000, 1000, 500, 200, 100, 50, 20, 10, 5, 2, 1];
-      // THE STEP IS THE SMALLEST ONE THAT STILL FITS <=14 TICKS. `find` on a descending
-      // table returns the LARGEST instead, which pinned the step at 2,000 years for every
-      // span under 28,000: the Mozart preset (a 100-year window) drew a time axis with no
-      // year on it at all, and any span over 28,000 fell through to `|| 1` and tried to
-      // put 80,000 ticks in one frame. Both projections read the same axis, so both are
-      // fixed here and in the other one, together.
-      const step = steps.filter(s => this.span() / s <= 14).pop() ?? steps[0];
-      const start = Math.ceil(this.d0 / step) * step;
-      ctx.beginPath();
-      for (let t = start; t <= this.d1; t += step) {
-        const yy = this.y(t, GY, Hp);
-        ctx.moveTo(GX, yy); ctx.lineTo(cw - 8, yy);
-        ctx.fillText(fmtY(t), GX - 10, yy + 4);
-      }
-      ctx.globalAlpha = .35; ctx.stroke(); ctx.globalAlpha = 1;
-    } else {
-      const labs: [number, string][] = [[1e10, '10 Gya'], [1e9, '1 Gya'], [1e8, '100 Mya'], [1e7, '10 Mya'], [1e6, '1 Mya'], [1e5, '100 kya'], [1e4, '10 kya'], [1e3, '1,000 ya'], [100, '100 ya'], [10, '10 ya']];
-      ctx.beginPath();
-      for (const [ya, lab] of labs) {
-        const yy = this.y(2026.5 - ya, GY, Hp);
-        if (yy < GY - 1 || yy > PB + 1) continue;
-        ctx.moveTo(GX, yy); ctx.lineTo(cw - 8, yy); ctx.fillText(lab, GX - 10, yy + 4);
-      }
-      ctx.globalAlpha = .35; ctx.stroke(); ctx.globalAlpha = 1;
+    ctx.beginPath();
+    for (const tk of timeTicks(TL.d0, TL.d1, Hp)) {
+      const yy = this.y(tk.y, GY, Hp);
+      if (yy < GY - 1 || yy > PB + 1) continue;
+      ctx.moveTo(GX, yy); ctx.lineTo(cw - 8, yy);
+      ctx.fillText(tk.label, GX - 10, yy + 4);
     }
+    ctx.globalAlpha = .35; ctx.stroke(); ctx.globalAlpha = 1;
     ctx.textAlign = 'left';
     const yn = this.y(2026, GY, Hp);
     if (yn >= GY && yn <= PB) { ctx.strokeStyle = T.accent2; ctx.setLineDash([4, 4]); ctx.beginPath(); ctx.moveTo(GX, yn); ctx.lineTo(cw - 8, yn); ctx.stroke(); ctx.setLineDash([]); }
 
-    const baseL = this.log ? 2 : this.levelFor(this.span());
+    const baseL = this.levelFor(this.span());
+    // graded selection dimming, shared with every other view
+    const rels = SelStore.id ? relOf(SelStore.id) : null;
 
     // ---- columns. The surface is drawn at -panX and clipped to the window, so nothing
     // ever paints over the time-axis gutter.
@@ -369,7 +331,7 @@ export const VT = {
       ctx.fillStyle = T.ink2; ctx.font = headFont(); ctx.textAlign = 'left';
       ctx.fillText(label.toUpperCase(), cx + 18, GY - 16);
 
-      const isLens = ['MU', 'SC', 'MZ'].includes(key);
+      const isLens = TL.isCurated(key);
       const evs = bandEvs[key];
       const PITCH = this.PITCH;
       const labX = cx + railW + 4, labW = Math.max(46, colW - railW - 12);
@@ -382,6 +344,7 @@ export const VT = {
         const [y0, y1, title, , lvl] = ev; const cat = ev[6], typ = ev[7];
         let a = this.alphaOf(ev, isLens, key, GY, Hp, PB);
         if (!a) continue;
+        a *= dimAlpha(evId(ev), SelStore.id, rels);   // graded selection dimming
         const ya = this.y(y0, GY, Hp), yb = y1 ? this.y(y1, GY, Hp) : ya;
         const top = Math.min(ya, yb), bot = Math.max(ya, yb);
         const isMatch = q && ((title.toLowerCase().includes(q)) || ev[5].includes(q));
@@ -485,13 +448,17 @@ export const VT = {
     // ---- "there is more over here" ------------------------------------------
     this._surface = { SW, CW, panX, maxPan };
     this.edgeHints(ctx, T, cw, GX, GY, PB, CW, panX, maxPan);
-    if (panX > 0.5) {    // era names are viewport furniture, not surface — the fade must not eat them
-      ctx.font = fontUI(10); ctx.textAlign = 'left';
-      ctx.globalAlpha = .75; ctx.fillStyle = T.ink3;
-      for (const [n, yy] of this._eras) ctx.fillText(n, GX + 6, yy);
-      ctx.globalAlpha = 1;
-    }
     this.panRail(ctx, T, cw, GX, PB, CW, SW, panX);
+
+    // ---- the global time index: the horizontal twin of ②'s red meridian ----
+    {
+      const yG = this.y(TimeStore.year, GY, Hp);
+      if (yG >= GY && yG <= PB) {
+        ctx.strokeStyle = T.accent; ctx.globalAlpha = .9; ctx.lineWidth = 1.5;
+        ctx.beginPath(); ctx.moveTo(GX, yG); ctx.lineTo(cw - 8, yG); ctx.stroke(); ctx.globalAlpha = 1;
+        yearPillV(ctx, T, 4, yG, fmtBig(TimeStore.year));
+      }
+    }
 
     // ---- hover crosshair + year readout ----
     if (this.hoverY !== null && this.hoverY > GY && this.hoverY < PB) {
@@ -499,11 +466,11 @@ export const VT = {
       ctx.strokeStyle = T.accent; ctx.globalAlpha = .55; ctx.lineWidth = 1;
       ctx.beginPath(); ctx.moveTo(GX, this.hoverY); ctx.lineTo(cw - 8, this.hoverY); ctx.stroke();
       ctx.globalAlpha = 1;
-      yearPillV(ctx, T, 4, this.hoverY, this.log ? fmtBig(yr) : fmtY(yr));
+      yearPillV(ctx, T, 4, this.hoverY, fmtBig(yr));
     }
     // the shared readouts — whichever projection is on screen reports on the same state
-    const rd = $('#zoomReadout'); if (rd) rd.textContent = this.log ? 'log scale · Big Bang → now' :
-      `showing importance ≤ ${baseL} of 5 · span ${Math.round(this.span()).toLocaleString()} yrs`;
+    const rd = $('#zoomReadout'); if (rd) rd.textContent =
+      `showing importance ≤ ${baseL} of 5 · span ${fmtSpan(this.span())}`;
     const sc = $('#searchCnt'); if (sc) sc.textContent = q ? `${hitCount} hits` : '';
 
     // A reveal asked for while this projection was off screen (the horizontal seg was
@@ -650,19 +617,17 @@ export const VT = {
         const d = (e.shiftKey && Math.abs(e.deltaX) < Math.abs(e.deltaY)) ? e.deltaY : e.deltaX;
         this.panX += d; this.render(); return;
       }
-      if (this.log) return;
       const r = cv.getBoundingClientRect(); const Hp = this.H - this.GY - this.PAD;
       const tc = this.it(e.clientY - r.top, this.GY, Hp);
-      const f = Math.pow(1.0018, e.deltaY); const s = clamp(this.span() * f, 8, 80000);
-      const frac = (tc - this.d0) / this.span();
-      this.d0 = tc - frac * s; this.d1 = this.d0 + s; this.render();
+      TL.zoomBy(tc, Math.pow(1.0018, e.deltaY));      // shared clamps, shared fixed-point
+      this.render();
     }, { passive: false });
 
     let drag: any = null;
     const onRail = (my: number) => !!this._rail && my >= this._rail.y0 - 5 && my <= this._rail.y1 + 5;
     cv.addEventListener('pointerdown', e => {
       const r = cv.getBoundingClientRect(), mx = e.clientX - r.left, my = e.clientY - r.top;
-      cv.setPointerCapture(e.pointerId);
+      try { cv.setPointerCapture(e.pointerId); } catch { /* synthetic or already-lifted pointer */ }
       const pl = this.pillAt(mx, my);
       if (pl) { drag = { rail: true, moved: true }; this.panAnim(pl.to); return; }
       if (onRail(my)) {                     // grab the map: centre the window on the click
@@ -695,18 +660,20 @@ export const VT = {
         const [y0, y1, t, , lvl] = b.ev; const cat = CATBY[b.ev[6]], typ = b.ev[7], pl = b.ev[8];
         showTip(e.clientX, e.clientY, `<div class=t>${t}</div><div class=m>${fmtBig(y0)}${y1 ? ' – ' + fmtY(y1) : ''} · ${b.band}</div>` +
           `<div class=m>${cat ? cat.name : ''} · ${typ}${pl ? ' · ' + pl[2] : ''}</div>` +
-          `<div class=m>importance ${'●'.repeat(6 - lvl)}${'○'.repeat(lvl - 1)} (${lvl}) · click → Wikipedia</div>`);
+          `<div class=m>importance ${'●'.repeat(6 - lvl)}${'○'.repeat(lvl - 1)} (${lvl}) · click to select · Wikipedia in the Related panel</div>`);
         cv.style.cursor = 'pointer';
       } else { hideTip(); cv.style.cursor = 'grab'; }
     });
     cv.addEventListener('pointerup', e => {
       const wasDrag = drag && drag.moved; drag = null; cv.style.cursor = 'grab'; if (wasDrag) return;
       const r = cv.getBoundingClientRect(), mx = e.clientX - r.left, my = e.clientY - r.top;
-      const b = this.hit(mx, my);
-      if (b) {
-        const t = b.ev[2].split(/ — | \(|·/)[0];
-        window.open('https://en.wikipedia.org/wiki/Special:Search?search=' + encodeURIComponent(t), '_blank');
+      if (mx < this.GX) {                              // year gutter: set the global moment
+        const Hp = this.H - this.GY - this.PAD;
+        TimeStore.set(Math.round(this.it(my, this.GY, Hp)), 'vt');
+        return;
       }
+      const b = this.hit(mx, my);
+      SelStore.set(b ? evId(b.ev) : null);             // click means select; empty clears
     });
     cv.addEventListener('pointerleave', () => { hideTip(); this.hoverY = null; this.render(); });
     cv.style.cursor = 'grab';

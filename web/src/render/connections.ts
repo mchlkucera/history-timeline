@@ -17,37 +17,17 @@
 // barely up, everything unrelated dimmed but still there as context.
 
 import {
-  $, BELIEFS, EVENTS, POLITIES, catColor, clamp, fitCanvas, fmtY, fontMono, fontUI, hideTip,
-  reduceMotion, repaintOnFonts, showTip, tokens, yearPill, type Tokens,
+  $, BELIEFS, EVENTS, POLITIES, SelStore, catColor, clamp, fitCanvas, fmtY, fontMono, fontUI,
+  hexHsl, hideTip, reduceMotion, repaintOnFonts, showTip, tokens, varyColor, yearPill, type Tokens,
 } from './shared';
 import { flowLayout } from './flow';
-
-// ---------- the data contract (data/relations/SCHEMA.md) ----------
-export interface Spread {
-  id: string; name: string; kind: string; start: number; end: number; sharpness?: number;
-  weight: [number, number][];
-  footprint?: { year: number; lat: number; lon: number; radius: number; intensity: number }[];
-  from?: string[]; to?: string[]; note?: string;
-}
-export interface Link { a: string; b: string; w: number; kind: string }
-export interface Relations { spreads: Spread[]; links: Link[] }
-
-let REL: Relations = { spreads: [], links: [] };
-export function setRelations(r: any) {
-  REL = { spreads: (r && r.spreads) || [], links: (r && r.links) || [] };
-}
-// The build step ships data/relations/{spreads,links}.json (falling back to the seeds)
-// as one public/data/relations.json. A miss must not stop the other seven tabs booting.
-export async function loadRelations(): Promise<Relations> {
-  try {
-    const res = await fetch('/data/relations.json');
-    if (!res.ok) throw new Error('HTTP ' + res.status);
-    setRelations(await res.json());
-  } catch {
-    setRelations({ spreads: [], links: [] });
-  }
-  return REL;
-}
+import {
+  REL, SPREADCAT, esc, kindColor, lit as litOf, lvlOfWeight, peakOf, regionOf,
+  relIndex, relOf as relOfShared, dimAlpha, renderRelatedPanel,
+} from './relations';
+// the shared loader moved to relations.ts; re-exported so Lab.tsx's import line survives
+export { loadRelations, setRelations } from './relations';
+export type { Spread, Link, Relations } from './relations';
 
 // ---------- the item model ----------
 type NKind = 'spread' | 'polity' | 'belief' | 'event' | 'entity';
@@ -60,28 +40,6 @@ interface Item {
   type?: string;                         // moment | episode | life | era | zone
   lvl: number;                           // importance 1..5, for the context budget
   linked: boolean;                       // appears in links.json
-}
-
-const KIND_ORDER = ['origin', 'part-of', 'enabled-by', 'caused', 'about', 'opposed-to', 'lineage'];
-// Relation kinds take DATA hues. 'part-of' used to be T.accent, i.e. minium, which by
-// doctrine means only "where you are" — it painted link threads on the canvas and the
-// weight bars in the RELATED panel. It now takes belief aubergine, the only slot of the
-// eight not already spoken for here.
-const kindColor = (k: string, T: Tokens): string => ({
-  'origin': T.accent2, 'part-of': T.s[6], 'enabled-by': T.s[2], 'caused': T.s[1],
-  'about': T.s[0], 'opposed-to': T.s[7], 'lineage': T.ink3,
-} as Record<string, string>)[k] || T.ink2;
-
-// spread kinds map onto the existing CATS grammar — colour still says "what domain"
-const SPREADCAT: Record<string, string> = {
-  technology: 'sci', movement: 'belief', religion: 'belief', era: 'power', economy: 'society',
-};
-
-function regionOf(lat: number, lon: number): string | null {
-  if (lon >= -25 && lon <= 45 && lat >= 34 && lat <= 72) return 'EU';
-  if (lon < -25) return 'AM';
-  if (lon <= 62 && lat < 34) return 'ME';           // ME band is "MidEast & Africa"
-  return 'AS';
 }
 
 // ---------- lanes are QUERIES, and they deliberately overlap ----------
@@ -125,44 +83,8 @@ const alphaFor = (lvl: number, S: number, isLens: boolean) => {
   if (S <= t) return 1; if (S <= t * 1.6) return 1 - (S - t) / (t * .6); return 0;
 };
 
-// Ribbons carry no hand-assigned importance, but they all carry a weight curve on the
-// same 0–10 scale (spreads, polities and belief streams alike), and its peak is exactly
-// the "how big did this ever get" question importance asks. So: peak 9+ is level 1 —
-// the Roman Empire, the Industrial Revolution, printing; peak under 3 is level 5 —
-// Anabaptism, the Papal States — visible only once you are looking closely.
-const peakOf = (w: any[]) => (w || []).reduce((m, p) => Math.max(m, p[1]), 0);
-const lvlOfWeight = (pk: number) => (pk >= 9 ? 1 : pk >= 7 ? 2 : pk >= 5 ? 3 : pk >= 3 ? 4 : 5);
-
-// The CATS grammar says "colour = which domain". Inside one domain a lane can hold a
-// dozen ribbons, so vary hue and lightness a little per id — exactly what ③ does with
-// its region hues — otherwise a lane reads as one undifferentiated slab.
-function hexHsl(hex: string): [number, number, number] | null {
-  const m = /^#?([0-9a-f]{6})$/i.exec(hex.trim()); if (!m) return null;
-  const n = parseInt(m[1], 16);
-  const r = ((n >> 16) & 255) / 255, g = ((n >> 8) & 255) / 255, b = (n & 255) / 255;
-  const mx = Math.max(r, g, b), mn = Math.min(r, g, b), l = (mx + mn) / 2;
-  if (mx === mn) return [0, 0, l * 100];
-  const d = mx - mn, sat = d / (1 - Math.abs(2 * l - 1));
-  let h = 0;
-  if (mx === r) h = 60 * (((g - b) / d) % 6); else if (mx === g) h = 60 * ((b - r) / d + 2); else h = 60 * ((r - g) / d + 4);
-  return [(h + 360) % 360, sat * 100, l * 100];
-}
-// returns [css colour, its lightness 0-100] — the caller needs the lightness to decide
-// whether a name written ON this ribbon should be white or ink. The palette is a token
-// set that can be re-tuned underneath this view, so the contrast has to be derived, not
-// assumed: a pale ribbon with white text on it says nothing.
-function varyColor(hex: string, id: string): [string, number] {
-  const c = hexHsl(hex); if (!c) return [hex, 50];
-  const s0 = hash(id);
-  // hue barely moves — a lane must still read as ONE domain — but lightness moves a lot,
-  // because that is what actually separates two ribbons stacked edge to edge.
-  const h = (c[0] + ((s0 % 15) - 7) + 360) % 360;
-  const sa = clamp(c[1] - 7 + ((s0 >> 3) % 14), 28, 68);
-  const li = clamp(c[2] - 15 + ((s0 >> 7) % 33), 25, 70);
-  return [`hsl(${h.toFixed(0)} ${sa.toFixed(0)}% ${li.toFixed(0)}%)`, li];
-}
-
-const esc = (s: string) => String(s).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
+// hexHsl / varyColor moved to shared.ts (the timeline needs them too); the local id
+// hash stays because ribbon-interior placement uses it directly.
 const hash = (s: string) => { let h = 0; for (let i = 0; i < s.length; i++) h = (h * 31 + s.charCodeAt(i)) >>> 0; return h; };
 
 // interpolate a ribbon's top/bottom edge at one year
@@ -181,7 +103,6 @@ export const Conn = {
   cv: null as unknown as HTMLCanvasElement,
   d0: 1350, d1: 2026,
   nodes: new Map<string, Item>(),
-  rel: new Map<string, { other: string; w: number; kind: string }[]>(),
   sel: null as string | null,
   hover: null as string | null,
   hoverX: null as number | null,
@@ -195,7 +116,7 @@ export const Conn = {
 
   // ---------- build the universe ----------
   build() {
-    this.nodes = new Map(); this.rel = new Map(); this.unresolved = 0;
+    this.nodes = new Map(); this.unresolved = 0; this._linkPairs = 0;
     const add = (n: Item) => { if (!this.nodes.has(n.id)) this.nodes.set(n.id, n); return this.nodes.get(n.id)!; };
 
     // every spread is in, always — they are the spine of this view
@@ -253,7 +174,9 @@ export const Conn = {
       return null;                                   // spread ids are already in
     };
 
-    // links — undirected for highlighting
+    // links — the WEIGHTS live in the shared relIndex (relations.ts) now; this loop
+    // survives for its side-effects: resolve() adds every linked node to the corpus,
+    // and the unresolved count is this view's honesty line.
     const seen = new Set<string>();
     for (const L of REL.links) {
       if (!L || !L.a || !L.b || L.a === L.b) continue;
@@ -262,11 +185,7 @@ export const Conn = {
       const A = resolve(L.a), B = resolve(L.b);
       if (!A || !B) { this.unresolved++; continue; }
       A.linked = B.linked = true;
-      const w = clamp(Number(L.w) || 0, 0, 1), kind = L.kind || 'about';
-      if (!this.rel.has(A.id)) this.rel.set(A.id, []);
-      if (!this.rel.has(B.id)) this.rel.set(B.id, []);
-      this.rel.get(A.id)!.push({ other: B.id, w, kind });
-      this.rel.get(B.id)!.push({ other: A.id, w, kind });
+      this._linkPairs++;
     }
 
     // context budget — now that level of detail governs what is drawn, the corpus can be
@@ -394,22 +313,12 @@ export const Conn = {
     return { x: p.x, y: p.y, year };
   },
 
-  // ---------- the graded dimming ----------
-  // unrelated is heavily dimmed but never gone; a relation's prominence is its weight.
-  relOf(id: string): Map<string, { w: number; kind: string }> {
-    const m = new Map<string, { w: number; kind: string }>();
-    for (const r of (this.rel.get(id) || [])) {
-      const p = m.get(r.other);
-      if (!p || r.w > p.w) m.set(r.other, { w: r.w, kind: r.kind });
-    }
-    return m;
-  },
+  // ---------- the graded dimming: the shared implementations (relations.ts) ----------
+  _linkPairs: 0,
+  relsOf(id: string) { return relIndex.get(id) || []; },
+  relOf(id: string): Map<string, { w: number; kind: string }> { return relOfShared(id); },
   alphaOf(id: string, rels: Map<string, { w: number; kind: string }> | null) {
-    if (!this.sel) return 1;
-    if (id === this.sel) return 1;
-    const r = rels && rels.get(id);
-    if (!r) return 0.1;                               // context, not erased
-    return 0.14 + 0.86 * Math.pow(r.w, 1.15);
+    return dimAlpha(id, this.sel, rels);
   },
 
   // ---------- paint ----------
@@ -432,7 +341,7 @@ export const Conn = {
     const REST = !this.sel;
     // an item the selection actually points at is exempt from level of detail — clicking
     // something must never be able to hide one of its own relations.
-    const lit = (id: string) => !!(this.sel && (id === this.sel || (rels && rels.has(id))));
+    const lit = (id: string) => litOf(id, this.sel, rels);
     const bgHsl = hexHsl(T.panel); const bgL = bgHsl ? bgHsl[2] : 92;
 
     for (const L of this.lanes) {
@@ -530,7 +439,7 @@ export const Conn = {
         if (px1 < -20 || px > cw + 20) continue;
         // strongest link to a ribbon that is actually drawn in this lane = its parent
         let host: any = null, hw = 0, hk = '';
-        for (const r of (this.rel.get(n.id) || [])) {
+        for (const r of this.relsOf(n.id)) {
           const t = this.nodes.get(r.other);
           if (!t || !t.ribbon || !L.lay || !L.lay.paths.has(t.id)) continue;
           if (r.w > hw) { hw = r.w; hk = r.kind; host = L.lay.paths.get(t.id); }
@@ -733,58 +642,38 @@ export const Conn = {
   },
 
   select(id: string | null) {
-    this.sel = id && this.nodes.has(id) ? id : null;
-    this.render(); this.panel();
+    // body is the store write: the SelStore subscriber (init) assigns this.sel and
+    // re-renders, so internal callers keep working and the selection is app-wide.
+    SelStore.set(id);
   },
 
-  // ---------- the side panel: what is related, ranked by weight, grouped by kind ----------
+  // ---------- the side panel: the shared Related renderer (relations.ts) ----------
   panel() {
-    const box = $('#connPanel'); if (!box) return;
-    const T = tokens();
-    if (!this.sel) {
-      box.innerHTML = `<div class="empty">Four lanes, one time axis. At this span you are seeing only the ` +
+    renderRelatedPanel($('#connPanel'), this.sel, {
+      emptyHTML: `<div class="empty">Four lanes, one time axis. At this span you are seeing only the ` +
         `<b>most important</b> things in each — <b>scroll to zoom in</b> and the rest fade in by importance, ` +
         `the same way ② behaves.</div>` +
         `<div class="empty" style="margin-top:10px"><b>Click anything</b> — a ribbon, a point, a state — and everything ` +
         `related to it stays lit in proportion to how strongly it is related, with a faint thread drawn to each. ` +
         `Everything else dims but stays on screen as context. Click empty space to clear.</div>` +
         `<div class="empty" style="margin-top:10px">Try <b>the Industrial Revolution</b> ribbon in <i>Power &amp; economy</i>, ` +
-        `or the <b>printing</b> ribbon in <i>Science &amp; technology</i> and the events sitting inside it.</div>`;
-      return;
-    }
-    const n = this.nodes.get(this.sel)!;
-    const rows = (this.rel.get(this.sel) || []).slice().sort((a, b) => b.w - a.w);
-    const groups = new Map<string, any[]>();
-    for (const r of rows) { if (!groups.has(r.kind)) groups.set(r.kind, []); groups.get(r.kind)!.push(r); }
-    const laneNames = (n as any).lanes.map((l: any[], i: number) =>
-      `${LANES[l[0]].name}${i === 0 ? ' <i>(solid)</i>' : ' <i>(echo)</i>'}`).join(' · ') || '—';
-    let html = `<h4>${esc(n.name)}</h4>` +
-      `<div class="sub">${n.kind} · ${fmtY(n.start)}${n.end > n.start ? ' – ' + fmtY(n.end) : ''} · ${rows.length} link${rows.length === 1 ? '' : 's'}</div>` +
-      (n.note ? `<div class="sub">${esc(n.note)}</div>` : '') +
-      `<div class="sub">lanes: ${laneNames}</div>`;
-    if (!rows.length) html += `<div class="empty" style="margin-top:12px">No curated relations yet for this item.</div>`;
-    const order = [...KIND_ORDER, ...[...groups.keys()].filter(k => !KIND_ORDER.includes(k))];
-    for (const k of order) {
-      const g = groups.get(k); if (!g) continue;
-      html += `<div class="grp"><span class="dot" style="background:${kindColor(k, T)}"></span>${k}</div>`;
-      for (const r of g) {
-        const t = this.nodes.get(r.other); if (!t) continue;
-        html += `<div class="relrow" data-id="${esc(r.other)}">` +
-          `<div><div class="n">${esc(t.name)}</div><div class="k">${t.kind} · ${fmtY(t.start)}${t.end > t.start ? '–' + fmtY(t.end) : ''}</div>` +
-          `<div class="bar"><i style="width:${Math.round(r.w * 100)}%;background:${kindColor(k, T)}"></i></div></div>` +
-          `<div class="w">${r.w.toFixed(2)}</div></div>`;
-      }
-    }
-    box.innerHTML = html;
+        `or the <b>printing</b> ribbon in <i>Science &amp; technology</i> and the events sitting inside it.</div>`,
+      extraSub: (id: string) => {
+        const n = this.nodes.get(id); if (!n) return '';
+        const laneNames = ((n as any).lanes || []).map((l: any[], i: number) =>
+          `${LANES[l[0]].name}${i === 0 ? ' <i>(solid)</i>' : ' <i>(echo)</i>'}`).join(' · ') || '—';
+        return `<div class="sub">lanes: ${laneNames}</div>`;
+      },
+    });
   },
 
   _cap: '',
   caption() {
     const el = $('#connCap'); if (!el) return;
     const spreads = [...this.nodes.values()].filter(n => n.kind === 'spread').length;
-    const links = [...this.rel.values()].reduce((a, b) => a + b.length, 0) / 2;
+    const links = this._linkPairs;
     const html = `<b>Showing importance ≤ ${levelFor(this.span())} of 5 · span ${Math.round(this.span()).toLocaleString()} yrs` +
-      ` · ${spreads} spreads · ${Math.round(links)} weighted links in the corpus.</b> ` +
+      ` · ${spreads} spreads · ${links} weighted links in the corpus.</b> ` +
       `Scroll to zoom and the level of detail follows, exactly as in ② — the essentials at a wide span, ` +
       `the rest fading in as you come closer. Ribbon thickness is the spread's reach at that moment; a ribbon's ` +
       `importance is the peak of that same curve. Points drawn <i>inside</i> a ribbon are the ` +
@@ -809,6 +698,9 @@ export const Conn = {
     const cv = this.cv = $<HTMLCanvasElement>('#connCanvas')!;
     if (!cv) return;
     this.build();
+    // this.sel MIRRORS the app-wide selection; select() writes the store, this reads it.
+    this.sel = SelStore.id;
+    SelStore.subscribe(() => { this.sel = SelStore.id; this.render(); this.panel(); });
     repaintOnFonts(() => this.render());
     cv.addEventListener('pointermove', e => {
       const r = cv.getBoundingClientRect(), mx = e.clientX - r.left, my = e.clientY - r.top;
@@ -824,7 +716,7 @@ export const Conn = {
       this.hover = id; this.render();
       if (h) {
         const n = this.nodes.get(h.id)!;
-        const links = (this.rel.get(h.id) || []).length;
+        const links = this.relsOf(h.id).length;
         const rels = this.sel ? this.relOf(this.sel) : null;
         const r = rels && rels.get(h.id);
         showTip(e.clientX, e.clientY,
@@ -858,13 +750,8 @@ export const Conn = {
       this.d0 = yc - frac * s; this.d1 = this.d0 + s; this.dirty = true; this.render();
     }, { passive: false });
 
-    // panel rows walk the graph
-    const box = $('#connPanel');
-    if (box) box.addEventListener('click', (e: any) => {
-      const row = e.target.closest && e.target.closest('.relrow');
-      if (row && row.dataset.id) this.select(row.dataset.id);
-    });
-
+    // panel rows walk the graph — the delegated listener is bound (once) by
+    // renderRelatedPanel, and it writes SelStore directly.
     const jump = (id: string, btn: string) => {
       const b = $(btn); if (!b) return;
       if (!this.nodes.has(id)) { (b as HTMLElement).style.display = 'none'; return; }

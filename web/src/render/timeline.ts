@@ -1,10 +1,21 @@
 /* eslint-disable @typescript-eslint/no-explicit-any */
 // ================= ② ZOOMABLE TIMELINE =================
-// Ported from prototypes/partB.html. Only change: `cv` is resolved in init().
+// The flagship projection. Two visual categories only, taken from the Connections
+// vocabulary: SPREADS (anything with duration — era, polity, episode, life, movement)
+// drawn as constant-height rectangles whose edges carry a per-item sharpness envelope,
+// and EVENTS (moments) drawn as dots in their own stratum BELOW the spreads. Spreads
+// pack into interval lanes biggest-first with no visual overlap — the founder's two
+// old spreadsheets, live. One piecewise C1 scale (shared.ts tv/ty) runs the wheel from
+// a decade to the Big Bang with no mode switch; the old log toggle is dead.
 import {
-  $, EVENTS, CATS, CATBY, catColor, clamp, fitCanvas, fmtBig, fmtY, fontMono, fontUI, hideTip, reduceMotion,
-  repaintOnFonts, showTip, tokens, yearPill,
+  $, EVENTS, POLITIES, CATS, CATBY, catColor, clamp, fitCanvas, fmtBig, fmtSpan, fmtY, fontMono, fontUI,
+  hideTip, reduceMotion, repaintOnFonts, showTip, tokens, yearPill,
+  tv, ty, VFULL, YMIN, YMAX, timeTicks, withA, hexHsl, varyColor,
+  TimeStore, SelStore, evId, LANES, sharpnessOf,
 } from './shared';
+import {
+  REL, SPREADCAT, peakOf, lvlOfWeight, regionOf, relOf, dimAlpha, lit, renderRelatedPanel,
+} from './relations';
 
 // ── projections of this state ───────────────────────────────────────────────
 // The Timeline group is ONE instrument shown two ways. vertical.ts reads d0/d1, log,
@@ -12,293 +23,633 @@ import {
 // (#btnMozart … #catRow) are bound here exactly once. So anything that WRITES that state
 // has to repaint whichever projection is currently on screen — that is what paint() is
 // for, and every state-changing handler below calls it instead of render().
-//
-// The hook fires from paint(), never from render(): render() bails at the top when its
-// own canvas is hidden (a display:none view has clientWidth 0, so fitCanvas returns
-// null), so a hook at the end of render() would never run in the case it exists for.
-// Repainting an off-screen projection costs exactly that one early return.
 const PROJECTIONS: Array<() => void> = [];
-
-// A projection that can only show PART of its surface at once needs to be told what
-// the subject of a state change was. In the horizontal projection every band is a row
-// and every row is always on screen, so this is a no-op there; in the vertical one a
-// band is a COLUMN and the surface is routinely wider than the window, so "which
-// column did the reader just ask for" is the difference between an answer and an empty
-// stretch of surface. Every control that turns a lens ON declares it here.
 const REVEALS: Array<(bandKey: string) => void> = [];
 
+// A spread in the lane corpus. `row` is its PERMANENT lane index within its band,
+// assigned once per corpus from the canonical importance-first order, so zoom can
+// never reshuffle: lane 0 goes to Rome and the defining eras by construction.
+interface SpreadItem {
+  id: string; name: string; start: number; end: number;
+  cat: string; type: string; lvl: number; sharpness: number;
+  note: string; tags: string; peak: number; row: number;
+  ev: any[] | null;
+}
+interface LSpread { it: SpreadItem; row: number; x0: number; x1: number; lodA: number; isMatch: boolean }
+interface LEvent { ev: any[]; id: string; x0: number; row: number; lodA: number; mode: 'right' | 'left' | 'none'; labelW: number; isMatch: boolean }
+interface LaneLayout {
+  key: string; label: string; si: number | null; isCur: boolean;
+  spreads: LSpread[]; events: LEvent[];
+  ns: number; ne: number; more: number;
+  top: number; h: number; evTop: number;
+}
+interface Layout {
+  lanes: LaneLayout[]; H: number; G: number; Wp: number;
+  sel: string | null; rels: Map<string, { w: number; kind: string }> | null; q: string;
+}
+
+// rectangle height by importance tier — the ONLY height variation permitted;
+// never a weight curve (founder decision 2).
+const TIER_H: Record<number, number> = { 1: 20, 2: 17, 3: 14, 4: 12, 5: 10 };
+
 export const TL = {
-  cv: null as unknown as HTMLCanvasElement, d0: -3000, d1: 2026, log: false,
-  lens: { MU: false, SC: false, MZ: true } as Record<string, boolean>, q: '', hoverX: null as number | null, off: new Set<string>(),
+  cv: null as unknown as HTMLCanvasElement, d0: -3000, d1: 2026,
+  // Frozen `false`, kept because Lab and the vertical projection still read it. The
+  // deep-time MODE died: the one piecewise scale reaches the Big Bang by wheel alone.
+  log: false,
+  lens: { MU: false, SC: false, MZ: false } as Record<string, boolean>,
+  q: '', hoverX: null as number | null, off: new Set<string>(),
   THR: { 1: Infinity, 2: 40000, 3: 2400, 4: 650, 5: 170 } as Record<number, number>,
-  // LENS COLUMNS SIT IMMEDIATELY AFTER DEEP TIME, NOT AT THE END.
-  //
-  // A band is a row in this projection and a COLUMN in the vertical one, and in the
-  // vertical one the surface is routinely wider than the window — so "last" there
-  // means "off the right edge". Appended last, the Mozart lens drew its header at
-  // x≈1060 of a 1152px canvas and not one of his thirteen life events was on screen,
-  // in the state the "Mozart's world" preset puts you in and in the boot state (MZ is
-  // on by default). Ordering is the structural half of that fix, and it argues for
-  // itself: a lens is a question the reader asked, so it is read FIRST — nearest the
-  // time axis going across, at the top of the stack going down — and the four
-  // standing regions keep their own order behind it. Deep time stays at the head
-  // because it is the only band with anything in it on the log scale.
+  LMAX: 10.2,                              // dead, but part of the compatibility surface
+  // stage height budget — sizeRenderers() writes this; the canvas grows to its content
+  // but never (except at the trim floor) past this.
+  HMAX: 760,
+  SP_PITCH: 24, EV_PITCH: 17, SPREAD_CAP: 6, EVENT_CAP: 3,
+
+  // ---- the lane registry: bands and lenses unified -------------------------
+  // Fixed order: CO deep time, then ON curated lanes in registry order, then the four
+  // standing regions. Regions and CO are always on; curated lanes toggle via chips.
+  laneDefs(): { key: string; label: string; si: number | null; kind: 'deep' | 'curated' | 'region' }[] {
+    const out: { key: string; label: string; si: number | null; kind: 'deep' | 'curated' | 'region' }[] =
+      [{ key: 'CO', label: 'Deep time', si: null, kind: 'deep' }];
+    for (const L of LANES) if (this.lens[L.key]) out.push({ key: L.key, label: L.label, si: L.si, kind: 'curated' });
+    out.push(
+      { key: 'EU', label: 'Europe', si: 0, kind: 'region' },
+      { key: 'ME', label: 'MidEast & Africa', si: 1, kind: 'region' },
+      { key: 'AS', label: 'Asia', si: 2, kind: 'region' },
+      { key: 'AM', label: 'Americas', si: 3, kind: 'region' });
+    return out;
+  },
+  /** Is this band key a curated lane? Replaces every hardcoded ['MU','SC','MZ'] list. */
+  isCurated(key: string) { return LANES.some(l => l.key === key); },
+  // COMPAT SHIM for the vertical projection: same tuple shape as ever; the bh numbers
+  // are frozen constants consumed only by VT's railWidth.
   bands(): [string, string, number, number | null][] {
     const lens: [string, string, number, number | null][] = [];
-    if (this.lens.MU) lens.push(['MU', 'Music', 88, 4]);
-    if (this.lens.SC) lens.push(['SC', 'Science & ideas', 88, 5]);
-    if (this.lens.MZ) lens.push(['MZ', 'Mozart', 88, 6]);
+    for (const L of LANES) if (this.lens[L.key]) lens.push([L.key, L.label, 88, L.si]);
     return [['CO', 'Deep time', 34, null], ...lens,
       ['EU', 'Europe', 86, 0], ['ME', 'MidEast & Africa', 86, 1], ['AS', 'Asia', 86, 2], ['AM', 'Americas', 86, 3]];
   },
   span() { return this.d1 - this.d0; },
-  LMAX: 10.2,
+
+  // ---- the piecewise screen mapping (shared tv/ty; d0/d1 stay in YEARS) ----
   x(y: number, G: number, Wp: number) {
-    if (!this.log) return G + (y - this.d0) / this.span() * Wp;
-    const ya = Math.max(2026.5 - y, 0.6); return G + (1 - Math.log10(ya) / this.LMAX) * Wp;
+    const v0 = tv(this.d0), v1 = tv(this.d1);
+    return G + (tv(y) - v0) / ((v1 - v0) || 1) * Wp;
   },
   ix(x: number, G: number, Wp: number) {
-    if (!this.log) return this.d0 + (x - G) / Wp * this.span();
-    return 2026.5 - Math.pow(10, (1 - (x - G) / Wp) * this.LMAX);
+    const v0 = tv(this.d0), v1 = tv(this.d1);
+    return ty(v0 + (x - G) / Wp * (v1 - v0));
+  },
+  /**
+   * Zoom about an anchor year by factor f, in v-space. INVARIANT: x is affine in tv
+   * with x(anchor) = G + frac·Wp before and after by construction, so the year under
+   * the cursor never moves — at the seam and in deep time alike.
+   */
+  zoomBy(anchorYear: number, f: number) {
+    const v0 = tv(this.d0), v1 = tv(this.d1), vc = tv(anchorYear);
+    const frac = (vc - v0) / ((v1 - v0) || 1);
+    const spanV = clamp((v1 - v0) * f, 8, VFULL);
+    let nv0 = vc - frac * spanV, nv1 = nv0 + spanV;
+    const lo = tv(YMIN), hi = tv(YMAX);
+    if (nv1 > hi) { nv0 -= (nv1 - hi); nv1 = hi; }     // shift, don't squash
+    if (nv0 < lo) { nv1 += (lo - nv0); nv0 = lo; if (nv1 > hi) nv1 = hi; }
+    this.d0 = ty(nv0); this.d1 = ty(nv1);
   },
   levelFor(S: number) { if (S <= this.THR[5]) return 5; if (S <= this.THR[4]) return 4; if (S <= this.THR[3]) return 3; if (S <= this.THR[2]) return 2; return 1; },
   alphaFor(lvl: number, S: number, isLens: boolean) {
     const t = this.THR[lvl] * (isLens ? 2.5 : 1); if (!isFinite(t)) return 1;
     if (S <= t) return 1; if (S <= t * 1.6) return 1 - (S - t) / (t * .6); return 0;
   },
+
+  // ---- the spread corpus: membership + PERMANENT lane packing --------------
+  // Region lanes: EVENTS durations of that band ∪ POLIS polities by region (AF folds
+  // into ME) ∪ REL.spreads by first-footprint region — deduped by exact name so an
+  // EVENTS row does not shadow the polity it duplicates. Curated lanes: their EVENTS
+  // durations (lane members live in EVENTS). Packed ONCE per corpus in year space,
+  // zero-gap (abutting spreads share a row — the Gantt look), canonical order
+  // (level asc, duration desc, peak desc, start asc, id asc).
+  _corpus: null as null | { sig: string; byLane: Map<string, SpreadItem[]> },
+  ensureCorpus() {
+    const sig = EVENTS.length + '|' + POLITIES.length + '|' + REL.spreads.length + '|' + LANES.map(l => l.key).join(',');
+    if (this._corpus && this._corpus.sig === sig) return this._corpus.byLane;
+    const byLane = new Map<string, SpreadItem[]>();
+    for (const key of ['CO', ...LANES.map(l => l.key), 'EU', 'ME', 'AS', 'AM']) byLane.set(key, []);
+    for (const e of EVENTS) {
+      if (!e[1]) continue;                             // moments belong to the event stratum
+      const arr = byLane.get(e[3]); if (!arr) continue;
+      arr.push({
+        id: evId(e), name: e[2], start: e[0], end: e[1], cat: e[6] || 'power',
+        type: e[7] || 'episode', lvl: e[4] || 3, sharpness: sharpnessOf(e[7], e[9]),
+        note: '', tags: e[5] || '', peak: 0, row: -1, ev: e,
+      });
+    }
+    for (const p of POLITIES) {
+      const arr = byLane.get(p.region === 'AF' ? 'ME' : p.region); if (!arr) continue;
+      arr.push({
+        id: 'polity:' + p.id, name: p.name, start: p.start, end: p.end, cat: 'power',
+        type: 'polity', lvl: lvlOfWeight(peakOf(p.weight)), sharpness: 0.85,
+        note: p.note || '', tags: '', peak: peakOf(p.weight), row: -1, ev: null,
+      });
+    }
+    for (const s of REL.spreads) {
+      const fp = s.footprint && s.footprint.length ? s.footprint[0] : null;
+      const arr = fp ? byLane.get(regionOf(fp.lat, fp.lon) || '') : null; if (!arr) continue;
+      arr.push({
+        id: 'spread:' + s.id, name: s.name, start: s.start, end: s.end,
+        cat: SPREADCAT[s.kind] || 'society', type: 'spread',
+        lvl: lvlOfWeight(peakOf(s.weight)), sharpness: s.sharpness ?? 0.25,
+        note: s.note || '', tags: '', peak: peakOf(s.weight), row: -1, ev: null,
+      });
+    }
+    for (const [key, items] of byLane) {
+      const names = new Set(items.filter(i => !i.ev).map(i => i.name.toLowerCase()));
+      const kept = items.filter(i => !(i.ev && names.has(i.name.toLowerCase())));
+      // DEVIATION from the architect's exact key (level, duration, peak): peak weight
+      // outranks duration inside a level, so the top rows hold what actually loomed
+      // largest (Rome, the big empires) rather than whatever merely lasted longest —
+      // the founder's "importance-first (level, then duration/peak weight)". And at
+      // equal level/peak, collective phenomena (empires, eras, movements) outrank
+      // individual lives, or a 90-year lifespan buries the 14-year Bauhaus.
+      const typeRank = (t: SpreadItem) => (t.type === 'life' ? 1 : 0);
+      kept.sort((a, b) => a.lvl - b.lvl
+        || b.peak - a.peak
+        || typeRank(a) - typeRank(b)
+        || (b.end - b.start) - (a.end - a.start)
+        || a.start - b.start
+        || (a.id < b.id ? -1 : a.id > b.id ? 1 : 0));
+      const rows: SpreadItem[][] = [];
+      for (const it of kept) {                          // zero-gap interval packing
+        let r = 0;
+        for (; r < rows.length; r++) if (!rows[r].some(o => it.start < o.end && o.start < it.end)) break;
+        if (r === rows.length) rows.push([]);
+        rows[r].push(it); it.row = r;
+      }
+      byLane.set(key, kept);
+    }
+    this._corpus = { sig, byLane };
+    return byLane;
+  },
+
+  // ---- pure layout pass: filter, pack, compact, cap → per-lane {h, rows, more} ----
+  // size() calls this before fitCanvas; render() paints from the SAME result, so the
+  // canvas height and the painted content can never disagree.
+  layout(cw: number): Layout {
+    const G = 118, Wp = cw - G - 10;
+    const span = this.span();
+    const sel = SelStore.id;
+    const rels = sel ? relOf(sel) : null;
+    const q = this.q.toLowerCase();
+    const ctx = this.cv.getContext('2d')!;
+    const byLane = this.ensureCorpus();
+    const lanes: LaneLayout[] = [];
+    for (const def of this.laneDefs()) {
+      const isCur = def.kind === 'curated';
+      // spreads: visible iff LOD alpha > 0.02 (lit items bypass LOD) and on screen
+      const vis: LSpread[] = [];
+      for (const it of (byLane.get(def.key) || [])) {
+        if (this.off.has(it.cat)) continue;
+        const isMatch = !!q && (it.name.toLowerCase().includes(q) || it.tags.includes(q) || it.note.toLowerCase().includes(q));
+        let lodA = lit(it.id, sel, rels) ? 1 : this.alphaFor(it.lvl, span, isCur);
+        if (isMatch && lodA <= 0.02) lodA = 0.6;     // a searched-for thing must be findable
+        if (lodA <= 0.02) continue;
+        const x0 = this.x(it.start, G, Wp), x1 = this.x(it.end, G, Wp);
+        if (x1 < G - 40 || x0 > cw + 40) continue;
+        vis.push({ it, row: it.row, x0, x1, lodA, isMatch });
+      }
+      // rows with zero visible spreads are COMPACTED OUT — order preserved
+      const rowIdx = [...new Set(vis.map(v => v.row))].sort((a, b) => a - b);
+      const rowMap = new Map(rowIdx.map((r, i) => [r, i] as [number, number]));
+      let more = 0;
+      const spreads: LSpread[] = [];
+      for (const v of vis) {
+        const cr = rowMap.get(v.row)!;
+        // the row cap spares search matches and the selection — neither may be hidden
+        if (cr >= this.SPREAD_CAP && !v.isMatch && v.it.id !== sel) { more++; continue; }
+        spreads.push({ ...v, row: cr });
+      }
+      // second compaction: capped-away rows close up under any spared rows above them
+      const keptRows = [...new Set(spreads.map(v => v.row))].sort((a, b) => a - b);
+      const rowMap2 = new Map(keptRows.map((r, i) => [r, i] as [number, number]));
+      for (const v of spreads) v.row = rowMap2.get(v.row)!;
+      const ns = keptRows.length;
+      // events: per-frame pixel packing, today's laneEnd algorithm, end==0 only;
+      // when no row is free the event is DROPPED to the overflow count.
+      ctx.font = fontUI(11.5);
+      const evs = EVENTS.filter(e => e[3] === def.key && !e[1] && !this.off.has(e[6])).sort((a, b) => a[0] - b[0]);
+      const laneEnd = new Array(this.EVENT_CAP).fill(-1e18);
+      const events: LEvent[] = [];
+      let usedRows = 0;
+      for (const ev of evs) {
+        const id = evId(ev);
+        const lodA = lit(id, sel, rels) ? 1 : this.alphaFor(ev[4], span, isCur);
+        if (lodA <= 0.02) continue;
+        const x0 = this.x(ev[0], G, Wp);
+        if (x0 < G - 40 || x0 > cw) continue;
+        const title = ev[2];
+        const isMatch = !!q && (title.toLowerCase().includes(q) || ev[5].includes(q));
+        const labelW = ctx.measureText(title).width;
+        let lane = laneEnd.findIndex(le => le < x0 - 4);
+        let mode: 'right' | 'left' | 'none' = 'right';
+        if (lane < 0) {
+          if (!isMatch) { more++; continue; }         // dropped, never double-stacked…
+          // …except a search match, which packs dot-only into the least-crowded row
+          lane = 0; let mMin = 1e18; laneEnd.forEach((le, i2) => { if (le < mMin) { mMin = le; lane = i2; } });
+          mode = 'none';
+        }
+        const prevEnd = laneEnd[lane];
+        if (mode === 'right' && x0 + 7 + labelW >= cw - 4) mode = (x0 - 9 - labelW > Math.max(G, prevEnd + 4)) ? 'left' : 'none';
+        laneEnd[lane] = Math.max(prevEnd, x0 + 8 + (mode === 'right' ? labelW : 0));
+        usedRows = Math.max(usedRows, lane + 1);
+        events.push({ ev, id, x0, row: lane, lodA, mode, labelW, isMatch });
+      }
+      lanes.push({ key: def.key, label: def.label, si: def.si, isCur, spreads, events, ns, ne: usedRows, more, top: 0, h: 0, evTop: 0 });
+    }
+    // per-lane height; a lane with no visible content collapses to a 20px strip
+    const hOf = (L: LaneLayout) => (L.ns || L.ne)
+      ? 22 + L.ns * this.SP_PITCH + (L.ns && L.ne ? 6 : 0) + L.ne * this.EV_PITCH + 6
+      : 20;
+    // GLOBAL cap: trim the lane showing the most spread rows (round-robin on ties),
+    // then event rows to 1 the same way; floor 1 spread + 1 event row — then STOP,
+    // even if still over (the canvas may exceed HMAX slightly, accepted).
+    const SPREAD_FLOOR = 3;                            // a lane keeps up to 3 spread rows
+    let rr = 0, guard = 400;
+    const noTrim = new Set<LaneLayout>();
+    while (lanes.reduce((a, L) => a + hOf(L), 0) + 34 > this.HMAX && guard-- > 0) {
+      let m = SPREAD_FLOOR;
+      for (const L of lanes) if (!noTrim.has(L) && L.ns > m) m = L.ns;
+      if (m > SPREAD_FLOOR) {
+        const cands = lanes.filter(L => !noTrim.has(L) && L.ns === m);
+        const pick = cands[(rr++) % cands.length];
+        const last = pick.ns - 1;
+        // a row holding a search match or the selection is spared — skip this lane
+        if (pick.spreads.some(v => v.row === last && (v.isMatch || v.it.id === sel))) { noTrim.add(pick); continue; }
+        pick.more += pick.spreads.filter(v => v.row === last).length;
+        pick.spreads = pick.spreads.filter(v => v.row !== last);
+        pick.ns = last;
+        continue;
+      }
+      let me = 1; for (const L of lanes) if (L.ne > me) me = L.ne;
+      if (me > 1) {
+        const cands = lanes.filter(L => L.ne === me);
+        const pick = cands[(rr++) % cands.length];
+        const last = pick.ne - 1;
+        pick.more += pick.events.filter(e2 => e2.row === last).length;
+        pick.events = pick.events.filter(e2 => e2.row !== last);
+        pick.ne = last;
+        continue;
+      }
+      break;      // the floor (3 spread rows + 1 event row) — the canvas may exceed
+                  // HMAX slightly and the section scrolls; never loop on an
+                  // unsatisfiable target
+    }
+    let top = 0;
+    for (const L of lanes) {
+      L.top = top; L.h = hOf(L);
+      L.evTop = L.top + 22 + L.ns * this.SP_PITCH + (L.ns && L.ne ? 6 : 0);
+      top += L.h;
+    }
+    return { lanes, H: top + 34, G, Wp, sel, rels, q };
+  },
+
+  _lay: null as Layout | null,
   size() {
     if (!this.cv) return null;
-    const H = this.bands().reduce((a, b) => a + b[2], 0) + 34;
-    const d = fitCanvas(this.cv, H); return d ? { cw: d.cw, H, ctx: d.ctx } : null;
+    const cw = this.cv.clientWidth || this.cv.parentElement?.clientWidth || 0;
+    if (!cw) return null;
+    const lay = this._lay = this.layout(cw);
+    const d = fitCanvas(this.cv, lay.H);
+    return d ? { cw: d.cw, H: lay.H, ctx: d.ctx, lay } : null;
   },
   boxes: [] as any[],
   /** Register another projection of this state (vertical.ts). Repainted by paint(). */
   onProjection(fn: () => void) { PROJECTIONS.push(fn); },
   /** Register a projection that has to bring a named band into view (vertical.ts). */
   onReveal(fn: (bandKey: string) => void) { REVEALS.push(fn); },
-  /**
-   * "This band is the subject of what just happened." Called by the controls that
-   * switch a lens ON — never by a plain repaint, and never by switching one off, which
-   * has no subject. A projection that shows every band at once ignores it.
-   */
   reveal(bandKey: string) { for (const f of REVEALS) f(bandKey); },
   /** The state changed — repaint every projection of it, not just this one. */
   paint() { this.render(); for (const f of PROJECTIONS) f(); },
+
+  // ---- one spread rectangle with its sharpness envelope --------------------
+  // The envelope is ALPHA/EDGE only — never geometry, never height. Per-edge ramp
+  // width R = min(0.5·(1−s)·W, 96): s=0.85 polity → crisp and stroked; s=0.25 era →
+  // long ramps with a 25% plateau; s→0 near-triangular. All alpha is baked into the
+  // gradient stops — globalAlpha stays 1, no double multiply.
+  drawSpread(ctx: CanvasRenderingContext2D, x0: number, x1: number, yC: number, h: number, col: string, alpha: number, s: number) {
+    const W = Math.max(x1 - x0, 2);
+    const R = Math.min(0.5 * (1 - s) * W, 96);
+    const lo = alpha * Math.max(s, 0.06);
+    const g = ctx.createLinearGradient(x0, 0, x0 + W, 0);
+    g.addColorStop(0, withA(col, lo));
+    g.addColorStop(R / W, withA(col, alpha));
+    g.addColorStop(1 - R / W, withA(col, alpha));
+    g.addColorStop(1, withA(col, lo));
+    ctx.fillStyle = g;
+    ctx.beginPath(); ctx.roundRect(x0, yC - h / 2, W, h, 3); ctx.fill();
+  },
+
   render() {
     const dim = this.size(); if (!dim) return;
-    const { cw, H, ctx } = dim; const T = tokens();
+    const { cw, H, ctx, lay } = dim; const T = tokens();
     ctx.fillStyle = T.panel; ctx.fillRect(0, 0, cw, H);
-    const G = 118, Wp = cw - G - 10;
-    const bands = this.bands(); this.boxes = [];
-    const q = this.q.toLowerCase();
+    const { G, Wp, lanes, sel, rels, q } = lay;
+    this.boxes = [];
     let hitCount = 0;
-    if (!this.log) {
-      const eras: [number, number, string][] = [[-800, 476, 'Antiquity'], [476, 1453, 'Middle Ages'], [1453, 1789, 'Early Modern'], [1789, 2026, 'Modern']];
-      ctx.textAlign = 'left'; ctx.font = fontUI(10);                 // an era name is language
-      for (const [a, b, n] of eras) {
-        const xa = clamp(this.x(a, G, Wp), G, cw - 10), xb = clamp(this.x(b, G, Wp), G, cw - 10);
-        if (xb - xa < 4) continue;
-        ctx.fillStyle = T.ink; ctx.globalAlpha = .055; ctx.fillRect(xa, 0, xb - xa, H - 30);
-        if (xb - xa > 70) { ctx.globalAlpha = .75; ctx.fillStyle = T.ink3; ctx.fillText(n, xa + 5, 12); }
-        ctx.globalAlpha = 1;
-      }
-    }
+
+    // ---- shared time axis (bounded by construction; both projections use it) ----
     ctx.strokeStyle = T.line; ctx.lineWidth = 1;
     ctx.font = fontMono(11); ctx.fillStyle = T.ink2; ctx.textAlign = 'center';   // years are measurements
-    if (!this.log) {
-      const steps = [2000, 1000, 500, 200, 100, 50, 20, 10, 5, 2, 1];
-      // THE STEP IS THE SMALLEST ONE THAT STILL FITS <=14 TICKS. `find` on a descending
-      // table returns the LARGEST instead, which pinned the step at 2,000 years for every
-      // span under 28,000: the Mozart preset (a 100-year window) drew a time axis with no
-      // year on it at all, and any span over 28,000 fell through to `|| 1` and tried to
-      // put 80,000 ticks in one frame. Both projections read the same axis, so both are
-      // fixed here and in the other one, together.
-      const step = steps.filter(s => this.span() / s <= 14).pop() ?? steps[0];
-      const start = Math.ceil(this.d0 / step) * step;
-      ctx.beginPath();
-      for (let y = start; y <= this.d1; y += step) {
-        const x = this.x(y, G, Wp);
-        ctx.moveTo(x, 0); ctx.lineTo(x, H - 30);
-        ctx.fillText(fmtY(y), x, H - 10);
-      }
-      ctx.globalAlpha = .35; ctx.stroke(); ctx.globalAlpha = 1;
-    } else {
-      const labs: [number, string][] = [[1e10, '10 Gya'], [1e9, '1 Gya'], [1e8, '100 Mya'], [1e7, '10 Mya'], [1e6, '1 Mya'], [1e5, '100 kya'], [1e4, '10 kya'], [1e3, '1,000 ya'], [100, '100 ya'], [10, '10 ya']];
-      ctx.beginPath();
-      for (const [ya, lab] of labs) {
-        const x = this.x(2026.5 - ya, G, Wp);
-        if (x < G) continue;
-        ctx.moveTo(x, 0); ctx.lineTo(x, H - 30); ctx.fillText(lab, x, H - 10);
-      }
-      ctx.globalAlpha = .35; ctx.stroke(); ctx.globalAlpha = 1;
+    ctx.beginPath();
+    for (const t of timeTicks(this.d0, this.d1, Wp)) {
+      const x = this.x(t.y, G, Wp);
+      if (x < G - 1 || x > cw - 4) continue;
+      ctx.moveTo(x, 0); ctx.lineTo(x, H - 30);
+      ctx.fillText(t.label, x, H - 10);
     }
+    ctx.globalAlpha = .35; ctx.stroke(); ctx.globalAlpha = 1;
     const xn = this.x(2026, G, Wp);
     if (xn >= G && xn <= cw) { ctx.strokeStyle = T.accent2; ctx.setLineDash([4, 4]); ctx.beginPath(); ctx.moveTo(xn, 0); ctx.lineTo(xn, H - 30); ctx.stroke(); ctx.setLineDash([]); }
-    let yTop = 0;
-    const baseL = this.log ? 2 : this.levelFor(this.span());
-    for (const [key, label, bh, si] of bands) {
-      ctx.strokeStyle = T.line; ctx.globalAlpha = .8; ctx.beginPath(); ctx.moveTo(0, yTop + bh); ctx.lineTo(cw, yTop + bh); ctx.stroke(); ctx.globalAlpha = 1;
-      ctx.fillStyle = si === null ? T.ink2 : T.s[si]; ctx.beginPath(); ctx.arc(10, yTop + 13, 4, 0, 7); ctx.fill();
+
+    const bgHsl = hexHsl(T.panel); const bgL = bgHsl ? bgHsl[2] : 92;
+
+    for (const L of lanes) {
+      // band separator + header — exactly today's furniture
+      ctx.strokeStyle = T.line; ctx.globalAlpha = .8; ctx.beginPath(); ctx.moveTo(0, L.top + L.h); ctx.lineTo(cw, L.top + L.h); ctx.stroke(); ctx.globalAlpha = 1;
+      ctx.fillStyle = L.si === null ? T.ink2 : T.s[L.si]; ctx.beginPath(); ctx.arc(10, L.top + 13, 4, 0, 7); ctx.fill();
       ctx.fillStyle = T.ink2; ctx.font = fontUI(10.5, 600); ctx.textAlign = 'left';   // a band name is language
-      ctx.fillText(label.toUpperCase(), 20, yTop + 17);
-      const isLens = ['MU', 'SC', 'MZ'].includes(key);
-      const evs = EVENTS.filter(e => e[3] === key && !this.off.has(e[6])).sort((a, b) => a[0] - b[0]);
-      const laneH = 17, maxLanes = Math.max(1, Math.floor((bh - 24) / laneH));
-      const laneEnd = new Array(maxLanes).fill(-1e18);
-      ctx.font = fontUI(11.5);                                       // event titles are language
-      for (const ev of evs) {
-        const [y0, y1, title, , lvl] = ev; const cat = ev[6], typ = ev[7];
-        let a = this.log ? (key === 'CO' ? 1 : (lvl <= 2 ? 1 : 0)) : this.alphaFor(lvl, this.span(), isLens);
-        if (a <= 0.02) continue;
-        const x0 = this.x(y0, G, Wp); const xe = y1 ? this.x(y1, G, Wp) : x0;
-        if (xe < G - 40 || x0 > cw) continue;
-        const isMatch = q && ((title.toLowerCase().includes(q)) || ev[5].includes(q));
-        if (q) { if (isMatch) { hitCount++; } else a *= .12; }
-        const col = catColor(cat, T);
-        const labelW = ctx.measureText(title).width;
-        let lane = laneEnd.findIndex(le => le < x0 - 4), noLabel = false;
-        if (lane < 0) {
-          lane = 0; let m = 1e18; laneEnd.forEach((le, i) => { if (le < m) { m = le; lane = i; } });
-          if (laneEnd[lane] >= x0 - 4) noLabel = true;
+      ctx.fillText(L.label.toUpperCase(), 20, L.top + 17);
+
+      // ---- SPREAD STRATUM: rows at constant pitch, rectangles with envelopes ----
+      const byRow: LSpread[][] = [];
+      for (const s of L.spreads) (byRow[s.row] ||= []).push(s);
+      for (let r = 0; r < L.ns; r++) {
+        const rowItems = (byRow[r] || []).sort((a, b) => a.x0 - b.x0);
+        const yC = L.top + 22 + 12 + r * this.SP_PITCH;
+        let prevEnd = -1e18;
+        for (let i = 0; i < rowItems.length; i++) {
+          const s = rowItems[i], it = s.it;
+          const searchDim = q ? (s.isMatch ? 1 : 0.12) : 1;
+          if (q && s.isMatch) hitCount++;
+          const dimA = dimAlpha(it.id, sel, rels) * searchDim;
+          const h = TIER_H[it.lvl] || 12;
+          const [col, colL] = varyColor(catColor(it.cat, T), it.id);
+          const fillA = clamp(0.75 * s.lodA * dimA, 0, 1);
+          this.drawSpread(ctx, s.x0, s.x1, yC, h, col, fillA, it.sharpness);
+          const W = Math.max(s.x1 - s.x0, 2);
+          if (it.sharpness >= 0.6) {                   // the stroke is what makes "founded on a date" read
+            ctx.globalAlpha = clamp(0.9 * s.lodA * dimA, 0, 1);
+            ctx.strokeStyle = col; ctx.lineWidth = 1;
+            ctx.beginPath(); ctx.roundRect(s.x0, yC - h / 2, W, h, 3); ctx.stroke();
+            ctx.globalAlpha = 1;
+          }
+          if (it.id === sel) {                          // the selection ring, Conn's exact idea
+            ctx.globalAlpha = 1; ctx.strokeStyle = T.ink; ctx.lineWidth = 1.6;
+            ctx.beginPath(); ctx.roundRect(s.x0 - 1, yC - h / 2 - 1, W + 2, h + 2, 4); ctx.stroke();
+          } else if (s.isMatch) {
+            ctx.globalAlpha = 1; ctx.strokeStyle = T.accent2; ctx.lineWidth = 1.6;
+            ctx.beginPath(); ctx.roundRect(s.x0 - 1, yC - h / 2 - 1, W + 2, h + 2, 4); ctx.stroke();
+          }
+          // label: inside when it fits (sticky-left), else today's right/left/none
+          const visX0 = Math.max(s.x0, G);
+          ctx.font = fontUI(10.5, 600);
+          const inW = ctx.measureText(it.name).width;
+          let mode: 'in' | 'right' | 'left' | 'none' = 'none';
+          let labelW = inW;
+          if (inW + 12 <= s.x1 - visX0) mode = 'in';
+          else {
+            ctx.font = fontUI(11.5);
+            labelW = ctx.measureText(it.name).width;
+            const nextX0 = i + 1 < rowItems.length ? rowItems[i + 1].x0 : 1e18;
+            if (s.x1 + 7 + labelW < Math.min(nextX0 - 4, cw - 4)) mode = 'right';
+            else if (s.x0 - 9 - labelW > Math.max(G, prevEnd + 4)) mode = 'left';
+          }
+          if (s.lodA * dimA > 0.25) {
+            if (mode === 'in') {
+              const effL = bgL + (colL - bgL) * fillA;  // ink from the COMPOSITE lightness
+              ctx.globalAlpha = Math.min(1, fillA + 0.2);
+              ctx.fillStyle = effL > 50 ? T.ink : '#fff';
+              ctx.fillText(it.name, visX0 + 6, yC + 3.5);
+            } else if (mode === 'right') {
+              ctx.globalAlpha = Math.min(1, s.lodA * dimA); ctx.fillStyle = T.ink;
+              ctx.fillText(it.name, s.x1 + 7, yC + 4);
+            } else if (mode === 'left') {
+              ctx.globalAlpha = Math.min(1, s.lodA * dimA); ctx.fillStyle = T.ink;
+              ctx.fillText(it.name, s.x0 - 9 - labelW, yC + 4);
+            }
+          }
+          ctx.globalAlpha = 1;
+          prevEnd = Math.max(prevEnd, s.x1 + (mode === 'right' ? 8 + labelW : 0));
+          this.boxes.push({
+            x: mode === 'left' ? s.x0 - 11 - labelW : s.x0 - 2,
+            y: yC - h / 2 - 2,
+            w: (s.x1 - s.x0) + 4 + (mode === 'right' ? 10 + labelW : mode === 'left' ? 12 + labelW : 0),
+            h: h + 4, kind: 'spread', id: it.id, it, band: L.label,
+          });
         }
-        const prevEnd = laneEnd[lane];
-        const rightX = (y1 ? Math.max(xe, x0) : x0) + 7;
-        let mode = noLabel ? 'none' : 'right';
-        if (mode === 'right' && rightX + labelW >= cw - 4)
-          mode = (x0 - 9 - labelW > Math.max(G, prevEnd + 4)) ? 'left' : 'none';
-        laneEnd[lane] = Math.max(prevEnd, Math.max(xe, x0) + 8 + (mode === 'right' ? labelW : 0));
-        const yy = yTop + 26 + lane * laneH;
-        ctx.globalAlpha = a; ctx.fillStyle = col; ctx.strokeStyle = col;
-        const w = Math.max(xe - x0, 6);
-        if (typ === 'era') {                                   // translucent swath
-          ctx.globalAlpha = a * .22; ctx.fillRect(x0, yTop + 22, w, bh - 26);
-          ctx.globalAlpha = a * .9; ctx.fillRect(x0, yy - 1, w, 2);
-        } else if (typ === 'zone') {                            // thick tapered ribbon
-          const th = Math.max(5, 12 - lvl * 1.2);
-          ctx.beginPath();
-          ctx.moveTo(x0, yy); ctx.lineTo(x0 + Math.min(9, w * .28), yy - th / 2);
-          ctx.lineTo(x0 + w - Math.min(9, w * .28), yy - th / 2); ctx.lineTo(x0 + w, yy);
-          ctx.lineTo(x0 + w - Math.min(9, w * .28), yy + th / 2); ctx.lineTo(x0 + Math.min(9, w * .28), yy + th / 2);
-          ctx.closePath(); ctx.fill();
-        } else if (typ === 'life') {                            // capsule with birth dot + death cap
-          ctx.globalAlpha = a * .55; ctx.beginPath(); ctx.roundRect(x0, yy - 3.5, w, 7, 3.5); ctx.fill();
-          ctx.globalAlpha = a; ctx.beginPath(); ctx.arc(x0, yy, 3.4, 0, 7); ctx.fill();
-          ctx.lineWidth = 2; ctx.beginPath(); ctx.moveTo(x0 + w, yy - 5); ctx.lineTo(x0 + w, yy + 5); ctx.stroke();
-        } else if (y1 || typ === 'episode') {                     // bar
-          ctx.beginPath(); ctx.roundRect(x0, yy - 4, w, 8, 4); ctx.fill();
-        } else {                                            // moment — a quiet point
-          ctx.beginPath(); ctx.arc(x0, yy, 3.2, 0, 7); ctx.fill();
+      }
+
+      // ---- EVENT STRATUM: strictly below the spread block (decision 4) ----
+      ctx.font = fontUI(11.5);
+      for (const E of L.events) {
+        const title = E.ev[2];
+        const searchDim = q ? (E.isMatch ? 1 : 0.12) : 1;
+        if (q && E.isMatch) hitCount++;
+        const a = clamp(E.lodA * dimAlpha(E.id, sel, rels) * searchDim, 0, 1);
+        const yy = L.evTop + 8.5 + E.row * this.EV_PITCH;
+        ctx.globalAlpha = a; ctx.fillStyle = catColor(E.ev[6], T);
+        ctx.beginPath(); ctx.arc(E.x0, yy, 3.2, 0, 7); ctx.fill();
+        if (E.id === sel) {
+          ctx.globalAlpha = 1; ctx.strokeStyle = T.ink; ctx.lineWidth = 1.6;
+          ctx.beginPath(); ctx.arc(E.x0, yy, 7, 0, 7); ctx.stroke();
+        } else if (E.isMatch) {
+          ctx.globalAlpha = 1; ctx.strokeStyle = T.accent2; ctx.lineWidth = 1.6;
+          ctx.beginPath(); ctx.arc(E.x0, yy, 7, 0, 7); ctx.stroke();
         }
-        if (isMatch) { ctx.strokeStyle = T.accent2; ctx.lineWidth = 1.6; ctx.beginPath(); ctx.arc(x0, yy, 7, 0, 7); ctx.stroke(); }
-        ctx.fillStyle = T.ink;
+        ctx.globalAlpha = a; ctx.fillStyle = T.ink;
         if (a > 0.25) {
-          if (mode === 'right') ctx.fillText(title, rightX, yy + 4);
-          else if (mode === 'left') ctx.fillText(title, x0 - 9 - labelW, yy + 4);
+          if (E.mode === 'right') ctx.fillText(title, E.x0 + 7, yy + 4);
+          else if (E.mode === 'left') ctx.fillText(title, E.x0 - 9 - E.labelW, yy + 4);
         }
         ctx.globalAlpha = 1;
-        this.boxes.push({ x: (mode === 'left' ? x0 - 11 - labelW : x0 - 8), y: yy - 9, w: (y1 ? xe - x0 : 0) + 16 + (mode === 'none' ? 4 : labelW), h: 18, ev, band: label });
+        this.boxes.push({
+          x: E.mode === 'left' ? E.x0 - 11 - E.labelW : E.x0 - 8, y: yy - 9,
+          w: 16 + (E.mode === 'none' ? 4 : E.labelW), h: 18, kind: 'ev', id: E.id, ev: E.ev, band: L.label,
+        });
       }
-      yTop += bh;
+
+      // ---- the "+N more" affordance: one LOD step in, anchored at the cursor ----
+      if (L.more > 0) {
+        ctx.font = fontMono(10); ctx.fillStyle = T.ink3; ctx.textAlign = 'right';
+        const txt = `+${L.more} more · zoom`;
+        ctx.fillText(txt, cw - 12, L.top + L.h - 6);
+        const tw = ctx.measureText(txt).width;
+        this.boxes.push({ x: cw - 14 - tw, y: L.top + L.h - 17, w: tw + 8, h: 15, kind: 'more' });
+        ctx.textAlign = 'left';
+      }
     }
-    // hover crosshair + year readout
+
+    // ---- the global time index: the one persistent accent mark --------------
+    const xg = this.x(TimeStore.year, G, Wp);
+    if (xg >= G && xg <= cw - 4) {
+      ctx.strokeStyle = T.accent; ctx.globalAlpha = .9; ctx.lineWidth = 1.5;
+      ctx.beginPath(); ctx.moveTo(xg, 0); ctx.lineTo(xg, H - 30); ctx.stroke(); ctx.globalAlpha = 1;
+      yearPill(ctx, T, xg, 2, fmtBig(TimeStore.year));
+    }
+
+    // hover crosshair + year readout (the hover pill keeps the bottom edge)
     if (this.hoverX !== null && this.hoverX > G && this.hoverX < cw) {
       const yr = this.ix(this.hoverX, G, Wp);
       ctx.strokeStyle = T.accent; ctx.globalAlpha = .55; ctx.lineWidth = 1;
       ctx.beginPath(); ctx.moveTo(this.hoverX, 0); ctx.lineTo(this.hoverX, H - 30); ctx.stroke();
       ctx.globalAlpha = 1;
-      yearPill(ctx, T, this.hoverX, H - 26, this.log ? fmtBig(yr) : fmtY(yr));
+      yearPill(ctx, T, this.hoverX, H - 26, fmtBig(yr));
     }
-    $('#zoomReadout')!.textContent = this.log ? 'log scale · Big Bang → now' :
-      `showing importance ≤ ${baseL} of 5 · span ${Math.round(this.span()).toLocaleString()} yrs`;
+    const baseL = this.levelFor(this.span());
+    $('#zoomReadout')!.textContent = `showing importance ≤ ${baseL} of 5 · span ${fmtSpan(this.span())}`;
     $('#searchCnt')!.textContent = q ? `${hitCount} hits` : '';
   },
-  // `done` runs once the span has SETTLED. Column widths are measured against the
-  // visible span, so a projection that has to pan to a column can only compute where
-  // that column ended up after the last frame — asking mid-flight aims at a layout
-  // that is still moving.
+
+  // eased in V-SPACE: year-space easing would spend 99.9% of the Big Bang preset's run
+  // outside human history.
   animTo(a: number, b: number, done?: () => void) {
     if (reduceMotion()) { this.d0 = a; this.d1 = b; this.paint(); done?.(); return; }
-    const A0 = this.d0, B0 = this.d1, t0 = performance.now();
+    const va0 = tv(this.d0), vb0 = tv(this.d1), va1 = tv(a), vb1 = tv(b), t0 = performance.now();
     const step = (t: number) => {
       const p = clamp((t - t0) / 650, 0, 1), e = p < .5 ? 4 * p * p * p : 1 - Math.pow(-2 * p + 2, 3) / 2;
-      this.d0 = A0 + (a - A0) * e; this.d1 = B0 + (b - B0) * e; this.paint();
+      this.d0 = ty(va0 + (va1 - va0) * e); this.d1 = ty(vb0 + (vb1 - vb0) * e); this.paint();
       if (p < 1) requestAnimationFrame(step); else done?.();
     };
     requestAnimationFrame(step);
   },
+  /** If the global moment is outside the window, centre the window on it. */
+  ensureYearVisible() {
+    const y = TimeStore.year;
+    if (y >= this.d0 && y <= this.d1) return;
+    const s = this.span();
+    this.animTo(y - s / 2, y + s / 2);
+  },
+
+  _storesBound: false,
   init() {
     const cv = this.cv = $<HTMLCanvasElement>('#zoomCanvas')!;
+    // curated-lane defaults arrive with the registry (Arts on at boot)
+    for (const L of LANES) if (!(L.key in this.lens)) this.lens[L.key] = !!L.default;
     // his own life events, plus the music row so his lifespan sits beside Bach's and Beethoven's
     $('#btnMozart')!.addEventListener('click', () => {
-      this.log = false; this.lens.MZ = true; this.lens.MU = true;
+      this.lens.MZ = true; this.lens.MU = true;
       this.syncChips();
-      // The preset names its own subject, so it ends with that column in view. It is
-      // the whole promise of the button: 0 of 13 of his life events were on screen
-      // before this line existed, because the vertical surface is wider than its window.
       this.animTo(1735, 1835, () => this.reveal('MZ'));
     });
-    $('#btn1776z')!.addEventListener('click', () => { this.log = false; this.animTo(1746, 1806); });
-    $('#btnDeep')!.addEventListener('click', () => { this.log = !this.log; this.paint(); });
-    $('#btnResetZ')!.addEventListener('click', () => { this.log = false; this.animTo(-3000, 2026); });
+    $('#btn1776z')!.addEventListener('click', () => { this.animTo(1746, 1806); TimeStore.set(1776, 'ui'); });
+    // the deep-time MODE is dead; the button is now a preset that animates the one
+    // continuous scale out to the whole of time.
+    $('#btnDeep')!.addEventListener('click', () => { this.animTo(-13.9e9, 2026); });
+    $('#btnResetZ')!.addEventListener('click', () => { this.animTo(-3000, 2026); });
     $('#searchBox')!.addEventListener('input', (e: any) => { this.q = e.target.value.trim(); this.paint(); });
-    document.querySelectorAll<HTMLElement>('#lensRow .chip').forEach(ch => ch.addEventListener('click', () => {
-      const k = ch.dataset.lens!; this.lens[k] = !this.lens[k]; ch.classList.toggle('on', this.lens[k]); this.paint();
-      // Switching a lens ON is a request to look at it. Switching one off has no
-      // subject, so the vertical projection keeps whatever column it was reading.
-      if (this.lens[k]) this.reveal(k);
-    }));
+    this.buildLaneRow();
     this.buildCatRow();
     buildGrammarLegend();
     repaintOnFonts(() => this.render());
+    if (!this._storesBound) {
+      this._storesBound = true;
+      TimeStore.subscribe(() => this.paint());
+      SelStore.subscribe(() => {
+        this.paint();
+        renderRelatedPanel($('#tlRelPanel'), SelStore.id);
+      });
+      renderRelatedPanel($('#tlRelPanel'), SelStore.id);
+    }
     cv.addEventListener('wheel', e => {
-      e.preventDefault(); if (this.log) return;
+      e.preventDefault();
       const r = cv.getBoundingClientRect(); const G = 118, Wp = cv.clientWidth - G - 10;
       const yc = this.ix(e.clientX - r.left, G, Wp);
-      const f = Math.pow(1.0018, e.deltaY); const s = clamp(this.span() * f, 8, 80000);
-      const frac = (yc - this.d0) / this.span();
-      this.d0 = yc - frac * s; this.d1 = this.d0 + s; this.paint();
+      this.zoomBy(yc, Math.pow(1.0018, e.deltaY));
+      this.paint();
     }, { passive: false });
     let drag: any = null;
-    cv.addEventListener('pointerdown', e => { if (!this.log) { drag = { x: e.clientX, d0: this.d0, d1: this.d1, moved: false }; cv.setPointerCapture(e.pointerId); } });
+    cv.addEventListener('pointerdown', e => {
+      drag = { x: e.clientX, v0: tv(this.d0), v1: tv(this.d1), moved: false };
+      try { cv.setPointerCapture(e.pointerId); } catch { /* synthetic or already-lifted pointer */ }
+    });
     cv.addEventListener('pointermove', e => {
       const r = cv.getBoundingClientRect(), mx = e.clientX - r.left, my = e.clientY - r.top;
       this.hoverX = mx;
       if (drag) {
+        // pan in v-space, or deep-time panning is wildly nonuniform
         const G = 118, Wp = cv.clientWidth - G - 10;
-        const dy = (e.clientX - drag.x) / Wp * (drag.d1 - drag.d0);
+        const dv = (e.clientX - drag.x) / Wp * (drag.v1 - drag.v0);
         if (Math.abs(e.clientX - drag.x) > 3) drag.moved = true;
-        this.d0 = drag.d0 - dy; this.d1 = drag.d1 - dy; this.paint(); return;
+        let nv0 = drag.v0 - dv, nv1 = drag.v1 - dv;
+        const lo = tv(YMIN), hi = tv(YMAX);
+        if (nv1 > hi) { nv0 -= (nv1 - hi); nv1 = hi; }
+        if (nv0 < lo) { nv1 += (lo - nv0); nv0 = lo; if (nv1 > hi) nv1 = hi; }
+        this.d0 = ty(nv0); this.d1 = ty(nv1); this.paint(); return;
       }
       const b = this.boxes.findLast(b => mx >= b.x && mx <= b.x + b.w && my >= b.y && my <= b.y + b.h);
       this.render();
-      if (b) {
+      if (b && b.kind === 'more') { hideTip(); cv.style.cursor = 'pointer'; return; }
+      if (b && b.kind === 'spread') {
+        const it = b.it; const cat = CATBY[it.cat];
+        showTip(e.clientX, e.clientY, `<div class=t>${it.name}</div><div class=m>${fmtBig(it.start)} – ${fmtY(it.end)} · ${b.band}</div>` +
+          `<div class=m>${cat ? cat.name : ''} · ${it.type}</div>` +
+          (it.note ? `<div class=m>${it.note}</div>` : '') +
+          `<div class=m>importance ${'●'.repeat(6 - it.lvl)}${'○'.repeat(it.lvl - 1)} (${it.lvl}) · click to select · Wikipedia in the Related panel</div>`);
+        cv.style.cursor = 'pointer';
+      } else if (b) {
         const [y0, y1, t, , lvl] = b.ev; const cat = CATBY[b.ev[6]], typ = b.ev[7], pl = b.ev[8];
         showTip(e.clientX, e.clientY, `<div class=t>${t}</div><div class=m>${fmtBig(y0)}${y1 ? ' – ' + fmtY(y1) : ''} · ${b.band}</div>` +
           `<div class=m>${cat ? cat.name : ''} · ${typ}${pl ? ' · ' + pl[2] : ''}</div>` +
-          `<div class=m>importance ${'●'.repeat(6 - lvl)}${'○'.repeat(lvl - 1)} (${lvl}) · click → Wikipedia</div>`);
+          `<div class=m>importance ${'●'.repeat(6 - lvl)}${'○'.repeat(lvl - 1)} (${lvl}) · click to select · Wikipedia in the Related panel</div>`);
         cv.style.cursor = 'pointer';
       } else { hideTip(); cv.style.cursor = 'crosshair'; }
     });
     cv.addEventListener('pointerup', e => {
       const wasDrag = drag && drag.moved; drag = null; if (wasDrag) return;
       const r = cv.getBoundingClientRect(), mx = e.clientX - r.left, my = e.clientY - r.top;
-      const b = this.boxes.findLast(b => mx >= b.x && mx <= b.x + b.w && my >= b.y && my <= b.y + b.h);
-      if (b) {
-        const t = b.ev[2].split(/ — | \(|·/)[0];
-        window.open('https://en.wikipedia.org/wiki/Special:Search?search=' + encodeURIComponent(t), '_blank');
+      const G = 118, Wp = cv.clientWidth - G - 10;
+      const H = cv.clientHeight;
+      if (my > H - 30) {                               // axis strip: set the global moment
+        TimeStore.set(Math.round(this.ix(mx, G, Wp)), 'tl');
+        return;
       }
+      const b = this.boxes.findLast(b => mx >= b.x && mx <= b.x + b.w && my >= b.y && my <= b.y + b.h);
+      if (b && b.kind === 'more') {                    // one LOD step in, anchored at the cursor
+        this.zoomBy(this.ix(mx, G, Wp), 0.42);
+        this.paint();
+        return;
+      }
+      SelStore.set(b ? b.id : null);                   // click means select; empty canvas clears
     });
     cv.addEventListener('pointerleave', () => { hideTip(); this.hoverX = null; this.render(); });
     this.syncChips();
+  },
+  // Builds the curated-lane chips into the EXISTING #lensRow (which ships EMPTY).
+  // Guarded against the strict-mode double build exactly like buildCatRow.
+  buildLaneRow() {
+    const row = $('#lensRow'); if (!row) return;
+    if (row.querySelector('[data-lens]')) { this.syncChips(); return; }
+    for (const L of LANES) {
+      const b = document.createElement('button');
+      b.type = 'button';
+      b.className = 'chip' + (this.lens[L.key] ? ' on' : '');
+      b.dataset.lens = L.key;
+      b.innerHTML = `<span class="dot" style="background:${L.si === null ? 'var(--tl-ink-2)' : `var(--s${L.si + 1})`}"></span>${L.label}`;
+      b.addEventListener('click', () => {
+        this.lens[L.key] = !this.lens[L.key];
+        b.classList.toggle('on', this.lens[L.key]);
+        this.paint();
+        // Switching a lane ON is a request to look at it.
+        if (this.lens[L.key]) this.reveal(L.key);
+      });
+      row.appendChild(b);
+    }
   },
   syncChips() { document.querySelectorAll<HTMLElement>('#lensRow .chip').forEach(ch => ch.classList.toggle('on', this.lens[ch.dataset.lens!])); },
 
   // ================= domain (category) filter =================
   // `off` is the set of hidden category ids; render() filters on it. Everything below is a
   // different way of WRITING that one set, so there is exactly one source of truth.
-  // The set the reader had before they soloed a single domain, so "back" can restore it.
   catPrevOff: null as Set<string> | null,
-  // true when exactly one domain is visible (and, with an argument, when it is that one)
   catIsSolo(id?: string) { return this.off.size === CATS.length - 1 && (id === undefined || !this.off.has(id)); },
   catAll() { this.off.clear(); this.catPrevOff = null; this.syncCatChips(); this.paint(); },
   catNone() {
@@ -405,23 +756,24 @@ export const TL = {
 };
 
 // ONE container, shared by both projections (#grammarRowV, in the disclosure at the
-// foot of the Timeline panel). It was two — a floating panel for the horizontal view
-// and a docked one for the vertical — until the docked one turned out to clip its own
-// last row against the column's secondary-panel floor while squeezing two domain chips
-// out of the Controls panel above it. Vertical and horizontal are two projections of
-// one instrument; they share the legend the way they share everything else. The lookup
-// still tolerates the old id, so a container that comes back gets filled.
+// foot of the Timeline panel). Two visual categories now: spreads (rectangles, sharp
+// or soft per their sharpness) and events (dots). Height carries importance; colour
+// still carries domain.
 export function buildGrammarLegend() {
   const rows = [$('#grammarRow'), $('#grammarRowV')].filter(Boolean) as HTMLElement[];
   if (!rows.length) return;
   const g = (svg: string, label: string) => `<span class="g"><svg width="30" height="14" viewBox="0 0 30 14">${svg}</svg>${label}</span>`;
   const c = 'var(--ink2)';
-  const html = `<span class="note" style="font-weight:600">Shape =</span>` +
-    g(`<circle cx="15" cy="7" r="3.2" fill="${c}"/>`, 'moment') +
-    g(`<rect x="3" y="3" width="24" height="8" rx="4" fill="${c}"/>`, 'episode') +
-    g(`<rect x="4" y="4" width="22" height="7" rx="3.5" fill="${c}" opacity=".55"/><circle cx="4" cy="7.5" r="3.2" fill="${c}"/><rect x="25" y="2.5" width="2" height="10" fill="${c}"/>`, 'a life') +
-    g(`<path d="M2 7 L7 2.5 L23 2.5 L28 7 L23 11.5 L7 11.5 Z" fill="${c}"/>`, 'territory') +
-    g(`<rect x="2" y="1" width="26" height="12" fill="${c}" opacity=".22"/><rect x="2" y="6" width="26" height="2" fill="${c}"/>`, 'era') +
-    `<span class="note" style="font-weight:600;margin-left:6px">Color = domain</span>`;
-  for (const r of rows) r.innerHTML = html;
+  rows.forEach((r, i) => {
+    const gid = 'tlfade' + i;                          // per-container gradient id — never duplicated
+    r.innerHTML = `<span class="note" style="font-weight:600">Mark =</span>` +
+      g(`<rect x="3" y="3.5" width="24" height="7" rx="2" fill="${c}" opacity=".75"/><rect x="3" y="3.5" width="24" height="7" rx="2" fill="none" stroke="${c}" stroke-width="1"/>`, 'spread, sharp — dated ends') +
+      g(`<defs><linearGradient id="${gid}" x1="0" y1="0" x2="1" y2="0">` +
+        `<stop offset="0" stop-color="${c}" stop-opacity=".05"/><stop offset=".38" stop-color="${c}" stop-opacity=".75"/>` +
+        `<stop offset=".62" stop-color="${c}" stop-opacity=".75"/><stop offset="1" stop-color="${c}" stop-opacity=".05"/>` +
+        `</linearGradient></defs><rect x="2" y="3.5" width="26" height="7" rx="2" fill="url(#${gid})"/>`, 'spread, soft — fades in and out') +
+      g(`<circle cx="15" cy="7" r="3.2" fill="${c}"/>`, 'event — a moment') +
+      `<span class="note" style="margin-left:6px">taller = more important</span>` +
+      `<span class="note" style="font-weight:600;margin-left:6px">Colour = domain</span>`;
+  });
 }

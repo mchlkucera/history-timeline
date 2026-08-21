@@ -11,8 +11,8 @@
    other agents right now and resolve their DOM by querySelector exactly once:
      · every canvas id and every renderer init call site survives;
      · all eleven views are MOUNTED AT BOOT — visibility is CSS only;
-     · containers a renderer appendChild()s into (#catRow, #flowRegionRow,
-       #corePresets) ship EMPTY;
+     · containers a renderer appendChild()s into (#catRow, #lensRow,
+       #flowRegionRow, #corePresets) ship EMPTY;
      · legacy class names (.chip/.on, .btn/.hero, .card, .caption, .note …) are
        frozen vocabulary — re-skinned in globals.css, never renamed here.
 
@@ -22,7 +22,8 @@
    ============================================================================= */
 
 import { useCallback, useEffect, useRef, useState, useSyncExternalStore } from 'react';
-import { initData, setGotoTab, type Datasets } from '@/render/shared';
+import { initData, setGotoTab, setLanes, SelStore, TimeStore, YMAX, YMIN, type Datasets } from '@/render/shared';
+import { buildRelIndex } from '@/render/relations';
 import { WorldMap } from '@/render/map';
 import { TL } from '@/render/timeline';
 import { VT } from '@/render/vertical';
@@ -60,12 +61,12 @@ const GROUPS: { id: string; label: string; members: ViewId[] }[] = [
   { id: 'g-core', label: 'Core', members: ['core'] },
 ];
 
-// Per-group landing member. Timeline lands on 'vertical': the vertical projection is
-// the PRIMARY timeline — it reads down the page, which is how a person reads a
-// chronology, and it is the one that never drops a label. Horizontal keeps its seat in
-// the seg, and coming back to the group returns you to whichever you last used.
+// Per-group landing member. Timeline lands on 'zoom': the horizontal projection is
+// the FLAGSHIP now — it carries the new spread-lane layout, the sharpness fades and
+// the piecewise deep-time zoom. Vertical keeps its seat in the seg, and coming back
+// to the group returns you to whichever you last used.
 const GROUP_DEFAULT: Record<string, ViewId> = {
-  'g-map': 'map', 'g-time': 'vertical', 'g-flow': 'flow', 'g-conn': 'conn', 'g-cube': 'cube', 'g-core': 'core',
+  'g-map': 'map', 'g-time': 'zoom', 'g-flow': 'flow', 'g-conn': 'conn', 'g-cube': 'cube', 'g-core': 'core',
 };
 const DEFAULT_VIEW: ViewId = 'map';
 
@@ -99,8 +100,8 @@ const VIEWS: Record<ViewId, ViewMeta> = {
   },
   zoom: {
     seg: 'Horizontal', name: 'Zoomable timeline', rail: 'span',
-    gist: 'A map of time with level of detail — zoom in and smaller events fade in.',
-    meta: 'shape = kind · colour = domain',
+    gist: 'A map of time with level of detail — zoom from a decade to the Big Bang.',
+    meta: 'spreads & events · colour = domain',
   },
   flow: {
     seg: 'Empires', name: 'Flow of empires', rail: 'span',
@@ -180,20 +181,22 @@ const NOTES: Record<ViewId, Notes> = {
   },
   vertical: {
     body: <>
-      <p>The <strong>primary</strong> projection of the timeline. It reads down the page like a scroll, which is how a person actually reads a chronology &mdash; and <strong>past is always at the top</strong>, in every state, with no flip.</p>
+      <p>The scroll projection of the timeline. It reads down the page, which is how a person actually reads a chronology &mdash; and <strong>past is always at the top</strong>, in every state, with no flip.</p>
       <p>Rotating it buys one enormous thing: <strong>a label no longer has to fit inside the time it describes.</strong> Every mark gets its own full line of text beside it, at whatever length the title actually is, instead of being cut to the gap before the next event. On the <strong>Mozart&rsquo;s world</strong> preset that is <strong>nine of his thirteen life events named on screen at 1280&times;800 and ten at 1440&times;900, against six either way in the horizontal view</strong> &mdash; half again as many, and the ones that are there are not abbreviated.</p>
       <p><strong>Neither projection fits all thirteen in a laptop window, and this one does not claim to.</strong> Eight of them fall between 1778 and 1791 &mdash; thirteen years, about a seventh of the plot at that zoom. A label may step aside by up to 64px to find a clear line, drawing a hairline back to its true year; past that it is dropped rather than parked against the wrong decade, and the mark stays on the axis, hoverable and clickable. Twelve fit at 1920&times;1080, all thirteen at 2560&times;1440.</p>
       <p>The bands are now <strong>columns, each as wide as its own longest label needs</strong>, so the surface is usually wider than the window. <strong>Drag it like a map</strong> &mdash; up and down through time, left and right across the world, in one gesture. The strip under the plot is the whole surface in miniature; the bright frame is what you can see, and you can drag that too. A chip at an edge names the next column off-screen; click it to bring it in &mdash; and <strong>turning a lens on brings its own column in for you</strong>, so the thing you just asked to see is never the thing off the right edge.</p>
-      <p><strong>It shares this group&rsquo;s controls on purpose:</strong> vertical and horizontal are two projections of one timeline state &mdash; the same span, the same lenses, the same domains, the same search. Switching the seg changes the projection, never the subject.</p>
+      <p><strong>It shares this group&rsquo;s controls on purpose:</strong> vertical and horizontal are two projections of one timeline state &mdash; the same span, the same lanes, the same domains, the same search. Switching the seg changes the projection, never the subject.</p>
+      <p>This projection still draws the older shape grammar and only the hand-curated corpus; the new spread lanes, sharpness fades, and the polity rows land here next round.</p>
     </>,
     src: <>Faint hairlines mean a label had to step aside to stay legible &mdash; the mark is always at the true year, and a mark whose label was dropped is still drawn, still hoverable and still clickable. Column widths are measured over a window padded by a screenful of time above and below, so travelling does not make the columns breathe under your hand. A lens column sits next to the time axis rather than at the far end, because a lens is something you asked for.</>,
   },
   zoom: {
     body: <>
-      <p>Your core vision: <strong>a map of time with level of detail</strong>. Zoomed out you see only what matters most; scroll to zoom in and smaller events fade in, exactly like streets appearing on Google Maps.</p>
-      <p><strong>Two orthogonal axes.</strong> Shape says what kind of thing it is &mdash; a moment, a stretch of time, a life, a territory, an era. Colour says which domain it belongs to. That split is what lets one person sit in several domains at once. Click any event to open it on Wikipedia.</p>
+      <p>Your core vision: <strong>a map of time with level of detail</strong>. Zoomed out you see only what matters most; scroll to zoom in and smaller things fade in, exactly like streets appearing on Google Maps &mdash; and the wheel alone now runs from a decade to the Big Bang on one continuous scale.</p>
+      <p><strong>Two kinds of thing.</strong> A <strong>spread</strong> is anything with duration &mdash; an empire, a war, a life, a movement, an era &mdash; drawn as a rectangle in its own row, biggest first, never overlapping another. Its edges carry its nature: a dynasty founded on a date ends crisply, the Renaissance dissolves at both ends. An <strong>event</strong> is a moment: a dot, in its own stratum below the spreads. Colour says which domain; height says how much it mattered.</p>
+      <p><strong>Click anything to select it</strong> &mdash; everything related stays lit in proportion to how strongly it is related (the same weighted links as the Connections view), the Related panel lists them, and Wikipedia is one click away in that panel. Click empty canvas to clear.</p>
     </>,
-    src: <>Importance is an editorial ladder, not a measurement. The five levels are thresholds on the visible span, so the same event appears and disappears with the zoom rather than with the data.</>,
+    src: <>Importance is an editorial ladder, not a measurement. The five levels are thresholds on the visible span, so the same thing appears and disappears with the zoom rather than with the data. Rows are packed once, importance first, so zooming reveals more without reshuffling what you were looking at.</>,
   },
   flow: {
     body: <>
@@ -241,11 +244,16 @@ const NOTES: Record<ViewId, Notes> = {
 
 // ── Boot ────────────────────────────────────────────────────────────────────
 function boot() {
-  // VT.init() after TL.init(): the vertical projection reads its state off TL and
-  // registers itself with TL.paint(), and TL owns every shared control.
+  // The shared link index + node directory first: TL.init() and initConn() both read
+  // it (selection dimming, Related panels). Then VT.init() after TL.init(): the
+  // vertical projection reads its state off TL and registers itself with TL.paint(),
+  // and TL owns every shared control.
+  buildRelIndex();
   WorldMap.init(); TL.init(); VT.init(); initFlow(); Cube.init(); Core.init(); initBraid(); Horizon.init(); Pop.init(); buildGallery();
   initConn();
   WorldMap.render();
+  // diagnostic handle for acceptance probes and console debugging — reads only
+  (window as any).__tl = { TL, VT, Conn, WorldMap, TimeStore, SelStore };
 }
 
 
@@ -255,10 +263,12 @@ const stageHeight = () => {
   return Math.max(420, Math.min(1200, h || 700));
 };
 
-// Five renderers expose a writable height, so they can fill the stage. TL, WorldMap
-// and Conn compute their own — never try to set those. (TL's height is the sum of its
-// band heights; the VERTICAL projection of the same state is viewport-driven instead,
-// because down the page is the time axis there.)
+// Five renderers expose a writable height, so they can fill the stage. WorldMap and
+// Conn compute their own — never try to set those. TL is content-driven WITH a budget:
+// sizeRenderers writes TL.HMAX (the stage height) and TL's layout() grows lanes to
+// their content, trimming rows to fit under that budget. (The VERTICAL projection of
+// the same state is viewport-driven instead, because down the page is the time axis
+// there.)
 //
 // Horizon and the cartogram are the exception: both project 360° × 145° of the
 // globe onto (width × H), so giving them the full stage height stretches the
@@ -270,6 +280,7 @@ function sizeRenderers() {
   const W = s ? s.clientWidth : 0;
   const geoH = Math.max(300, Math.min(H, Math.round(W * 403 / 1000)));
   Flow.H = H; Braid.H = H; Cube.H = H;
+  TL.HMAX = H;                     // the lane-trim budget, not a fixed height
   // Below 760px every panel becomes a bottom SHEET fixed over the canvas
   // (shell.css §13). Every full-height view loses its bottom strip to it, but only
   // the vertical timeline keeps a CONTROL down there — the pan rail that says which
@@ -290,8 +301,8 @@ function renderTab(v: ViewId) {
     case 'map': WorldMap.render(); break;
     case 'pop': Pop.render(); break;
     case 'horizon': Horizon.render(); break;
-    case 'zoom': TL.render(); break;
-    case 'vertical': VT.render(); break;
+    case 'zoom': TL.ensureYearVisible(); TL.render(); break;
+    case 'vertical': TL.ensureYearVisible(); VT.render(); break;
     case 'flow': Flow.render(); break;
     case 'braid': Braid.render(); break;
     case 'conn': Conn.dirty = true; Conn.render(); break;
@@ -394,12 +405,14 @@ export default function Lab() {
         const grab = async (u: string) => {
           const r = await fetch(u); if (!r.ok) throw new Error(`${u} → HTTP ${r.status}`); return r.json();
         };
-        const [worlds, datasets] = await Promise.all([
+        const [worlds, datasets, lanes] = await Promise.all([
           grab('/data/worlds.json'), grab('/data/datasets.json') as Promise<Datasets>,
+          grab('/data/lanes.json').catch(() => ({ lanes: [] })),   // curated lanes; tolerant
           loadRelations(),                       // Connections; a miss must not stop the boot
           loadPopulation(),                      // Map · People; same posture
         ]);
         initData(worlds, datasets);
+        setLanes(lanes);                         // AFTER initData: lane members append to EVENTS pre-classified
         boot();
         setReady(true);
       } catch (e: any) {
@@ -473,21 +486,22 @@ export default function Lab() {
     }
 
     // mode === 'span': the canvas axis IS time, but the view is a zoom WINDOW,
-    // not a moment. The rail shows the full extent with the visible window
-    // drawn as a bracket, and the index sitting at its centre.
+    // not a moment. The rail shows the full extent with the visible window drawn as a
+    // bracket — and the red index sits at the GLOBAL moment (TimeStore), because the
+    // index means "where you are" app-wide now, not the window's centre.
     const src: any = v === 'flow' ? Flow : v === 'braid' ? Braid : v === 'conn' ? Conn : TL;
     const d0 = Number(src.d0), d1 = Number(src.d1);
     const a = railPos(d0), b = railPos(d1);
     const centre = (d0 + d1) / 2;
-    const pct = railPos(centre);
+    const pct = railPos(TimeStore.year);
     setIndex(pct);
     if (span) { span.hidden = false; span.style.left = a + '%'; span.style.width = Math.max(0.4, b - a) + '%'; }
     stops.forEach(s => s.dataset.here = 'false');
     const flag = document.getElementById('railFlag');
-    if (flag) flag.textContent = railNum(centre);
-    txt('railYear', railNum(centre));
-    txt('railEra', (v === 'zoom' || v === 'vertical') && TL.log
-      ? 'LOG · BIG BANG → NOW'
+    if (flag) flag.textContent = railNum(TimeStore.year);
+    txt('railYear', railNum(TimeStore.year));
+    txt('railEra', (v === 'zoom' || v === 'vertical') && TL.span() > 60000
+      ? 'DEEP TIME · BIG BANG → NOW'
       : `${railEraOf(centre)} · SPAN ${Math.round(d1 - d0).toLocaleString('en-US')} YRS`);
     if (generic && document.activeElement !== generic) generic.value = String(Math.round(pct * 10));
   }, []);
@@ -547,13 +561,14 @@ export default function Lab() {
     let raf = 0, last = '';
     const tick = () => {
       const v = viewRef.current;
-      const key = v === 'map' ? `m${WorldMap.ix}`
+      const key = (v === 'map' ? `m${WorldMap.ix}`
         : v === 'pop' ? `p${Pop.ix.toFixed(3)}`
           : v === 'horizon' ? `h${Horizon.year}`
             : v === 'flow' ? `f${Flow.d0}|${Flow.d1}`
               : v === 'braid' ? `b${Braid.d0}|${Braid.d1}`
                 : v === 'conn' ? `c${Conn.d0}|${Conn.d1}`
-                  : `t${TL.d0}|${TL.d1}|${TL.log}`;
+                  : `t${TL.d0}|${TL.d1}|${TL.log}`)
+        + `|${TimeStore.year}|${SelStore.id ?? ''}`;   // the global stores nudge the rail too
       if (key !== last) { last = key; syncRail(); }
       raf = requestAnimationFrame(tick);
     };
@@ -574,7 +589,14 @@ export default function Lab() {
     }
     const src: any = v === 'flow' ? Flow : v === 'braid' ? Braid : v === 'conn' ? Conn : TL;
     const half = (Number(src.d1) - Number(src.d0)) / 2;
-    if (v === 'zoom' || v === 'vertical') { TL.log = false; TL.animTo(y - half, y + half); return; }
+    if (v === 'zoom' || v === 'vertical') {
+      // same domain clamp-shift the wheel enforces — a rail click near the edge
+      // must not centre the window past YMIN/YMAX (defect: d1 landed at 4464)
+      let a = y - half, b = y + half;
+      if (b > YMAX) { a -= b - YMAX; b = YMAX; }
+      if (a < YMIN) { b += YMIN - a; a = YMIN; }
+      TL.animTo(a, Math.min(b, YMAX)); return;
+    }
     src.d0 = y - half; src.d1 = y + half;
     if (v === 'conn') Conn.dirty = true;
     src.render();
@@ -582,7 +604,7 @@ export default function Lab() {
 
   const step = (d: number) => {
     const v = viewRef.current;
-    if (v === 'map') { WorldMap.stop(); WorldMap.ix = Math.max(0, Math.min(17, WorldMap.ix + d)); WorldMap.render(); }
+    if (v === 'map') { WorldMap.stop(); WorldMap.ix = Math.max(0, Math.min(17, WorldMap.ix + d)); WorldMap.render(); TimeStore.set((WorldMap as any).year(), 'map'); }
     else if (v === 'pop') {
       const n = Pop.slices().length;
       Pop.stop(); Pop.ix = Math.max(0, Math.min(n - 1, Math.round(Pop.ix) + d)); Pop.render();
@@ -903,7 +925,7 @@ export default function Lab() {
                 <div className="tl-cluster">
                   <button className="btn hero" id="btnMozart">Mozart&rsquo;s world</button>
                   <button className="btn" id="btn1776z">1776 in context</button>
-                  <button className="btn" id="btnDeep">Deep time (log)</button>
+                  <button className="btn" id="btnDeep">Deep time</button>
                   <button className="btn" id="btnResetZ">Reset</button>
                 </div>
                 <div className="searchwrap">
@@ -913,12 +935,10 @@ export default function Lab() {
                 </div>
                 <hr className="tl-hr" />
                 <div className="tl-field-group">
-                  <span className="tl-label">Lenses</span>
-                  <div className="tl-cluster" id="lensRow">
-                    <button className="chip" data-lens="MU"><span className="dot" style={{ background: 'var(--s5)' }} />Music</button>
-                    <button className="chip" data-lens="SC"><span className="dot" style={{ background: 'var(--s6)' }} />Science &amp; ideas</button>
-                    <button className="chip on" data-lens="MZ"><span className="dot" style={{ background: 'var(--s7)' }} />Mozart&rsquo;s life</button>
-                  </div>
+                  <span className="tl-label">Lanes</span>
+                  {/* MUST ship EMPTY — timeline.ts appendChild()s one chip per curated
+                      lane from the registry (buildLaneRow), like #catRow. */}
+                  <div className="tl-cluster" id="lensRow" />
                 </div>
                 <div className="tl-field-group">
                   <span className="tl-label">Domain</span>
@@ -945,6 +965,14 @@ export default function Lab() {
                   <div className="tl-disc__bd"><div className="grammar" id="grammarRowV" /></div>
                 </details>
               </div>
+            </aside>
+            {/* THE TIMELINE'S "RELATED" PANEL — the same pattern as Connections'.
+                Click a spread or an event on either projection and relations.ts
+                renders the ranked, grouped relation list (plus the Wikipedia link,
+                which moved here from the old click-through) into #tlRelPanel. */}
+            <aside {...panel('tl', ['zoom', 'vertical'], 'Related', 'tl-panel--secondary')}>
+              <div className="tl-panel__hd"><span className="tl-panel__title">Related</span></div>
+              <div className="tl-panel__bd"><div className="relpanel" id="tlRelPanel" /></div>
             </aside>
             {/* flow */}
             <aside {...panel('tl', ['flow'], 'Controls')}>
