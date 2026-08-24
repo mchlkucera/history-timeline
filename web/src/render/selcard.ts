@@ -75,9 +75,11 @@ export interface CardWiring {
   anchorOf(id: string): DOMRect | null;
 }
 
-/** The ⌘K palette and the field notes own Escape while they are open. */
+/** The field notes own Escape while open. (The ⌘K palette used to as well; it
+ *  is gone — the one search is an <input>, and the guard below already refuses
+ *  to act on any input, so Escape there closes its own dropdown instead.) */
 const modalOpen = () =>
-  !!document.querySelector('.tl-cmdk:not([hidden]), #fieldNotes:not([hidden])');
+  !!document.querySelector('#fieldNotes:not([hidden])');
 
 export const SelCard = {
   el: null as HTMLElement | null,

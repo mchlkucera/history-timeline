@@ -46,9 +46,10 @@ import { railPos, railYear, railNum, railEraOf, SNAPSHOTS } from './rail';
 // ── The information architecture ────────────────────────────────────────────
 // Eleven flat tabs do not fit a 44px rail: eleven uppercase items is ~800px of
 // switcher and .tl-rail__end alone is ~450px. So the IA is two levels — six
-// groups in .tl-switch, and a .tl-seg sub-switcher for the three groups that
-// have more than one member. Five of eleven views therefore sit behind a seg,
-// which is why the ⌘K palette below is load-bearing rather than a nicety.
+// groups in .tl-switch, and a .tl-seg sub-switcher for the two groups that
+// still show one (the Timeline group's moved into its own panel). Views
+// therefore sit behind a seg, which is why the search field's "Views" group —
+// reached by typing, or by ⌘K — is load-bearing rather than a nicety.
 
 type ViewId =
   | 'map' | 'pop' | 'horizon'
@@ -915,10 +916,15 @@ export default function Lab() {
    * with content first — because "what happened" is the question this app is
    * for, and the eleven views are a fixed set the user learns once.
    *
-   * The exception is a query that IS the beginning of a view's name: someone
-   * typing "cube" or "conn" is navigating, and making them arrow past four
-   * empires to reach the view they named would be the wrong default. Prefix
-   * match only, so "cubism" still leads with the movement.
+   * The exception is a query that NAMES a view outright — "cube", "connections",
+   * "horizon", whatever is written on the rail. Someone who typed the whole word
+   * is navigating, and making them arrow past ten empires to reach the view they
+   * just named would be the wrong default.
+   *
+   * It has to be the WHOLE word, not a prefix. "empire" is a prefix of the
+   * Empires seg, and it also matches sixty-six empires in history — putting the
+   * view above them because of a shared stem gets the common case backwards.
+   * "cubism" is not a view at all, and leads with the movement either way.
    */
   const buildRows = useCallback((raw: string): { rows: SRow[]; total: number } => {
     const q = raw.trim().toLowerCase();
@@ -928,8 +934,12 @@ export default function Lab() {
       const m = VIEWS[v];
       return (m.name + ' ' + m.seg + ' ' + m.gist).toLowerCase().includes(q);
     }).slice(0, VIEW_CAP);
-    const navFirst = views.some(v =>
-      VIEWS[v].seg.toLowerCase().startsWith(q) || VIEWS[v].name.toLowerCase().startsWith(q));
+    const navFirst = views.some(v => {
+      const g = GROUPS.find(gr => gr.members.includes(v));
+      return VIEWS[v].seg.toLowerCase() === q
+        || VIEWS[v].name.toLowerCase() === q
+        || (g ? g.label.toLowerCase() === q : false);       // the word on the rail
+    });
     const cRows: SRow[] = hits.map(h => ({ k: 'c', h }));
     const vRows: SRow[] = views.map(v => ({ k: 'v', v }));
     return { rows: navFirst ? [...vRows, ...cRows] : [...cRows, ...vRows], total: total - hits.length };
@@ -1902,24 +1912,48 @@ export default function Lab() {
           rect, so a positioned ancestor would silently shift it — and
           .tl-panel__bd scrolls, which would clip it. */}
       {sOpen && sBox && (
-        <div className="tl-sugg" role="listbox" aria-label="Search results"
+        <div className="tl-sugg" id="searchSugg" role="listbox" aria-label="Search results"
           style={{ left: sBox.left, top: sBox.top, width: sBox.width }}>
-          {sHits.map((h, i) => (
-            <button key={h.id} className="tl-sugg__row" role="option" aria-selected={i === sSel}
-              data-sel={String(i === sSel)}
-              onMouseDown={e => e.preventDefault()}
-              onMouseEnter={() => setSSel(i)}
-              onClick={() => takeHit(h)}>
-              <i className="tl-sugg__dot" style={{ background: catColor(h.cat, tokens()) }} aria-hidden="true" />
-              <span className="tl-sugg__name">{h.name}</span>
-              <span className="tl-sugg__meta">
-                {h.end > h.start ? `${fmtBig(h.start)} – ${fmtY(h.end)}` : fmtBig(h.start)}
-                {h.lane ? ` · ${h.lane}` : ''}
-              </span>
-            </button>
-          ))}
-          {sTotal > sHits.length && (
-            <div className="tl-sugg__more">+{sTotal - sHits.length} more — keep typing</div>
+          {sRows.map((r, i) => {
+            // A header wherever the KIND changes, which is once at most: the two
+            // groups are contiguous by construction, so this needs no grouping
+            // pass — it just notices the seam.
+            const head = i === 0 || sRows[i - 1].k !== r.k
+              ? (r.k === 'c' ? 'In history' : 'Views')
+              : null;
+            const sel = i === sSel;
+            return (
+              <div key={r.k === 'c' ? r.h.id : 'v:' + r.v}>
+                {head && <div className="tl-sugg__group">{head}</div>}
+                {r.k === 'c' ? (
+                  <button className="tl-sugg__row" role="option" aria-selected={sel} data-sel={String(sel)}
+                    onMouseDown={e => e.preventDefault()}
+                    onMouseEnter={() => setSSel(i)}
+                    onClick={() => takeRow(r)}>
+                    <i className="tl-sugg__dot" style={{ background: catColor(r.h.cat, tokens()) }} aria-hidden="true" />
+                    <span className="tl-sugg__name">{r.h.name}</span>
+                    <span className="tl-sugg__meta">
+                      {r.h.end > r.h.start ? `${fmtBig(r.h.start)} – ${fmtY(r.h.end)}` : fmtBig(r.h.start)}
+                      {r.h.lane ? ` · ${r.h.lane}` : ''}
+                    </span>
+                  </button>
+                ) : (
+                  <button className="tl-sugg__row tl-sugg__row--view" role="option" aria-selected={sel} data-sel={String(sel)}
+                    onMouseDown={e => e.preventDefault()}
+                    onMouseEnter={() => setSSel(i)}
+                    onClick={() => takeRow(r)}>
+                    <i className="tl-sugg__dot tl-sugg__dot--view" aria-hidden="true" />
+                    <span className="tl-sugg__name">{VIEWS[r.v].name}</span>
+                    <span className="tl-sugg__meta">
+                      {GROUPS.find(g => g.members.includes(r.v))?.label || 'Concepts'}
+                    </span>
+                  </button>
+                )}
+              </div>
+            );
+          })}
+          {sTotal > 0 && (
+            <div className="tl-sugg__more">+{sTotal} more in history — keep typing</div>
           )}
         </div>
       )}

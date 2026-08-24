@@ -84,5 +84,22 @@ export function searchCorpus(query: string, cap: number): { hits: Hit[]; total: 
     || a.h.lvl - b.h.lvl
     || (a.h.name < b.h.name ? -1 : a.h.name > b.h.name ? 1 : 0));
 
-  return { hits: scored.slice(0, cap).map(x => x.h), total: scored.length };
+  /* ONE ROW PER THING. The directory is keyed by id, and the same thing can
+     hold two: the People's Republic of China is a polity AND the event that
+     founded it, Ancient Egypt is a polity AND a spread. Both are legitimate
+     ids with their own relations — but as two adjacent rows reading exactly
+     the same, they are a list that looks broken. Deduped AFTER the sort, so
+     the survivor is the better-ranked of the pair (the polity, which carries
+     the map and cube joins, over the bare event). */
+  const seen = new Set<string>();
+  const hits: Hit[] = [];
+  let total = 0;
+  for (const x of scored) {
+    const k = x.h.name.toLowerCase();
+    if (seen.has(k)) continue;
+    seen.add(k);
+    total++;
+    if (hits.length < cap) hits.push(x.h);
+  }
+  return { hits, total };
 }

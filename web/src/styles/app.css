@@ -220,6 +220,29 @@
   margin-top: var(--tl-space-2);
 }
 
+/* ONE FIELD, TWO KINDS OF ANSWER, so the seam between them is named. The header
+   is a label, not a control: it never takes the cursor and never takes a turn
+   in the arrow-key order. */
+.tl-sugg__group {
+  padding: var(--tl-space-3) var(--tl-space-3) var(--tl-space-2);
+  font-family: var(--tl-font-mono);
+  font-size: var(--tl-text-2xs);
+  letter-spacing: var(--tl-track-caps);
+  text-transform: uppercase;
+  color: var(--tl-ink-3);
+}
+.tl-sugg__group:not(:first-child) {
+  margin-top: var(--tl-space-2);
+  border-top: var(--tl-border) solid var(--tl-rule-soft);
+}
+/* A view has no domain colour to carry — it is a place to stand, not a thing
+   that happened — so its dot is a hollow ring rather than a filled swatch. */
+.tl-sugg__dot--view {
+  background: transparent;
+  border: 1.5px solid var(--tl-ink-3);
+}
+.tl-sugg__row--view .tl-sugg__name { color: var(--tl-ink-2); }
+
 /* On a phone the panel is a bottom sheet, so the box's rect is already near the
    bottom of the screen and a list hanging off it would run off. It keeps the
    measured left/width but takes a shorter ceiling. */
@@ -227,66 +250,12 @@
   .tl-sugg { max-height: 32vh; }
 }
 
-/* ── Command palette ──────────────────────────────────────────────────────────
-   Load-bearing, not a nicety: five of the eleven views sit behind the seg. */
-.tl-cmdk {
-  position: fixed;
-  inset: 0;
-  z-index: var(--tl-z-pop);
-  display: grid;
-  grid-template-rows: 12vh auto 1fr;
-  justify-items: center;
-  background: var(--tl-scrim);
-}
-.tl-cmdk[hidden] { display: none; }
-.tl-cmdk__box {
-  grid-row: 2;
-  width: min(520px, calc(100vw - var(--tl-space-8)));
-  background: var(--tl-surface);
-  border: var(--tl-border) solid var(--tl-rule);
-  border-radius: var(--tl-radius-lg);
-  box-shadow: var(--tl-shadow-pop);
-  overflow: hidden;
-}
-.tl-cmdk__in {
-  width: 100%;
-  height: 44px;
-  padding: 0 var(--tl-space-6);
-  border: 0;
-  border-bottom: var(--tl-border) solid var(--tl-rule-soft);
-  background: transparent;
-  color: var(--tl-ink);
-  font-family: var(--tl-font-ui);
-  font-size: var(--tl-text-md);
-  outline: none;
-}
-.tl-cmdk__in::placeholder { color: var(--tl-ink-3); }
-.tl-cmdk__list { max-height: 46vh; overflow-y: auto; padding: var(--tl-space-2); }
-.tl-cmdk__row {
-  display: flex;
-  align-items: baseline;
-  gap: var(--tl-space-5);
-  width: 100%;
-  padding: var(--tl-space-4) var(--tl-space-5);
-  border: 0;
-  border-radius: var(--tl-radius-xs);
-  background: transparent;
-  color: var(--tl-ink);
-  font-size: var(--tl-text-base);
-  text-align: left;
-  cursor: pointer;
-}
-.tl-cmdk__row[data-sel="true"] { background: var(--tl-selected); }
-.tl-cmdk__row em {
-  margin-left: auto;
-  font-style: normal;
-  font-family: var(--tl-font-mono);
-  font-size: var(--tl-text-2xs);
-  letter-spacing: var(--tl-track-caps);
-  text-transform: uppercase;
-  color: var(--tl-ink-3);
-}
-.tl-cmdk__empty { padding: var(--tl-space-6); color: var(--tl-ink-3); font-size: var(--tl-text-sm); }
+/* ── Command palette — RETIRED ────────────────────────────────────────────────
+   The modal palette was the second search. "Keep only one search - one at the
+   top": its job (go to a view) is now a group of rows in .tl-sugg, under the
+   one field in the rail, and ⌘K focuses that field instead of opening this.
+   Markup and styles both removed rather than left dark — a stylesheet that
+   describes an element nobody renders is a map of a building that is gone. */
 
 /* ── Small shared bits ───────────────────────────────────────────────────── */
 .tl-panel__bd .tl-label { display: block; }
