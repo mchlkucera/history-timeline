@@ -1,0 +1,261 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>C — Fixed slots, detail within</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500;600&family=Instrument+Sans:wght@400;500;600;700&display=swap">
+<style>
+/* tokens — cheap copy of design/tokens.css */
+:root{
+  color-scheme:light;
+  --tl-ground:#E3E8E6; --tl-canvas-bg:#E7ECEA; --tl-surface:#F5F7F6; --tl-surface-2:#EDF0EF;
+  --tl-surface-over:rgba(245,247,246,.96);
+  --tl-ink:#12181A; --tl-ink-2:#505E63; --tl-ink-3:#6D7B7F;
+  --tl-rule:#C7D0CD; --tl-rule-soft:#D6DEDB; --tl-rule-strong:#ADB9B6;
+  --tl-graticule:rgba(18,24,26,.055);
+  --tl-accent:#B4382A;
+  --tl-cat-power:#2C4E8F; --tl-cat-war:#8B4A31; --tl-cat-belief:#6B3F79; --tl-cat-sci:#1F6E63;
+  --tl-cat-art:#A33A63; --tl-cat-nature:#4F6B2B; --tl-cat-society:#8A6B15; --tl-cat-reach:#16657E;
+  --sans:"Instrument Sans",system-ui,sans-serif; --mono:"IBM Plex Mono",monospace;
+}
+@media (prefers-color-scheme:dark){:root{
+  color-scheme:dark;
+  --tl-ground:#14191B; --tl-canvas-bg:#171D1F; --tl-surface:#1B2225; --tl-surface-2:#20282B;
+  --tl-surface-over:rgba(27,34,37,.96);
+  --tl-ink:#E9F0EE; --tl-ink-2:#A9B7B9; --tl-ink-3:#7E8D90;
+  --tl-rule:#2E393C; --tl-rule-soft:#283134; --tl-rule-strong:#41504F;
+  --tl-graticule:rgba(233,240,238,.06);
+  --tl-accent:#E06B58;
+  --tl-cat-power:#7098DC; --tl-cat-war:#C98058; --tl-cat-belief:#B287C0; --tl-cat-sci:#45B39D;
+  --tl-cat-art:#E0789F; --tl-cat-nature:#92B85C; --tl-cat-society:#D2A63C; --tl-cat-reach:#4FAFC9;
+}}
+*{box-sizing:border-box;margin:0;padding:0}
+html,body{height:100%}
+body{font-family:var(--sans);background:var(--tl-canvas-bg);color:var(--tl-ink);overflow:hidden;user-select:none;-webkit-font-smoothing:antialiased}
+#stage{position:absolute;inset:0;cursor:grab}
+#stage.pan{cursor:grabbing}
+canvas{display:block;width:100%;height:100%}
+#hud{position:absolute;right:10px;bottom:9px;font-family:var(--mono);font-size:9.5px;line-height:1.5;
+  color:var(--tl-ink-3);background:var(--tl-surface-over);border:1px solid var(--tl-rule);
+  border-radius:5px;padding:4px 8px;text-align:right;pointer-events:none;white-space:pre}
+</style>
+</head>
+<body>
+<div id="stage"><canvas id="cv"></canvas><div id="hud"></div></div>
+<script src="./data.js"></script>
+<script>
+'use strict';
+/* ══════════════════════════════════════════════════════════════════════════
+   C — FIXED SLOTS, DETAIL WITHIN
+   Every lane owns a fixed viewport slot. Lane tops and lane heights are set
+   at resize and NEVER change — not on zoom, not on pan, not ever. Zooming in
+   opens more packed rows INSIDE each slot: a new row appears at zero height
+   and grows as space allows; when the rows outgrow the slot they compress
+   together. The page geometry is rock solid; only interior density responds.
+   ══════════════════════════════════════════════════════════════════════════ */
+const D = window.TLDATA;
+const CSS = getComputedStyle(document.documentElement);
+const tok = n => CSS.getPropertyValue(n).trim();
+const catCol = c => tok('--tl-cat-'+c) || tok('--tl-cat-power');
+
+const SEED = ['eu-ess','eu-war','eu-sci','eu-art','as-ess','as-dyn','deep','arts','design','mozart'];
+const NOW = 2030, U = y => Math.log10(Math.max(1, NOW - y));
+const uMin = U(2026), uMax = U(-13.8e9);
+const K0 = 26, K1 = 6000;
+
+function pack(items){                                 /* cribbed from layers/v2.html */
+  const spans = items.filter(it => it.e && it.e !== it.s)
+    .sort((a,b) => a.i-b.i || (b.e-b.s)-(a.e-a.s) || a.s-b.s);
+  const rows = [];
+  for(const it of spans){
+    let r = 0;
+    for(; r < rows.length; r++) if(!rows[r].some(o => it.s < o.e && o.s < it.e)) break;
+    if(r === rows.length) rows.push([]);
+    rows[r].push(it);
+  }
+  const dots = items.filter(it => !(it.e && it.e !== it.s)).sort((a,b) => a.s - b.s);
+  return {rows, dots};
+}
+/* packed ONCE, at full detail. row 0 holds the most important spans, so
+   opening rows in order is itself the level-of-detail ladder. */
+const LANES = SEED.map(id => {
+  const t = D.topics[id], p = pack(t.items);
+  return {id, name:t.name, rows:p.rows, dots:p.dots, n:t.items.length};
+});
+const NMARKS = LANES.reduce((a,l) => a + l.n, 0);
+
+/* ── VIEW — x only. there is no camera Y: the world is exactly one screen. ─ */
+const AX = 26, STEP = 0.052, RAMP = 0.105;
+const stage = document.getElementById('stage'), cv = document.getElementById('cv'), ctx = cv.getContext('2d');
+let W = 0, H = 0, SLOT = 60;
+/* slot furniture — set at resize with SLOT, then constant. never touched by zoom. */
+let HEAD = 12, DOTBAND = 15, ROWB = 15;
+const view = {u0: U(-3000), k: 210};
+const xOf = y => (view.u0 - U(y)) * view.k;
+const clamp01 = v => v < 0 ? 0 : v > 1 ? 1 : v;
+const zoomP = () => clamp01((Math.log(view.k) - Math.log(K0)) / (Math.log(K1) - Math.log(K0)));
+
+function resize(){
+  W = stage.clientWidth; H = stage.clientHeight;
+  SLOT = (H - AX) / LANES.length;                     /* the ONLY place a lane height is set */
+  HEAD    = Math.max(10, Math.min(12, SLOT*0.15));
+  DOTBAND = Math.max(11, Math.min(15, SLOT*0.20));
+  ROWB    = Math.max(9,  Math.min(15, SLOT*0.19));
+  const dpr = devicePixelRatio || 1;
+  cv.width = W*dpr; cv.height = H*dpr; ctx.setTransform(dpr,0,0,dpr,0,0);
+  clampV(); paint();
+}
+function clampV(){
+  view.u0 = Math.max(uMin+.05, Math.min(uMax + W/view.k - .05, view.u0));
+}
+
+/* ── PAINT ─────────────────────────────────────────────────────────────── */
+const TICKS=[-13e9,-1e9,-100e6,-1e6,-100000,-10000,-5000,-3000,-2000,-1000,-500,0,500,1000,1200,1400,1500,1600,1700,1800,1850,1900,1950,2000,2020];
+const fmt = y => { const a = Math.abs(y);
+  if(a>=1e9) return (a/1e9).toFixed(a>=1e10?0:1)+' bn'+(y<0?' BCE':'');
+  if(a>=1e6) return (a/1e6).toFixed(0)+' m'+(y<0?' BCE':'');
+  if(a>=10000) return (a/1000).toFixed(0)+'k'+(y<0?' BCE':'');
+  return y<0 ? a+' BCE' : (y===0?'0':''+y); };
+
+function paint(){
+  const p = zoomP();
+  const bg=tok('--tl-canvas-bg'), ink2=tok('--tl-ink-2'), ink3=tok('--tl-ink-3');
+  const rule=tok('--tl-rule'), grat=tok('--tl-graticule'), surf=tok('--tl-surface');
+  ctx.fillStyle = bg; ctx.fillRect(0,0,W,H);
+
+  const shown = [];
+  ctx.strokeStyle = grat; ctx.lineWidth = 1; ctx.beginPath();
+  let last = -1e9;
+  for(const tk of TICKS){
+    const x = Math.round(xOf(tk)) + .5;
+    if(x < -20 || x > W) continue;
+    if(x - last < 56) continue;
+    last = x; shown.push([x,tk]);
+    ctx.moveTo(x, AX); ctx.lineTo(x, H);
+  }
+  ctx.stroke();
+
+  let openTotal = 0, shownMarks = 0, squeezed = false;
+  LANES.forEach((L, li) => {
+    const top = AX + li*SLOT;                          /* fixed. forever. */
+    const interior = SLOT - HEAD - DOTBAND - 2;
+
+    /* how far each row has opened — a pure function of zoom, nothing else */
+    const open = [];
+    let want = 0;
+    for(let i=0;i<L.rows.length;i++){
+      const o = clamp01((p + RAMP - i*STEP) / RAMP);
+      open.push(o); want += o*ROWB;
+      if(o > 0.02) openTotal++;
+    }
+    const squash = want > interior ? interior/want : 1;   /* the crowding price */
+    if(squash < 0.999) squeezed = true;
+
+    ctx.save();
+    ctx.beginPath(); ctx.rect(0, top, W, SLOT); ctx.clip();
+
+    let ry = top + HEAD;
+    for(let i=0;i<L.rows.length;i++){
+      const h = open[i]*ROWB*squash;
+      if(h < 0.4) break;
+      for(const it of L.rows[i]){
+        const x0 = xOf(it.s), x1 = xOf(it.e), w = Math.max(2, x1-x0);
+        if(x1 < 0 || x0 > W) continue;
+        shownMarks++;
+        ctx.globalAlpha = Math.min(1, open[i]*1.4) * (it.k === 'life' ? .55 : .82);
+        ctx.fillStyle = catCol(it.c);
+        ctx.beginPath(); ctx.roundRect(x0, ry, w, Math.max(1, h-2), Math.min(2, h/3)); ctx.fill();
+        ctx.globalAlpha = 1;
+        if(h > 11 && w > 46){
+          ctx.save(); ctx.beginPath(); ctx.rect(x0, ry, w, h-2); ctx.clip();
+          ctx.fillStyle = '#fff'; ctx.font = '10px "Instrument Sans",sans-serif'; ctx.textAlign='left';
+          ctx.fillText(it.t, x0+5, ry + (h-2)/2 + 3.5);
+          ctx.restore();
+        }
+      }
+      ry += h;
+    }
+
+    /* the dot band sits at the foot of the slot — always there, never moves */
+    if(L.dots.length){
+      const cy = top + SLOT - DOTBAND/2 - 1;
+      ctx.font = '10.5px "Instrument Sans",sans-serif'; ctx.textAlign='left';
+      let lastR = -1e9;
+      for(let i=0;i<L.dots.length;i++){
+        const it = L.dots[i];
+        const a = it.i <= 2 ? 1 : clamp01((p - (it.i-2)*0.13) / 0.16);   /* detail by zoom alone */
+        if(a <= .02) continue;
+        const x = xOf(it.s);
+        if(x < -40 || x > W+40) continue;
+        shownMarks++;
+        ctx.globalAlpha = a; ctx.fillStyle = catCol(it.c);
+        ctx.beginPath(); ctx.arc(x, cy, it.i<=2 ? 4 : 3, 0, 7); ctx.fill();
+        const lw = ctx.measureText(it.t).width;
+        const nx = i < L.dots.length-1 ? xOf(L.dots[i+1].s) : 1e9;
+        if(x > lastR + 8 && (nx - x > lw + 14 || (it.i<=2 && nx-x > 26))){
+          ctx.fillStyle = ink2; ctx.fillText(it.t, x+7, cy+3.5);
+          lastR = x + lw + 10;
+        }
+        ctx.globalAlpha = 1;
+      }
+    }
+    ctx.restore();
+
+    /* slot furniture — the rock-solid part */
+    ctx.font = '9.5px "IBM Plex Mono",monospace'; ctx.textAlign='left';
+    const lab = L.name;
+    ctx.fillStyle = bg; ctx.fillRect(0, top+1, ctx.measureText(lab).width + 14, 11);
+    ctx.fillStyle = ink3; ctx.fillText(lab, 9, top+10);
+    ctx.strokeStyle = grat;
+    ctx.beginPath(); ctx.moveTo(0, Math.round(top+SLOT)+.5); ctx.lineTo(W, Math.round(top+SLOT)+.5); ctx.stroke();
+  });
+
+  ctx.fillStyle = surf; ctx.fillRect(0,0,W,AX);
+  ctx.strokeStyle = rule; ctx.beginPath(); ctx.moveTo(0,AX-.5); ctx.lineTo(W,AX-.5); ctx.stroke();
+  ctx.font = '9.5px "IBM Plex Mono",monospace'; ctx.textAlign='left';
+  for(const [x,tk] of shown){
+    ctx.strokeStyle = tok('--tl-rule-soft'); ctx.beginPath(); ctx.moveTo(x,0); ctx.lineTo(x,AX); ctx.stroke();
+    ctx.fillStyle = ink3; ctx.fillText(fmt(tk), x+4, 16);
+  }
+
+  hudEl.textContent =
+    'C · fixed slots\n' +
+    'px/decade ' + Math.round(view.k) + '   slot ' + SLOT.toFixed(1) + 'px (fixed)\n' +
+    openTotal + ' rows open · ' + NMARKS + ' marks in world\n' +
+    (squeezed ? 'interior compressed' : 'interior at full row height');
+}
+const hudEl = document.getElementById('hud');
+
+/* ── INPUT — x pan and zoom. vertical is deliberately dead. ────────────── */
+let pan = null;
+stage.addEventListener('mousedown', e => {
+  if(e.button) return;
+  pan = {x:e.clientX, u0:view.u0};
+  stage.classList.add('pan');
+});
+window.addEventListener('mousemove', e => {
+  if(!pan) return;
+  view.u0 = pan.u0 + (e.clientX - pan.x)/view.k;      /* content follows the hand */
+  clampV(); paint();
+});
+window.addEventListener('mouseup', () => { pan = null; stage.classList.remove('pan'); });
+
+stage.addEventListener('wheel', e => {
+  e.preventDefault();
+  const px = e.clientX - stage.getBoundingClientRect().left;
+  if(!e.ctrlKey && Math.abs(e.deltaX) > Math.abs(e.deltaY)){
+    view.u0 += e.deltaX/view.k; clampV(); paint(); return;
+  }
+  const uAt = view.u0 - px/view.k;                    /* year under the cursor */
+  view.k = Math.max(K0, Math.min(K1, view.k * Math.exp(-e.deltaY * 0.0016)));
+  view.u0 = uAt + px/view.k;                          /* ...stays under the cursor */
+  clampV(); paint();
+}, {passive:false});
+addEventListener('resize', resize);
+
+resize();
+</script>
+</body>
+</html>

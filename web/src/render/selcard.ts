@@ -13,10 +13,20 @@
    point. Its relations are garnish: four of them, quiet, with the full ranked
    list one click away in the dock.
 
-   THE IRON RULE: THE YEAR NEVER MOVES UNLESS THE USER PRESSES A THING THAT SAYS
-   SO. Exactly one control in here writes TimeStore — "Go to its peak", which
-   names the year on its own face before you press it. "In perspective" moves the
-   timeline's WINDOW; "See on map" moves the VIEW. Neither touches the moment.
+   NOTHING IN HERE WRITES TimeStore. "Zoom to X" moves the timeline's WINDOW,
+   and the year follows the window's centre by the global centre-year rule that
+   lives in Lab.tsx — so the moment moves as a CONSEQUENCE of the framing, in
+   one place, rather than being written from four. "See on map", "See on cube"
+   and "Drill down" move the VIEW and nothing else. ("Go to its peak" is gone:
+   it was the one control that wrote the year, and the centre-year rule made it
+   a second, contradictory way to say the same thing.)
+
+   THE SAME CARD ON THE MAP. Clicking a territory selects that polity and shows
+   this card beside the click, with the verbs pointed the other way: "See on
+   timeline" instead of "Zoom to", and "Drill down HERE" — at the point the
+   user actually put the cursor on, not at the polity's centroid, because they
+   pointed somewhere specific. A feature the alias table cannot resolve to a
+   curated polity still gets a card: name, sovereign, years, and the drill.
 
    PLACEMENT: it may never cover the thing it describes. The anchor rect comes
    from whichever renderer handled the click, in viewport coordinates, and the
@@ -32,8 +42,8 @@
 import { $, SelStore, TimeStore, catColor, fmtBig, fmtY, tokens } from './shared';
 import { esc, relDir } from './relations';
 import {
-  aliveAt, bandLabel, catLabel, describe, perspectiveSpan, relCount, territoryAt, topRelations,
-  typeLabel, type Subject,
+  aliveAt, bandLabel, catLabel, describe, perspectiveSpan, placeOf, relCount, territoryAt,
+  topRelations, typeLabel, type Place, type Subject,
 } from './subject';
 import { FOLD, roleWord } from './fold';
 
@@ -49,12 +59,14 @@ const SUPPRESS = new Set(['conn']);
 
 /** Everything the card can do, injected by Lab.tsx at boot. */
 export interface CardWiring {
-  /** frame the horizontal timeline on [a, b] — must NOT move the global year */
+  /** show the horizontal timeline framed on [a, b] — "Zoom to" / "See on timeline" */
   perspective(a: number, b: number): void;
   /** show the map, at the current global year */
   seeOnMap(): void;
   /** show the cube with this polity id traced */
   traceInCube(polityId: string): void;
+  /** show the core sample, drilled at this point */
+  drillAt(lon: number, lat: number, label: string): void;
   /** reveal the full ranked relation list in the docked panel */
   allConnections(): void;
   /** the snapshot year the map is actually showing right now */
@@ -63,14 +75,21 @@ export interface CardWiring {
   anchorOf(id: string): DOMRect | null;
 }
 
+/** The ⌘K palette and the field notes own Escape while they are open. */
+const modalOpen = () =>
+  !!document.querySelector('.tl-cmdk:not([hidden]), #fieldNotes:not([hidden])');
+
 export const SelCard = {
   el: null as HTMLElement | null,
   wiring: null as CardWiring | null,
   anchor: null as DOMRect | null,
   view: '' as string,
   open: false,
-  dismissed: false,        // Esc / × — sticky until the selection changes
+  dismissed: false,        // × — sticky until the selection changes
+  /** the exact spot the user pointed at, when the selection came from the map */
+  point: null as Place | null,
   _hint: null as DOMRect | null,
+  _pt: null as Place | null,
   _bound: false,
 
   wire(w: CardWiring) { this.wiring = w; },
@@ -88,16 +107,28 @@ export const SelCard = {
       if (row) { e.preventDefault(); this.select(row.dataset.goid!, null); }
     });
 
-    // Esc closes the card. It does NOT clear the selection: the selection is
-    // application state shared by every view, the card is one reading of it.
+    // ESC CLEARS THE SELECTION, EVERYWHERE.
+    //
+    // It used to close the card and deliberately KEEP the selection — the
+    // selection being application state and the card only one reading of it.
+    // That reasoning left the founder with a highlighted empire on the map and
+    // no way to un-highlight it: "Once I click see on map theres no way to
+    // un-click the highlight." The old rule is revoked by that bug. One Escape
+    // now closes the card AND drops the selection, which is the only reading
+    // that means the same thing on all eleven views.
+    //
     // Capture phase, and stopPropagation, so Lab's global handler does not also
-    // close the field notes underneath.
+    // close the field notes underneath — but the two things that own Escape
+    // when they are open (⌘K, the field notes) are handed it first.
     addEventListener('keydown', (e) => {
-      if (e.key !== 'Escape' || !this.open) return;
+      if (e.key !== 'Escape') return;
       const t = e.target as HTMLElement | null;
       if (t && (t.tagName === 'INPUT' || t.tagName === 'TEXTAREA' || t.tagName === 'SELECT')) return;
+      if (modalOpen()) return;
+      if (!this.open && !SelStore.id) return;
       e.stopPropagation();
-      this.hide(true);
+      this.hide();
+      SelStore.set(null);                         // the highlight goes with it
     }, true);
 
     addEventListener('resize', () => { if (this.open) this.place(); });
@@ -105,19 +136,22 @@ export const SelCard = {
     SelStore.subscribe(() => {
       this.dismissed = false;                     // a NEW selection un-dismisses
       const r = this._hint; this._hint = null;
+      const p = this._pt; this._pt = null;
+      this.point = p;                             // …and a new selection re-points
       if (!SelStore.id) { this.hide(); return; }
       this.show(SelStore.id, r ?? this.resolveAnchor(SelStore.id));
     });
-    // "Go to its peak" moves the year and the card's honest line is about the
-    // year, so the card has to re-read itself whenever the year moves.
+    // The card's honest line is about the YEAR, and the year now moves on its
+    // own whenever the timeline is panned (the centre-year rule), so the card
+    // has to re-read itself whenever the year moves.
     //
     // ON A MICROTASK, because the line also quotes the SNAPSHOT the map settled
     // on, and the map is another subscriber of the same store. The card is
     // initialised before the renderers (boot() needs it in place before anything
     // can call SelCard.select), so it is notified first — and repainting there
-    // read the map's previous snapshot: pressing "Go to its peak · 117" left the
-    // card saying "not on the map in 117 (nearest snapshot 1783)" over a map
-    // that was, by then, showing Rome at 1 BCE.
+    // read the map's previous snapshot: a year move to 117 left the card saying
+    // "not on the map in 117 (nearest snapshot 1783)" over a map that was, by
+    // then, showing Rome at 1 BCE.
     TimeStore.subscribe(() => {
       if (!this.open) return;
       queueMicrotask(() => { if (this.open) this.paint(); });
@@ -127,17 +161,22 @@ export const SelCard = {
   /**
    * THE ONE ENTRY POINT FOR RENDERERS. Select this id and put the card beside
    * that rect. Passing null for the id clears the selection, which is what an
-   * empty-canvas click means.
+   * empty-canvas click — and an empty-OCEAN click — means.
+   *
+   * `pt` is the exact point on the globe the user pointed at, which only the
+   * map can know. It is what "Drill down here" drills: someone who clicked the
+   * Tibetan corner of the Qing asked about Tibet, not about Beijing.
    */
-  select(id: string | null, rect: DOMRect | null) {
+  select(id: string | null, rect: DOMRect | null, pt: Place | null = null) {
     if (id === SelStore.id) {                     // re-click: the store will not fire
       this.dismissed = false;
+      this.point = pt;
       if (id) this.show(id, rect ?? this.resolveAnchor(id)); else this.hide();
       return;
     }
-    this._hint = rect;
+    this._hint = rect; this._pt = pt;
     SelStore.set(id);
-    this._hint = null;
+    this._hint = null; this._pt = null;
   },
 
   /** Lab tells the card which view is on screen — the honest line depends on it. */
@@ -149,7 +188,7 @@ export const SelCard = {
   },
 
   /**
-   * The thing moved under the card. "In perspective" re-frames the window, so
+   * The thing moved under the card. "Zoom to view" re-frames the window, so
    * the mark that was at the right edge when it was clicked is at the centre a
    * heartbeat later — and a card still parked at the old anchor is now covering
    * a piece of the very context the button just went and fetched.
@@ -225,18 +264,34 @@ export const SelCard = {
     const honest = this.honestLine(s);
     if (honest) html += `<div class="tl-selcard__honest">${esc(honest)}</div>`;
 
-    // ── the actions. Exactly one moves time, and it says which year. ──
-    html += `<div class="tl-selcard__acts">` +
-      `<button class="btn hero" data-act="persp" ` +
-      `title="Frame the timeline around this — the year does not move">In perspective</button>`;
-    if (s.polity) {
-      html += `<button class="btn" data-act="map" title="The map, at the year you are already on">See on map</button>`;
+    // ── the actions ───────────────────────────────────────────────────────
+    // Four verbs, one per projection: the timeline, the map, the cube, the
+    // core sample. On the map the first one points the other way, and the
+    // drill goes to the spot that was clicked rather than to the centroid.
+    const onMap = this.view === 'map';
+    const place = this.point ?? placeOf(s);
+    html += `<div class="tl-selcard__acts">`;
+    if (!s.minimal) {
+      html += onMap
+        ? `<button class="btn hero" data-act="persp" ` +
+        `title="The timeline, framed on its span">See on timeline</button>`
+        : `<button class="btn hero" data-act="persp" ` +
+        `title="Frame the timeline around this">Zoom to view</button>`;
+      if (s.polity && !onMap) {
+        html += `<button class="btn" data-act="map" title="The map, at the year you are already on">See on map</button>`;
+      }
+      if (s.polity) html += `<button class="btn" data-act="cube">See on cube</button>`;
     }
-    if (this.offerPeak(s)) {
-      html += `<button class="btn" data-act="peak" ` +
-        `title="The one control here that moves the year">Go to its peak · ${esc(fmtY(s.peakYear))}</button>`;
+    if (place) {
+      // "HERE" IS A PROMISE ABOUT A PIXEL, so it is only made when there is one:
+      // a selection that arrived from the map click carries the exact spot, one
+      // that arrived from the search box or the timeline does not, and offering
+      // "here" over a map nobody pointed at would name a place the user never
+      // chose. Without a point it is still a drill — at the thing's own place.
+      html += `<button class="btn" data-act="drill" ` +
+        `title="Every sovereign that ever held ${esc(place.label)}, newest first">` +
+        (this.point && onMap ? 'Drill down here' : 'Drill down') + `</button>`;
     }
-    if (s.polity) html += `<button class="btn" data-act="cube">Trace in cube</button>`;
     html += `</div>`;
 
     // ── relations: quiet, secondary, never the point ──
@@ -262,6 +317,10 @@ export const SelCard = {
    */
   honestLine(s: Subject): string | null {
     const y = TimeStore.year;
+    // A bare border feature is only ever selected FROM the snapshot it is drawn
+    // in, and its dates ARE that snapshot's stratum, so there is nothing here
+    // it could be honest about that the dates line has not already said.
+    if (s.minimal) return null;
     if (s.polity && this.view === 'map') {
       // The map draws the nearest of eighteen snapshots, which is usually not
       // the year you are standing in. Naming only one of the two would be a
@@ -277,18 +336,6 @@ export const SelCard = {
     return null;
   },
 
-  /** "only when absent": the control that moves time shows up when the thing is
-   *  not there at the moment you are standing in. */
-  offerPeak(s: Subject): boolean {
-    if (s.peakYear === TimeStore.year) return false;
-    if (!aliveAt(s, TimeStore.year)) return true;
-    if (s.polity && this.view === 'map') {
-      const snap = this.wiring ? this.wiring.mapYear() : TimeStore.year;
-      return territoryAt(s.polity, snap).size === 0;
-    }
-    return false;
-  },
-
   // ── the actions ───────────────────────────────────────────────────────────
   act(a: string) {
     const s = describe(SelStore.id); if (!s) return;
@@ -298,7 +345,13 @@ export const SelCard = {
       case 'persp': { const [a0, a1] = perspectiveSpan(s); w?.perspective(a0, a1); break; }
       case 'map': w?.seeOnMap(); break;
       case 'cube': if (s.polity) w?.traceInCube(s.polity); break;
-      case 'peak': TimeStore.set(s.peakYear, 'ui'); break;   // THE ONE that moves time
+      case 'drill': {
+        // this.point first, ALWAYS: on the map that is the pixel the user put
+        // the cursor on, and it outranks the polity's own centroid.
+        const p = this.point ?? placeOf(s);
+        if (p) w?.drillAt(p.lon, p.lat, p.label);
+        break;
+      }
       case 'all': w?.allConnections(); break;
     }
   },

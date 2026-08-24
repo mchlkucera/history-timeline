@@ -1,0 +1,288 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>A — True 2D camera</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500;600&family=Instrument+Sans:wght@400;500;600;700&display=swap">
+<style>
+/* tokens — cheap copy of design/tokens.css */
+:root{
+  color-scheme:light;
+  --tl-ground:#E3E8E6; --tl-canvas-bg:#E7ECEA; --tl-surface:#F5F7F6; --tl-surface-2:#EDF0EF;
+  --tl-surface-over:rgba(245,247,246,.96);
+  --tl-ink:#12181A; --tl-ink-2:#505E63; --tl-ink-3:#6D7B7F;
+  --tl-rule:#C7D0CD; --tl-rule-soft:#D6DEDB; --tl-rule-strong:#ADB9B6;
+  --tl-graticule:rgba(18,24,26,.055);
+  --tl-accent:#B4382A;
+  --tl-cat-power:#2C4E8F; --tl-cat-war:#8B4A31; --tl-cat-belief:#6B3F79; --tl-cat-sci:#1F6E63;
+  --tl-cat-art:#A33A63; --tl-cat-nature:#4F6B2B; --tl-cat-society:#8A6B15; --tl-cat-reach:#16657E;
+  --sans:"Instrument Sans",system-ui,sans-serif; --mono:"IBM Plex Mono",monospace;
+}
+@media (prefers-color-scheme:dark){:root{
+  color-scheme:dark;
+  --tl-ground:#14191B; --tl-canvas-bg:#171D1F; --tl-surface:#1B2225; --tl-surface-2:#20282B;
+  --tl-surface-over:rgba(27,34,37,.96);
+  --tl-ink:#E9F0EE; --tl-ink-2:#A9B7B9; --tl-ink-3:#7E8D90;
+  --tl-rule:#2E393C; --tl-rule-soft:#283134; --tl-rule-strong:#41504F;
+  --tl-graticule:rgba(233,240,238,.06);
+  --tl-accent:#E06B58;
+  --tl-cat-power:#7098DC; --tl-cat-war:#C98058; --tl-cat-belief:#B287C0; --tl-cat-sci:#45B39D;
+  --tl-cat-art:#E0789F; --tl-cat-nature:#92B85C; --tl-cat-society:#D2A63C; --tl-cat-reach:#4FAFC9;
+}}
+*{box-sizing:border-box;margin:0;padding:0}
+html,body{height:100%}
+body{font-family:var(--sans);background:var(--tl-canvas-bg);color:var(--tl-ink);overflow:hidden;user-select:none;-webkit-font-smoothing:antialiased}
+#stage{position:absolute;inset:0;cursor:grab}
+#stage.pan{cursor:grabbing}
+canvas{display:block;width:100%;height:100%}
+#hud{position:absolute;right:10px;bottom:9px;font-family:var(--mono);font-size:9.5px;line-height:1.5;
+  color:var(--tl-ink-3);background:var(--tl-surface-over);border:1px solid var(--tl-rule);
+  border-radius:5px;padding:4px 8px;text-align:right;pointer-events:none;white-space:pre}
+</style>
+</head>
+<body>
+<div id="stage"><canvas id="cv"></canvas><div id="hud"></div></div>
+<script src="./data.js"></script>
+<script>
+'use strict';
+/* ══════════════════════════════════════════════════════════════════════════
+   A — THE TRUE 2D CAMERA
+   One rigid world. Every lane has a fixed WORLD height, every item a fixed
+   WORLD position, computed once at load from the full item set. Zoom scales
+   BOTH axes about the cursor. Nothing ever moves relative to anything else.
+   Detail arrives only as opacity, driven by scale alone.
+   Press Y to toggle a modest Y-damping variant (Y scales at sqrt of X).
+   ══════════════════════════════════════════════════════════════════════════ */
+const D = window.TLDATA;
+const CSS = getComputedStyle(document.documentElement);
+const tok = n => CSS.getPropertyValue(n).trim();
+const catCol = c => tok('--tl-cat-'+c) || tok('--tl-cat-power');
+
+const SEED = ['eu-ess','eu-war','eu-sci','eu-art','as-ess','as-dyn','deep','arts','design','mozart'];
+const NOW = 2030, U = y => Math.log10(Math.max(1, NOW - y));
+const uMin = U(2026), uMax = U(-13.8e9), uSpan = uMax - uMin;
+
+/* ── THE WORLD ─────────────────────────────────────────────────────────────
+   world x: log-time, 700 world px per decade. world y: stacked lanes.       */
+const WU = 700;                                     // world px per log decade
+const WORLD_W = uSpan * WU;
+const ROW_W = 30, DOT_W = 36, HEAD_W = 22, PAD_W = 8, GAP_W = 18;
+
+function pack(items){                               // cribbed from layers/v2.html
+  const spans = items.filter(it => it.e && it.e !== it.s)
+    .sort((a,b) => a.i-b.i || (b.e-b.s)-(a.e-a.s) || a.s-b.s);
+  const rows = [];
+  for(const it of spans){
+    let r = 0;
+    for(; r < rows.length; r++) if(!rows[r].some(o => it.s < o.e && o.s < it.e)) break;
+    if(r === rows.length) rows.push([]);
+    rows[r].push(it);
+  }
+  const dots = items.filter(it => !(it.e && it.e !== it.s)).sort((a,b) => a.s - b.s);
+  return {rows, dots};
+}
+const wx = y => (uMax - U(y)) * WU;                 // past on the left
+
+/* build the world ONCE. after this line no geometry is ever recomputed. */
+const LANES = [];
+let wy = 14;
+for(const key of SEED){
+  const t = D.topics[key];
+  const p = pack(t.items);
+  const top = wy;
+  const h = HEAD_W + p.rows.length*ROW_W + (p.dots.length ? DOT_W : 0) + PAD_W;
+  LANES.push({key, name:t.name, cat:t.cat, rows:p.rows, dots:p.dots, y:top, h});
+  wy = top + h + GAP_W;
+}
+const WORLD_H = wy + 14;
+const NMARKS = LANES.reduce((a,l) => a + l.rows.reduce((x,r)=>x+r.length,0) + l.dots.length, 0);
+
+/* ── LOD: pure function of scale. an item's POSITION never depends on it. ── */
+const REVEAL = {1:0, 2:0.20, 3:0.34, 4:0.62, 5:1.05};   // scale at which it starts to arrive
+function alphaOf(imp, s){
+  const r = REVEAL[imp] ?? 0.5;
+  if(r === 0) return 1;
+  return Math.max(0, Math.min(1, (s/r - 1) / 0.55));
+}
+
+/* ── CAMERA ────────────────────────────────────────────────────────────── */
+const AX = 26;
+const stage = document.getElementById('stage'), cv = document.getElementById('cv'), ctx = cv.getContext('2d');
+let W = 0, H = 0;
+let uniformY = true;
+const cam = {x:0, y:0, s:0.46};                     // world point at screen (0, AX)
+const S_FIT = () => (W || 1400) / WORLD_W;
+const sy = () => uniformY ? cam.s : S_FIT() * Math.pow(cam.s / S_FIT(), 0.5);
+const sxOf = w => (w - cam.x) * cam.s;
+const syOf = w => (w - cam.y) * sy() + AX;
+
+function clamp(){
+  const vh = H - AX, k = sy();
+  cam.x = Math.max(-W*0.45/cam.s, Math.min(WORLD_W - W*0.55/cam.s, cam.x));
+  cam.y = Math.max(-40/k, Math.min(WORLD_H - vh*0.45/k, cam.y));
+}
+function resize(){
+  W = stage.clientWidth; H = stage.clientHeight;
+  const dpr = devicePixelRatio || 1;
+  cv.width = W*dpr; cv.height = H*dpr; ctx.setTransform(dpr,0,0,dpr,0,0);
+  clamp(); paint();
+}
+
+/* ── PAINT ─────────────────────────────────────────────────────────────── */
+const TICKS=[-13e9,-1e9,-100e6,-1e6,-100000,-10000,-5000,-3000,-2000,-1000,-500,0,500,1000,1200,1400,1500,1600,1700,1800,1850,1900,1950,2000,2020];
+const fmt = y => { const a = Math.abs(y);
+  if(a>=1e9) return (a/1e9).toFixed(a>=1e10?0:1)+' bn'+(y<0?' BCE':'');
+  if(a>=1e6) return (a/1e6).toFixed(0)+' m'+(y<0?' BCE':'');
+  if(a>=10000) return (a/1000).toFixed(0)+'k'+(y<0?' BCE':'');
+  return y<0 ? a+' BCE' : (y===0?'0':''+y); };
+
+function paint(){
+  const bg=tok('--tl-canvas-bg'), ink2=tok('--tl-ink-2'), ink3=tok('--tl-ink-3');
+  const rule=tok('--tl-rule'), grat=tok('--tl-graticule'), surf=tok('--tl-surface');
+  const k = sy(), s = cam.s;
+  ctx.fillStyle = bg; ctx.fillRect(0,0,W,H);
+
+  /* graticule — world lines, so they scale with the terrain */
+  const shown = [];
+  ctx.strokeStyle = grat; ctx.lineWidth = 1; ctx.beginPath();
+  let last = -1e9;
+  for(const t of TICKS){
+    const x = Math.round(sxOf(wx(t))) + .5;
+    if(x < -30 || x > W+30) continue;
+    if(x - last < 52) continue;
+    last = x; shown.push([x,t]);
+    ctx.moveTo(x, AX); ctx.lineTo(x, H);
+  }
+  ctx.stroke();
+
+  ctx.save(); ctx.beginPath(); ctx.rect(0, AX, W, H-AX); ctx.clip();
+
+  const rowH = ROW_W * k;                                  // screen height of one row
+  const labels = rowH >= 9.5;                              // text is screen-sized: it either fits or it doesn't
+  for(const L of LANES){
+    const ly = syOf(L.y), lh = L.h * k;
+    if(ly > H || ly + lh < AX) continue;
+
+    /* lane ground + name — fixed world box, screen-sized type */
+    ctx.strokeStyle = grat;
+    ctx.beginPath(); ctx.moveTo(0, Math.round(ly+lh)+.5); ctx.lineTo(W, Math.round(ly+lh)+.5); ctx.stroke();
+    if(lh > 24){
+      ctx.font = '9.5px "IBM Plex Mono",monospace'; ctx.textAlign='left';
+      ctx.fillStyle = ink3; ctx.fillText(L.name, 9, ly + Math.min(HEAD_W*k, 14));
+    }
+
+    let ry = ly + HEAD_W*k;
+    for(const row of L.rows){
+      for(const it of row){
+        const a = alphaOf(it.i, s); if(a <= 0.01) continue;
+        const x0 = sxOf(wx(it.s)), x1 = sxOf(wx(it.e)), w = Math.max(1.5, x1-x0);
+        if(x1 < -2 || x0 > W) continue;
+        ctx.globalAlpha = a * (it.k === 'life' ? .55 : .82);
+        ctx.fillStyle = catCol(it.c);
+        const bh = Math.max(1, rowH - 3*Math.min(1,k*6));
+        ctx.beginPath(); ctx.roundRect(x0, ry, w, bh, Math.min(2, bh/2)); ctx.fill();
+        ctx.globalAlpha = 1;
+        if(labels && w > 46 && rowH > 11){
+          ctx.save(); ctx.beginPath(); ctx.rect(x0, ry, w, bh); ctx.clip();
+          ctx.globalAlpha = a;
+          ctx.fillStyle = '#fff'; ctx.font = '10px "Instrument Sans",sans-serif'; ctx.textAlign='left';
+          ctx.fillText(it.t, x0+5, ry + bh/2 + 3.5);
+          ctx.restore(); ctx.globalAlpha = 1;
+        }
+      }
+      ry += rowH;
+    }
+    if(L.dots.length){
+      const cy = ry + DOT_W*k/2;
+      ctx.font = '10.5px "Instrument Sans",sans-serif'; ctx.textAlign='left';
+      const rad = Math.max(1, Math.min(4.5, 4*Math.min(1, k*22)));
+      let lastR = -1e9;
+      for(let i=0;i<L.dots.length;i++){
+        const it = L.dots[i], a = alphaOf(it.i, s); if(a <= .01) continue;
+        const x = sxOf(wx(it.s));
+        if(x < -40 || x > W+40) continue;
+        ctx.globalAlpha = a; ctx.fillStyle = catCol(it.c);
+        ctx.beginPath(); ctx.arc(x, cy, it.i<=2 ? rad : rad*0.75, 0, 7); ctx.fill();
+        if(labels && DOT_W*k > 13){
+          const lw = ctx.measureText(it.t).width;
+          const nx = i < L.dots.length-1 ? sxOf(wx(L.dots[i+1].s)) : 1e9;
+          if(x > lastR + 8 && nx - x > lw + 14){
+            ctx.fillStyle = ink2; ctx.fillText(it.t, x+7, cy+3.5);
+            lastR = x + lw + 10;
+          }
+        }
+        ctx.globalAlpha = 1;
+      }
+    }
+  }
+  ctx.restore();
+
+  /* axis strip — the only screen-space chrome */
+  ctx.fillStyle = surf; ctx.fillRect(0,0,W,AX);
+  ctx.strokeStyle = rule; ctx.beginPath(); ctx.moveTo(0,AX-.5); ctx.lineTo(W,AX-.5); ctx.stroke();
+  ctx.font = '9.5px "IBM Plex Mono",monospace'; ctx.textAlign = 'left';
+  for(const [x,t] of shown){
+    ctx.strokeStyle = tok('--tl-rule-soft'); ctx.beginPath(); ctx.moveTo(x,0); ctx.lineTo(x,AX); ctx.stroke();
+    ctx.fillStyle = ink3; ctx.fillText(fmt(t), x+4, 16);
+  }
+  hud();
+}
+const hudEl = document.getElementById('hud');
+function hud(){
+  hudEl.textContent =
+    'A · true 2D camera\n' +
+    'zoom ×' + cam.s.toFixed(3) + '   world ' + Math.round(WORLD_W) + '×' + Math.round(WORLD_H) + '\n' +
+    LANES.length + ' lanes · ' + NMARKS + ' marks · rigid\n' +
+    'Y axis: ' + (uniformY ? 'uniform (press Y to damp)' : 'sqrt-damped (press Y for uniform)');
+}
+
+/* ── INPUT — zoom about the cursor, drag pans, nothing else ────────────── */
+let pan = null;
+stage.addEventListener('mousedown', e => {
+  if(e.button) return;
+  pan = {px:e.clientX, py:e.clientY, cx:cam.x, cy:cam.y};
+  stage.classList.add('pan');
+});
+window.addEventListener('mousemove', e => {
+  if(!pan) return;
+  cam.x = pan.cx - (e.clientX - pan.px)/cam.s;       // content follows the hand
+  cam.y = pan.cy - (e.clientY - pan.py)/sy();
+  clamp(); paint();
+});
+window.addEventListener('mouseup', () => { pan = null; stage.classList.remove('pan'); });
+
+stage.addEventListener('wheel', e => {
+  e.preventDefault();
+  const r = stage.getBoundingClientRect();
+  const px = e.clientX - r.left, py = e.clientY - r.top - AX;
+  if(!e.ctrlKey && Math.abs(e.deltaX) > Math.abs(e.deltaY)){    // trackpad sideways = pan
+    cam.x += e.deltaX / cam.s; clamp(); paint(); return;
+  }
+  const wAtX = cam.x + px/cam.s, wAtY = cam.y + py/sy();        // world point under the cursor
+  cam.s = Math.max(0.06, Math.min(14, cam.s * Math.exp(-e.deltaY * 0.0016)));
+  cam.x = wAtX - px/cam.s;                                      // ...stays under the cursor
+  cam.y = wAtY - py/sy();
+  clamp(); paint();
+}, {passive:false});
+
+window.addEventListener('keydown', e => {
+  if(e.key === 'y' || e.key === 'Y'){
+    const cy = cam.y + (H-AX)/2/sy();                           // keep the screen centre put
+    uniformY = !uniformY;
+    cam.y = cy - (H-AX)/2/sy();
+    clamp(); paint();
+  }
+});
+addEventListener('resize', resize);
+
+/* open on a readable slice of the world, not the full fit — the full fit is
+   one wheel-out away, and feeling that sliver is part of the point. */
+resize();
+cam.x = wx(1500) - W*0.35/cam.s;
+cam.y = -20;
+clamp(); paint();
+</script>
+</body>
+</html>

@@ -1,0 +1,570 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>Layers</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500;600&family=Instrument+Sans:wght@400;500;600;700&display=swap">
+<style>
+:root{
+  color-scheme:light;
+  --tl-ground:#E3E8E6; --tl-canvas-bg:#E7ECEA; --tl-surface:#F5F7F6; --tl-surface-2:#EDF0EF;
+  --tl-surface-over:rgba(245,247,246,.96);
+  --tl-hover:rgba(18,24,26,.045); --tl-press:rgba(18,24,26,.085); --tl-selected:rgba(18,24,26,.07);
+  --tl-ink:#12181A; --tl-ink-2:#505E63; --tl-ink-3:#6D7B7F;
+  --tl-rule:#C7D0CD; --tl-rule-soft:#D6DEDB; --tl-rule-strong:#ADB9B6;
+  --tl-graticule:rgba(18,24,26,.055);
+  --tl-accent:#B4382A; --tl-accent-soft:rgba(180,56,42,.12); --tl-accent-line:rgba(180,56,42,.45);
+  --tl-cat-power:#2C4E8F; --tl-cat-war:#8B4A31; --tl-cat-belief:#6B3F79; --tl-cat-sci:#1F6E63;
+  --tl-cat-art:#A33A63; --tl-cat-nature:#4F6B2B; --tl-cat-society:#8A6B15; --tl-cat-reach:#16657E;
+  --tl-shadow-pop:0 8px 24px rgba(18,24,26,.16);
+  --sans:"Instrument Sans",system-ui,sans-serif; --mono:"IBM Plex Mono",monospace;
+}
+@media (prefers-color-scheme:dark){:root{
+  color-scheme:dark;
+  --tl-ground:#14191B; --tl-canvas-bg:#171D1F; --tl-surface:#1B2225; --tl-surface-2:#20282B;
+  --tl-surface-over:rgba(27,34,37,.96);
+  --tl-hover:rgba(233,240,238,.055); --tl-press:rgba(233,240,238,.10); --tl-selected:rgba(233,240,238,.08);
+  --tl-ink:#E9F0EE; --tl-ink-2:#A9B7B9; --tl-ink-3:#7E8D90;
+  --tl-rule:#2E393C; --tl-rule-soft:#283134; --tl-rule-strong:#41504F;
+  --tl-graticule:rgba(233,240,238,.06);
+  --tl-accent:#E06B58; --tl-accent-soft:rgba(224,107,88,.16); --tl-accent-line:rgba(224,107,88,.5);
+  --tl-cat-power:#7098DC; --tl-cat-war:#C98058; --tl-cat-belief:#B287C0; --tl-cat-sci:#45B39D;
+  --tl-cat-art:#E0789F; --tl-cat-nature:#92B85C; --tl-cat-society:#D2A63C; --tl-cat-reach:#4FAFC9;
+  --tl-shadow-pop:0 8px 24px rgba(0,0,0,.5);
+}}
+*{box-sizing:border-box;margin:0;padding:0}
+html,body{height:100%}
+body{font-family:var(--sans);background:var(--tl-ground);color:var(--tl-ink);font-size:13px;overflow:hidden;user-select:none;-webkit-font-smoothing:antialiased}
+#app{display:grid;grid-template-columns:280px 1fr;height:100vh}
+#panel{background:var(--tl-surface);border-right:1px solid var(--tl-rule);display:flex;flex-direction:column;min-height:0}
+.phead{height:24px;padding:0 12px;border-bottom:1px solid var(--tl-rule);display:flex;gap:7px;align-items:center}
+.phead h1{font-size:11.5px;font-weight:600}
+.phead .sub{font-family:var(--mono);font-size:9px;color:var(--tl-ink-3);text-transform:uppercase;letter-spacing:.04em}
+/* #tree mirrors the canvas content box exactly: same origin (24px), same clip, no scroll of its own */
+#tree{flex:1;position:relative;overflow:hidden}
+.pfoot{border-top:1px solid var(--tl-rule-soft);padding:7px 8px;display:flex;gap:6px}
+.btn{font:inherit;font-size:11.5px;color:var(--tl-ink-2);background:none;border:1px solid var(--tl-rule);border-radius:5px;padding:4px 8px;cursor:pointer}
+.btn:hover{background:var(--tl-hover);color:var(--tl-ink)}
+
+.row{position:absolute;left:0;right:0;display:flex;align-items:center;gap:6px;padding:0 6px 0 5px;overflow:hidden}
+.row:hover{background:var(--tl-hover)}
+.row.ind{padding-left:18px;box-shadow:inset 11px 0 0 -10px var(--tl-rule-soft)}
+.row.off .nm,.row.off .dot{opacity:.34}
+.row.dragging{opacity:.45;background:var(--tl-accent-soft);box-shadow:inset 0 0 0 1px var(--tl-accent-line)}
+.eye{width:16px;height:16px;flex:none;display:grid;place-items:center;color:var(--tl-ink-3);cursor:pointer;border-radius:3px}
+.eye:hover{background:var(--tl-press);color:var(--tl-ink)}
+.eye svg{width:12px;height:12px}
+.dot{width:7px;height:7px;border-radius:50%;flex:none}
+.nm{flex:1;font-size:12.5px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;cursor:grab}
+.lvl{font-size:10.5px;color:var(--tl-ink-3);font-family:var(--mono);letter-spacing:.02em;
+     border:1px solid transparent;border-radius:4px;padding:1px 5px;cursor:pointer;opacity:0;flex:none}
+.row:hover .lvl{opacity:1}
+.lvl:hover,.lvl.open{border-color:var(--tl-rule-strong);background:var(--tl-surface-2);color:var(--tl-ink-2);opacity:1}
+.x{width:15px;flex:none;text-align:center;color:var(--tl-ink-3);cursor:pointer;opacity:0;font-size:13px;line-height:1}
+.row:hover .x{opacity:1}
+.x:hover{color:var(--tl-accent)}
+
+.ghead{position:absolute;left:0;right:0;display:flex;align-items:flex-start;gap:5px;padding:1px 6px 0 3px;overflow:hidden;line-height:15px}
+.ghead:hover{background:var(--tl-hover)}
+.chev{width:14px;flex:none;text-align:center;color:var(--tl-ink-3);cursor:pointer;font-size:9px}
+.gname{font-size:10.5px;font-weight:600;letter-spacing:.05em;text-transform:uppercase;color:var(--tl-ink-2);flex:1;cursor:grab}
+.gcount{font-family:var(--mono);font-size:9px;color:var(--tl-ink-3)}
+.ghead .x{opacity:0}.ghead:hover .x{opacity:1}
+
+#ghost{position:fixed;z-index:900;display:none;background:var(--tl-surface);border:1px solid var(--tl-rule-strong);
+  border-radius:5px;box-shadow:var(--tl-shadow-pop);padding:4px 9px;font-size:12.5px;pointer-events:none}
+.pop{position:fixed;z-index:950;background:var(--tl-surface-over);border:1px solid var(--tl-rule);border-radius:8px;
+  box-shadow:var(--tl-shadow-pop);padding:6px;display:none;min-width:250px}
+.pop h4{font-family:var(--mono);font-size:9px;text-transform:uppercase;letter-spacing:.06em;color:var(--tl-ink-3);padding:3px 6px 5px}
+.opt{display:flex;flex-direction:column;padding:5px 8px;border-radius:5px;cursor:pointer}
+.opt:hover{background:var(--tl-hover)}
+.opt.on{background:var(--tl-selected);box-shadow:inset 2px 0 0 var(--tl-accent)}
+.opt b{font-size:12.5px;font-weight:600}
+.opt span{font-size:11px;color:var(--tl-ink-3);line-height:1.35}
+.item{display:flex;align-items:center;gap:7px;padding:4px 7px;border-radius:5px;cursor:pointer;font-size:12.5px}
+.item:hover{background:var(--tl-hover)}
+.item .n{margin-left:auto;font-family:var(--mono);font-size:9px;color:var(--tl-ink-3)}
+#libpop{max-height:62vh;overflow:auto}
+
+#stage{position:relative;overflow:hidden;background:var(--tl-canvas-bg);cursor:grab}
+#stage.pan{cursor:grabbing}
+#cv{display:block;width:100%;height:100%}
+#hud{position:absolute;right:10px;bottom:8px;font-family:var(--mono);font-size:9.5px;color:var(--tl-ink-3);
+  background:var(--tl-surface-over);border:1px solid var(--tl-rule);border-radius:5px;padding:3px 7px}
+#tip{position:fixed;z-index:960;background:var(--tl-surface-over);border:1px solid var(--tl-rule);border-radius:6px;
+  box-shadow:var(--tl-shadow-pop);padding:5px 8px;font-size:11.5px;pointer-events:none;display:none}
+#tip em{font-style:normal;font-family:var(--mono);font-size:10px;color:var(--tl-ink-3)}
+</style>
+</head>
+<body>
+<div id="app">
+  <aside id="panel">
+    <div class="phead"><h1>Layers</h1><span class="sub" id="hcount"></span></div>
+    <div id="tree"></div>
+    <div class="pfoot"><button class="btn" id="addLane">+ Add lane</button><button class="btn" id="addGroup">+ Group</button></div>
+  </aside>
+  <main id="stage"><canvas id="cv"></canvas><div id="hud"></div></main>
+</div>
+<div id="ghost"></div>
+<div class="pop" id="lvlpop"></div>
+<div class="pop" id="libpop"></div>
+<div id="tip"></div>
+<script>
+window.TLDATA={"topics":{"eu-ess":{"name":"Europe · Essentials","cat":"power","kind":"region","items":[{"t":"Mycenaean Greece","s":-1600,"e":-1100,"c":"power","i":4,"k":"zone","g":"greece bronze"},{"t":"Rome founded (legend)","s":-753,"e":0,"c":"power","i":3,"k":"moment","g":"rome"},{"t":"Athenian democracy","s":-508,"e":0,"c":"power","i":3,"k":"moment","g":"greece democracy"},{"t":"Alexander the Great","s":-356,"e":-323,"c":"power","i":2,"k":"life","g":"macedonia greece conquest empire"},{"t":"Julius Caesar","s":-100,"e":-44,"c":"power","i":2,"k":"life","g":"rome empire"},{"t":"Caesar assassinated","s":-44,"e":0,"c":"power","i":3,"k":"moment","g":"rome"},{"t":"Vesuvius buries Pompeii","s":79,"e":0,"c":"nature","i":4,"k":"moment","g":"rome volcano"},{"t":"Roman Empire at maximum","s":117,"e":0,"c":"power","i":3,"k":"moment","g":"rome peak"},{"t":"Western Rome falls","s":476,"e":0,"c":"power","i":2,"k":"moment","g":"rome fall"},{"t":"Charlemagne","s":748,"e":814,"c":"power","i":3,"k":"life","g":"franks empire christianity"},{"t":"Charlemagne crowned emperor","s":800,"e":0,"c":"power","i":3,"k":"moment","g":"franks empire"},{"t":"Magna Carta","s":1215,"e":0,"c":"power","i":3,"k":"moment","g":"england law rights"},{"t":"Black Death kills a third of Europe","s":1347,"e":1351,"c":"nature","i":2,"k":"episode","g":"plague pandemic"},{"t":"Charles University founded in Prague","s":1348,"e":0,"c":"society","i":5,"k":"moment","g":"prague czech university"},{"t":"Age of Discovery","s":1418,"e":1650,"c":"reach","i":2,"k":"life","g":"exploration sea portugal spain era"},{"t":"Columbus reaches the Americas","s":1492,"e":0,"c":"reach","i":2,"k":"moment","g":"exploration spain"},{"t":"Jan Amos Komenský (Comenius)","s":1592,"e":1670,"c":"society","i":4,"k":"life","g":"czech education philosophy"},{"t":"Defenestration of Prague","s":1618,"e":0,"c":"power","i":4,"k":"moment","g":"prague czech war"},{"t":"Great Britain formed","s":1707,"e":0,"c":"power","i":4,"k":"moment","g":"britain union"},{"t":"Napoleon Bonaparte","s":1769,"e":1821,"c":"power","i":2,"k":"life","g":"france napoleon empire war"},{"t":"French Revolution","s":1789,"e":1799,"c":"power","i":2,"k":"episode","g":"france revolution"},{"t":"Terror: Louis XVI guillotined","s":1793,"e":0,"c":"power","i":4,"k":"moment","g":"france revolution"},{"t":"Napoleon crowns himself","s":1804,"e":0,"c":"power","i":3,"k":"moment","g":"france napoleon empire"},{"t":"Revolutions sweep Europe","s":1848,"e":0,"c":"power","i":3,"k":"moment","g":"revolution liberalism nationalism"},{"t":"Germany unified","s":1871,"e":0,"c":"power","i":3,"k":"moment","g":"germany empire"},{"t":"Winston Churchill","s":1874,"e":1965,"c":"power","i":3,"k":"life","g":"britain war"},{"t":"Russian Revolution","s":1917,"e":0,"c":"power","i":3,"k":"moment","g":"russia revolution communism"},{"t":"USSR founded","s":1922,"e":0,"c":"power","i":4,"k":"moment","g":"russia communism"},{"t":"Hitler takes power","s":1933,"e":0,"c":"power","i":3,"k":"moment","g":"germany nazism"},{"t":"Iron Curtain descends","s":1945,"e":0,"c":"power","i":3,"k":"moment","g":"cold-war communism"},{"t":"The Cold War","s":1947,"e":1991,"c":"power","i":2,"k":"life","g":"cold-war usa ussr communism era"},{"t":"Treaty of Rome — EEC born","s":1957,"e":0,"c":"power","i":4,"k":"moment","g":"europe union"},{"t":"Prague Spring crushed","s":1968,"e":0,"c":"power","i":4,"k":"moment","g":"czech communism prague"},{"t":"Berlin Wall falls · Velvet Revolution","s":1989,"e":0,"c":"power","i":3,"k":"moment","g":"communism revolution czech prague"},{"t":"EU founded · Czechoslovakia splits","s":1993,"e":0,"c":"power","i":4,"k":"moment","g":"europe union czech"}]},"eu-sci":{"name":"Europe · Science","cat":"sci","kind":"region","items":[{"t":"Thales predicts an eclipse","s":-585,"e":0,"c":"sci","i":4,"k":"moment","g":"science greece"},{"t":"Plato founds the Academy","s":-387,"e":0,"c":"belief","i":3,"k":"moment","g":"philosophy greece plato"},{"t":"Euclid's Elements","s":-300,"e":0,"c":"sci","i":4,"k":"moment","g":"math greece"},{"t":"Archimedes at work","s":-250,"e":0,"c":"sci","i":4,"k":"moment","g":"science greece"},{"t":"Paper invented in China","s":105,"e":0,"c":"sci","i":3,"k":"moment","g":"china invention paper"},{"t":"Ptolemy maps the cosmos (wrongly)","s":150,"e":0,"c":"sci","i":4,"k":"moment","g":"astronomy"},{"t":"Al-Khwarizmi writes the algebra book","s":820,"e":0,"c":"sci","i":3,"k":"moment","g":"math islam algorithm"},{"t":"First printed book (Diamond Sutra)","s":868,"e":0,"c":"sci","i":4,"k":"moment","g":"china printing"},{"t":"First university (Bologna)","s":1088,"e":0,"c":"society","i":4,"k":"moment","g":"university education"},{"t":"Gutenberg's printing press","s":1439,"e":0,"c":"sci","i":2,"k":"moment","g":"printing revolution information"},{"t":"Nicolaus Copernicus","s":1473,"e":1543,"c":"sci","i":2,"k":"life","g":"astronomy revolution science poland"},{"t":"Copernicus: Earth moves","s":1543,"e":0,"c":"sci","i":2,"k":"moment","g":"astronomy revolution science"},{"t":"Galileo Galilei","s":1564,"e":1642,"c":"sci","i":2,"k":"life","g":"astronomy galileo science italy"},{"t":"Galileo points a telescope up","s":1609,"e":0,"c":"sci","i":3,"k":"moment","g":"astronomy galileo science"},{"t":"Isaac Newton","s":1643,"e":1727,"c":"sci","i":2,"k":"life","g":"physics newton science england"},{"t":"Newton's Principia","s":1687,"e":0,"c":"sci","i":2,"k":"moment","g":"physics newton science"},{"t":"The Encyclopédie — Enlightenment engine","s":1751,"e":0,"c":"belief","i":4,"k":"moment","g":"enlightenment france philosophy"},{"t":"Industrial Revolution","s":1760,"e":1840,"c":"sci","i":2,"k":"life","g":"industry steam factory era"},{"t":"Watt's steam engine goes commercial","s":1776,"e":0,"c":"sci","i":3,"k":"moment","g":"industrial-revolution steam technology"},{"t":"Adam Smith's Wealth of Nations","s":1776,"e":0,"c":"belief","i":4,"k":"moment","g":"economics enlightenment"},{"t":"First vaccine (smallpox)","s":1796,"e":0,"c":"sci","i":3,"k":"moment","g":"medicine vaccine"},{"t":"Charles Darwin","s":1809,"e":1882,"c":"sci","i":2,"k":"life","g":"biology evolution science england"},{"t":"Faraday: electricity from motion","s":1831,"e":0,"c":"sci","i":4,"k":"moment","g":"physics electricity"},{"t":"Darwin's Origin of Species","s":1859,"e":0,"c":"sci","i":2,"k":"moment","g":"biology evolution science"},{"t":"Marx's Das Kapital","s":1867,"e":0,"c":"belief","i":4,"k":"moment","g":"communism economics philosophy"},{"t":"Marie Curie","s":1867,"e":1934,"c":"sci","i":3,"k":"life","g":"physics chemistry radioactivity poland france"},{"t":"Mendeleev's periodic table","s":1869,"e":0,"c":"sci","i":4,"k":"moment","g":"chemistry"},{"t":"Telephone","s":1876,"e":0,"c":"sci","i":4,"k":"moment","g":"technology communication"},{"t":"Electric light bulb","s":1879,"e":0,"c":"sci","i":4,"k":"moment","g":"technology electricity"},{"t":"Albert Einstein","s":1879,"e":1955,"c":"sci","i":2,"k":"life","g":"physics einstein relativity germany"},{"t":"First automobile","s":1885,"e":0,"c":"sci","i":4,"k":"moment","g":"technology car"},{"t":"First powered flight","s":1903,"e":0,"c":"sci","i":3,"k":"moment","g":"technology flight usa"},{"t":"Einstein's miracle year","s":1905,"e":0,"c":"sci","i":3,"k":"moment","g":"physics einstein relativity"},{"t":"Alan Turing","s":1912,"e":1954,"c":"sci","i":3,"k":"life","g":"computing turing britain"},{"t":"Penicillin discovered","s":1928,"e":0,"c":"sci","i":3,"k":"moment","g":"medicine antibiotics"},{"t":"Turing defines computation","s":1936,"e":0,"c":"sci","i":4,"k":"moment","g":"computing turing"},{"t":"Atomic bomb","s":1945,"e":0,"c":"sci","i":2,"k":"moment","g":"physics war nuclear"},{"t":"Transistor invented","s":1947,"e":0,"c":"sci","i":3,"k":"moment","g":"computing electronics"},{"t":"DNA structure solved","s":1953,"e":0,"c":"sci","i":3,"k":"moment","g":"biology dna"},{"t":"Sputnik — space age","s":1957,"e":0,"c":"sci","i":3,"k":"moment","g":"space ussr"},{"t":"ARPANET: internet's first packet","s":1969,"e":0,"c":"sci","i":4,"k":"moment","g":"internet computing"},{"t":"World Wide Web proposed","s":1989,"e":0,"c":"sci","i":2,"k":"moment","g":"internet web information"},{"t":"iPhone","s":2007,"e":0,"c":"sci","i":3,"k":"moment","g":"technology mobile"},{"t":"AI goes mainstream (ChatGPT)","s":2022,"e":0,"c":"sci","i":3,"k":"moment","g":"ai computing"}]},"eu-war":{"name":"Europe · Wars","cat":"war","kind":"region","items":[{"t":"Battle of Marathon","s":-490,"e":0,"c":"war","i":4,"k":"moment","g":"greece persia war"},{"t":"Peloponnesian War","s":-431,"e":-404,"c":"war","i":4,"k":"episode","g":"greece war"},{"t":"Alexander conquers the East","s":-334,"e":-323,"c":"war","i":2,"k":"episode","g":"greece macedonia conquest"},{"t":"Punic Wars: Rome vs Carthage","s":-264,"e":-146,"c":"war","i":3,"k":"episode","g":"rome carthage war"},{"t":"Viking age begins (Lindisfarne)","s":793,"e":0,"c":"war","i":3,"k":"moment","g":"viking raid"},{"t":"Norman conquest of England","s":1066,"e":0,"c":"war","i":3,"k":"moment","g":"england war"},{"t":"First Crusade launched","s":1095,"e":0,"c":"war","i":3,"k":"moment","g":"crusade religion war"},{"t":"Constantinople falls to Ottomans","s":1453,"e":0,"c":"war","i":3,"k":"moment","g":"byzantium ottoman war"},{"t":"Spanish Armada defeated","s":1588,"e":0,"c":"war","i":4,"k":"moment","g":"spain england war"},{"t":"Thirty Years' War","s":1618,"e":1648,"c":"war","i":3,"k":"episode","g":"war religion germany"},{"t":"English Civil War","s":1642,"e":1651,"c":"war","i":4,"k":"episode","g":"england war"},{"t":"Ottomans turned back at Vienna","s":1683,"e":0,"c":"war","i":4,"k":"moment","g":"ottoman austria war"},{"t":"Seven Years' War — first world war","s":1756,"e":1763,"c":"war","i":3,"k":"episode","g":"war britain france prussia"},{"t":"Napoleon freezes in Russia","s":1812,"e":0,"c":"war","i":4,"k":"moment","g":"france russia war napoleon"},{"t":"Waterloo — Napoleon done","s":1815,"e":0,"c":"war","i":3,"k":"moment","g":"france napoleon war"},{"t":"World War I","s":1914,"e":1918,"c":"war","i":1,"k":"episode","g":"war"},{"t":"World War II","s":1939,"e":1945,"c":"war","i":1,"k":"episode","g":"war"},{"t":"Russia invades Ukraine","s":2022,"e":0,"c":"war","i":4,"k":"moment","g":"russia ukraine war"}]},"eu-art":{"name":"Europe · Art & culture","cat":"art","kind":"region","items":[{"t":"Stonehenge raised","s":-2500,"e":0,"c":"art","i":4,"k":"moment","g":"britain megalith"},{"t":"First Olympic games","s":-776,"e":0,"c":"art","i":4,"k":"moment","g":"greece sport"},{"t":"Christianity legalized","s":313,"e":0,"c":"belief","i":3,"k":"moment","g":"rome christianity religion"},{"t":"Great Schism east/west","s":1054,"e":0,"c":"belief","i":4,"k":"moment","g":"christianity schism"},{"t":"Jan Hus burned at Konstanz","s":1415,"e":0,"c":"belief","i":4,"k":"moment","g":"czech religion reformation"},{"t":"Luther's 95 theses — Reformation","s":1517,"e":0,"c":"belief","i":3,"k":"moment","g":"religion reformation"}]},"as-ess":{"name":"Asia · Essentials","cat":"power","kind":"region","items":[{"t":"Indus Valley civilization","s":-2600,"e":-1900,"c":"power","i":3,"k":"zone","g":"india bronze"},{"t":"Shang dynasty — Chinese writing","s":-1600,"e":-1046,"c":"power","i":3,"k":"zone","g":"china bronze writing"},{"t":"Buddha born","s":-563,"e":0,"c":"belief","i":2,"k":"moment","g":"india buddhism religion"},{"t":"The Buddha","s":-563,"e":-483,"c":"belief","i":2,"k":"life","g":"india buddhism religion"},{"t":"Confucius born","s":-551,"e":0,"c":"belief","i":3,"k":"moment","g":"china philosophy"},{"t":"Confucius","s":-551,"e":-479,"c":"belief","i":2,"k":"life","g":"china philosophy confucius"},{"t":"Maurya Empire unites India","s":-321,"e":-185,"c":"power","i":3,"k":"zone","g":"india empire"},{"t":"Ashoka turns to Buddhism","s":-268,"e":0,"c":"belief","i":3,"k":"moment","g":"india buddhism"},{"t":"Qin unifies China","s":-221,"e":0,"c":"power","i":2,"k":"moment","g":"china empire"},{"t":"Han dynasty","s":-206,"e":220,"c":"power","i":3,"k":"zone","g":"china empire"},{"t":"The Silk Road","s":-130,"e":1450,"c":"reach","i":2,"k":"life","g":"trade route china rome exchange era"},{"t":"Gupta golden age of India","s":320,"e":550,"c":"power","i":3,"k":"zone","g":"india science"},{"t":"Tang dynasty — cosmopolitan China","s":618,"e":907,"c":"power","i":3,"k":"zone","g":"china"},{"t":"Song dynasty — paper money, gunpowder","s":960,"e":1279,"c":"power","i":4,"k":"zone","g":"china invention"},{"t":"Genghis Khan","s":1162,"e":1227,"c":"power","i":2,"k":"life","g":"mongol empire conquest"},{"t":"First shogunate in Japan","s":1192,"e":0,"c":"power","i":4,"k":"moment","g":"japan samurai"},{"t":"Genghis Khan unites the Mongols","s":1206,"e":0,"c":"power","i":2,"k":"moment","g":"mongol empire conquest"},{"t":"Mongols rule all of China","s":1279,"e":0,"c":"power","i":3,"k":"moment","g":"mongol china"},{"t":"Ming dynasty founded","s":1368,"e":0,"c":"power","i":3,"k":"moment","g":"china"},{"t":"Zheng He's treasure fleets","s":1405,"e":1433,"c":"reach","i":3,"k":"episode","g":"china exploration"},{"t":"Mughal Empire founded","s":1526,"e":0,"c":"power","i":3,"k":"moment","g":"india empire islam"},{"t":"East India Company chartered","s":1600,"e":0,"c":"society","i":3,"k":"moment","g":"britain india trade"},{"t":"Tokugawa shogunate — Japan closes","s":1603,"e":0,"c":"power","i":4,"k":"moment","g":"japan"},{"t":"Qing dynasty takes China","s":1644,"e":0,"c":"power","i":3,"k":"moment","g":"china manchu"},{"t":"Plassey: British rule in India begins","s":1757,"e":0,"c":"power","i":3,"k":"moment","g":"britain india colonialism"},{"t":"Opium War humiliates China","s":1839,"e":1842,"c":"war","i":3,"k":"episode","g":"china britain war"},{"t":"Perry forces Japan open","s":1853,"e":0,"c":"reach","i":3,"k":"moment","g":"japan usa"},{"t":"Meiji Restoration — Japan sprints","s":1868,"e":0,"c":"power","i":3,"k":"moment","g":"japan modernization"},{"t":"Mahatma Gandhi","s":1869,"e":1948,"c":"power","i":2,"k":"life","g":"india independence nonviolence"},{"t":"Last emperor: Qing falls","s":1912,"e":0,"c":"power","i":3,"k":"moment","g":"china revolution"},{"t":"India independent, partitioned","s":1947,"e":0,"c":"power","i":2,"k":"moment","g":"india independence"},{"t":"People's Republic of China","s":1949,"e":0,"c":"power","i":3,"k":"moment","g":"china communism"},{"t":"Deng opens China","s":1978,"e":0,"c":"society","i":3,"k":"moment","g":"china reform"},{"t":"India liberalizes","s":1991,"e":0,"c":"society","i":4,"k":"moment","g":"india economy"}]},"as-dyn":{"name":"Asia · Dynasties","cat":"power","kind":"movements","items":[{"t":"Indus Valley Civilisation","s":-2600,"e":-1900,"c":"power","i":3,"k":"span","g":"largest Bronze Age civilisation by area, with planned brick cities and an undeciphered scr"},{"t":"Shang Dynasty","s":-1600,"e":-1046,"c":"power","i":3,"k":"span","g":"first Chinese state confirmed by writing, via oracle-bone divination records"},{"t":"Zhou Dynasty","s":-1046,"e":-256,"c":"power","i":3,"k":"span","g":"longest Chinese dynasty; its slow collapse into warring states produced Confucius, Laozi a"},{"t":"Maurya Empire","s":-322,"e":-185,"c":"power","i":3,"k":"span","g":"first empire to unify almost all of South Asia; Ashoka's edicts spread Buddhism across Asi"},{"t":"Qin Dynasty","s":-221,"e":-206,"c":"power","i":3,"k":"span","g":"unified China in a single generation and set the imperial template that lasted 2,100 years"},{"t":"Xiongnu Confederation","s":-209,"e":155,"c":"power","i":3,"k":"span","g":"first steppe empire; forced the Han into tribute and set the nomad-versus-farmer pattern o"},{"t":"Han Dynasty","s":-206,"e":220,"c":"power","i":3,"k":"span","g":"Rome's eastern equal; opened the Silk Road and gave the Chinese majority its name"},{"t":"Three Kingdoms","s":220,"e":280,"c":"power","i":3,"k":"span","g":"Wei, Shu and Wu split the Han inheritance, becoming East Asia's most retold historical dra"},{"t":"Jin Dynasty","s":266,"e":420,"c":"power","i":3,"k":"span","g":"briefly reunified China in 280, then lost the north and preserved classical culture in the"},{"t":"Yamato Japan","s":300,"e":794,"c":"power","i":3,"k":"span","g":"first unified Japanese state; imported Chinese writing, Buddhism and law codes"},{"t":"Gupta Empire","s":320,"e":550,"c":"power","i":3,"k":"span","g":"classical golden age of India; gave the world the decimal place-value system and the zero"},{"t":"Gokturk Khaganate","s":552,"e":744,"c":"power","i":3,"k":"span","g":"first empire to call itself Turk, stretching from Manchuria to the Black Sea and linking B"},{"t":"Sui Dynasty","s":581,"e":618,"c":"power","i":3,"k":"span","g":"reunified China after three centuries of division and dug the Grand Canal that still binds"},{"t":"Tang Dynasty","s":618,"e":907,"c":"power","i":3,"k":"span","g":"the cosmopolitan peak of the Chinese world order; Chang'an was the largest city on Earth"},{"t":"Srivijaya","s":671,"e":1288,"c":"power","i":3,"k":"span","g":"maritime hegemon of the Malacca and Sunda straits and a great centre of Buddhist learning"},{"t":"Heian Japan","s":794,"e":1185,"c":"power","i":3,"k":"span","g":"aristocratic court culture that produced the world's first novel and a distinctly Japanese"},{"t":"Khmer Empire","s":802,"e":1431,"c":"power","i":3,"k":"span","g":"mainland Southeast Asia's dominant power; Angkor was the largest pre-industrial city ever "},{"t":"Goryeo","s":918,"e":1392,"c":"power","i":3,"k":"span","g":"gave Korea its name and printed with movable metal type two centuries before Gutenberg"},{"t":"Dai Viet (Vietnam)","s":939,"e":1883,"c":"power","i":3,"k":"span","g":"won independence from China in 939 and held it for nine centuries, expanding south to the "},{"t":"Song Dynasty","s":960,"e":1279,"c":"power","i":3,"k":"span","g":"the world's richest and most technologically advanced economy: gunpowder, printing, paper "},{"t":"Kamakura Shogunate","s":1185,"e":1333,"c":"power","i":3,"k":"span","g":"first warrior government of Japan; repelled two Mongol invasions"},{"t":"Delhi Sultanate","s":1206,"e":1526,"c":"power","i":3,"k":"span","g":"established lasting Muslim rule in India and shielded the subcontinent from Mongol conques"},{"t":"Mongol Empire","s":1206,"e":1368,"c":"power","i":3,"k":"span","g":"largest contiguous land empire in history, briefly making Eurasia a single connected space"},{"t":"Yuan Dynasty","s":1271,"e":1368,"c":"power","i":3,"k":"span","g":"first foreign dynasty to rule all China; Marco Polo's Cathay"},{"t":"Majapahit","s":1293,"e":1527,"c":"power","i":3,"k":"span","g":"Java-based maritime empire claimed today as the ancestor of the Indonesian archipelago sta"},{"t":"Ashikaga Shogunate","s":1336,"e":1573,"c":"power","i":3,"k":"span","g":"weak centre that produced Zen aesthetics, Noh and tea ceremony before dissolving into civi"},{"t":"Ming Dynasty","s":1368,"e":1644,"c":"power","i":3,"k":"span","g":"restored native rule, sent Zheng He's treasure fleets to Africa, then turned inward"},{"t":"Timurid Empire","s":1370,"e":1507,"c":"power","i":3,"k":"span","g":"Timur's brutal Central Asian empire, whose Samarkand and Herat courts led the Islamic worl"},{"t":"Joseon","s":1392,"e":1910,"c":"power","i":3,"k":"span","g":"five centuries of Confucian Korean rule; created the hangul alphabet, ended by Japanese an"},{"t":"Mughal Empire","s":1526,"e":1857,"c":"power","i":3,"k":"span","g":"at its height held a quarter of world GDP and built the Taj Mahal; hollowed out by the Eas"},{"t":"Tokugawa Shogunate","s":1603,"e":1868,"c":"power","i":3,"k":"span","g":"two and a half centuries of enforced peace and near-total isolation, ended by American gun"},{"t":"Qing Dynasty","s":1644,"e":1912,"c":"power","i":3,"k":"span","g":"Manchu conquerors who doubled China's territory and ruled a third of humanity before colla"},{"t":"British Raj","s":1858,"e":1947,"c":"power","i":3,"k":"span","g":"the jewel of the British Empire, whose partition created the two states of modern South As"},{"t":"Empire of Japan","s":1868,"e":1947,"c":"power","i":3,"k":"span","g":"first non-Western industrial great power; its imperial expansion ended in total defeat in "},{"t":"Republic of China","s":1912,"e":2026,"c":"power","i":3,"k":"span","g":"ended 2,100 years of imperial rule; after 1949 survives on Taiwan"},{"t":"Japan","s":1947,"e":2026,"c":"power","i":3,"k":"span","g":"post-war pacifist constitution and an economic miracle that made it the world's second-lar"},{"t":"Republic of India","s":1947,"e":2026,"c":"power","i":3,"k":"span","g":"the world's most populous country and largest democracy"},{"t":"Pakistan","s":1947,"e":2026,"c":"power","i":3,"k":"span","g":"created as a Muslim homeland at partition; lost its eastern wing as Bangladesh in 1971"},{"t":"People's Republic of China","s":1949,"e":2026,"c":"power","i":3,"k":"span","g":"lifted hundreds of millions out of poverty to become the second superpower of the 21st cen"}]},"deep":{"name":"Deep time","cat":"nature","kind":"region","items":[{"t":"Big Bang","s":-13800000000.0,"e":0,"c":"nature","i":1,"k":"moment","g":"cosmos"},{"t":"Earth forms","s":-4540000000.0,"e":0,"c":"nature","i":1,"k":"moment","g":"cosmos earth"},{"t":"First life","s":-3800000000.0,"e":0,"c":"nature","i":1,"k":"moment","g":"life"},{"t":"Oxygen fills the air","s":-2400000000.0,"e":0,"c":"nature","i":2,"k":"moment","g":"life"},{"t":"Cambrian explosion","s":-541000000.0,"e":0,"c":"nature","i":1,"k":"moment","g":"life"},{"t":"Great Dying (worst extinction)","s":-252000000.0,"e":0,"c":"nature","i":2,"k":"moment","g":"extinction"},{"t":"Dinosaurs wiped out","s":-66000000.0,"e":0,"c":"nature","i":1,"k":"moment","g":"extinction"},{"t":"Homo sapiens appears","s":-300000,"e":0,"c":"nature","i":1,"k":"moment","g":"human"},{"t":"Out of Africa migration","s":-70000,"e":0,"c":"reach","i":2,"k":"moment","g":"human migration"},{"t":"Farming begins","s":-10000,"e":0,"c":"society","i":1,"k":"moment","g":"agriculture revolution"},{"t":"Writing invented (Sumer)","s":-3200,"e":0,"c":"sci","i":1,"k":"moment","g":"writing"}]},"arts":{"name":"Arts movements","cat":"art","kind":"movements","items":[{"t":"Byzantine art","s":330,"e":1453,"c":"art","i":4,"k":"span","g":"icons and gold mosaics from Constantinople's founding to its fall"},{"t":"Romanesque art","s":1000,"e":1200,"c":"art","i":4,"k":"span","g":"round arches and thick walls of pilgrimage Europe"},{"t":"Gothic art","s":1140,"e":1500,"c":"art","i":3,"k":"span","g":"born in Saint-Denis's choir; pointed arches reach for light"},{"t":"Renaissance","s":1350,"e":1600,"c":"art","i":2,"k":"span","g":"antiquity reborn through Florentine humanism"},{"t":"International Gothic","s":1375,"e":1425,"c":"art","i":5,"k":"span","g":"courtly elegance shared by Prague, Paris and Milan"},{"t":"Northern Renaissance","s":1430,"e":1580,"c":"art","i":4,"k":"span","g":"oil paint and the printing press carry the Renaissance north of the Alps"},{"t":"High Renaissance","s":1495,"e":1527,"c":"art","i":4,"k":"span","g":"Leonardo, Michelangelo and Raphael's brief perfection, ended by the Sack of Rome"},{"t":"Mannerism","s":1520,"e":1600,"c":"art","i":4,"k":"span","g":"elegance strained past nature after Raphael's death"},{"t":"Dutch Golden Age painting","s":1588,"e":1672,"c":"art","i":4,"k":"span","g":"Rembrandt and Vermeer paint a merchant republic"},{"t":"Baroque","s":1600,"e":1750,"c":"art","i":2,"k":"span","g":"one block for painting, architecture AND music; music textbooks end it at Bach's death"},{"t":"Rococo","s":1720,"e":1780,"c":"art","i":4,"k":"span","g":"gilded lightness of the French salons"},{"t":"Viennese Classicism","s":1750,"e":1820,"c":"art","i":4,"k":"span","g":"the music era between Baroque and Romanticism: Haydn, Mozart, early Beethoven"},{"t":"Neoclassicism","s":1760,"e":1830,"c":"art","i":3,"k":"span","g":"antiquity as moral order, from Winckelmann's Rome to David's Paris"},{"t":"Romanticism","s":1780,"e":1850,"c":"art","i":3,"k":"span","g":"feeling over reason, across painting, poetry and music"},{"t":"Realism","s":1840,"e":1880,"c":"art","i":4,"k":"span","g":"Courbet paints ordinary life at heroic scale"},{"t":"Pre-Raphaelites","s":1848,"e":1900,"c":"art","i":5,"k":"span","g":"a secret brotherhood of 1848 and its long Morris-era afterglow"},{"t":"Impressionism","s":1860,"e":1886,"c":"art","i":3,"k":"span","g":"light caught outdoors, bracketed by eight group exhibitions"},{"t":"Symbolism","s":1880,"e":1910,"c":"art","i":5,"k":"span","g":"dreams and myth set against the machine age"},{"t":"Post-Impressionism","s":1886,"e":1905,"c":"art","i":4,"k":"span","g":"Cezanne, van Gogh and Gauguin push past optics toward structure and feeling"},{"t":"Modernism","s":1890,"e":1970,"c":"art","i":2,"k":"span","g":"umbrella block over the whole avant-garde century"},{"t":"Fauvism","s":1905,"e":1908,"c":"art","i":5,"k":"span","g":"Matisse's 'wild beasts' set colour free for three years"},{"t":"Expressionism","s":1905,"e":1933,"c":"art","i":4,"k":"span","g":"German anguish in raw colour, from Die Brucke until the Nazis shut it down"},{"t":"Cubism","s":1907,"e":1922,"c":"art","i":3,"k":"span","g":"Picasso and Braque shatter the single viewpoint"},{"t":"Futurism","s":1909,"e":1944,"c":"art","i":5,"k":"span","g":"speed and machines worshipped, from manifesto to Marinetti's death"},{"t":"Constructivism","s":1915,"e":1930,"c":"art","i":4,"k":"span","g":"art as engineering for the Soviet revolution"},{"t":"Dada","s":1916,"e":1924,"c":"art","i":4,"k":"span","g":"anti-art absurdity born in the Cabaret Voltaire mid-war"},{"t":"De Stijl","s":1917,"e":1931,"c":"art","i":4,"k":"span","g":"pure right angles and primaries, ending with van Doesburg's death"},{"t":"Surrealism","s":1924,"e":1966,"c":"art","i":3,"k":"span","g":"Breton's manifesto unlocks the unconscious; fades with his death"},{"t":"Abstract Expressionism","s":1943,"e":1965,"c":"art","i":3,"k":"span","g":"New York takes over modern art: gesture and colour-field"},{"t":"Pop Art","s":1955,"e":1975,"c":"art","i":3,"k":"span","g":"mass culture as fine art, London first, then Warhol's New York"},{"t":"Minimalism","s":1960,"e":1975,"c":"art","i":4,"k":"span","g":"the art object stripped to plain fact"},{"t":"Conceptual art","s":1965,"e":1980,"c":"art","i":4,"k":"span","g":"the idea outranks the object"},{"t":"Contemporary art","s":1970,"e":2026,"c":"art","i":3,"k":"span","g":"the open present: global, plural, market-driven"}]},"design":{"name":"Design","cat":"art","kind":"movements","items":[{"t":"William Morris","s":1834,"e":1896,"c":"art","i":3,"k":"span","g":"pattern, print and the case for beautiful work"},{"t":"Great Exhibition of 1851","s":1851,"e":0,"c":"art","i":4,"k":"span","g":"the Crystal Palace show that made design a public question"},{"t":"Arts and Crafts movement","s":1860,"e":1910,"c":"art","i":3,"k":"span","g":"Morris's revolt against the machine: honest craft before industry"},{"t":"Charles Rennie Mackintosh","s":1868,"e":1928,"c":"art","i":4,"k":"span","g":"Glasgow's line between Art Nouveau and modernity"},{"t":"Peter Behrens","s":1868,"e":1940,"c":"art","i":4,"k":"span","g":"AEG's house designer: the first corporate identity"},{"t":"Eileen Gray","s":1878,"e":1976,"c":"art","i":4,"k":"span","g":"lacquer, tubular steel and villa E-1027, recognised late"},{"t":"Walter Gropius","s":1883,"e":1969,"c":"art","i":3,"k":"span","g":"founded the Bauhaus"},{"t":"Ludwig Mies van der Rohe","s":1886,"e":1969,"c":"art","i":3,"k":"span","g":"less is more; last director of the Bauhaus"},{"t":"Le Corbusier","s":1887,"e":1965,"c":"art","i":3,"k":"span","g":"the house as a machine for living in"},{"t":"Art Nouveau","s":1890,"e":1914,"c":"art","i":3,"k":"span","g":"whiplash organic ornament, killed off by WWI"},{"t":"Raymond Loewy","s":1893,"e":1986,"c":"art","i":4,"k":"span","g":"streamlined everything from locomotives to Lucky Strike"},{"t":"Alvar Aalto","s":1898,"e":1976,"c":"art","i":4,"k":"span","g":"modernism warmed with wood and curves"},{"t":"Charlotte Perriand","s":1903,"e":1999,"c":"art","i":4,"k":"span","g":"the chaise longue Corbusier got credit for"},{"t":"Deutscher Werkbund","s":1907,"e":1938,"c":"art","i":4,"k":"span","g":"artists meet industry; the seedbed of the Bauhaus"},{"t":"Charles Eames","s":1907,"e":1978,"c":"art","i":4,"k":"span","g":"with Ray, bent plywood into the century's furniture"},{"t":"Art Deco","s":1910,"e":1939,"c":"art","i":3,"k":"span","g":"machine-age glamour, named after the 1925 Paris exposition"},{"t":"Ray Eames","s":1912,"e":1988,"c":"art","i":4,"k":"span","g":"the Eames Office's other half: colour, form, films"},{"t":"Paul Rand","s":1914,"e":1996,"c":"art","i":4,"k":"span","g":"IBM, ABC, UPS: the American logo modernist"},{"t":"Bauhaus","s":1919,"e":1933,"c":"art","i":3,"k":"span","g":"form follows function; shut by the Nazis after fourteen years"},{"t":"Saul Bass","s":1920,"e":1996,"c":"art","i":4,"k":"span","g":"film titles as design, Vertigo to Casino"},{"t":"Milton Glaser","s":1929,"e":2020,"c":"art","i":4,"k":"span","g":"Dylan's hair and the I Love NY mark"},{"t":"Streamline Moderne","s":1930,"e":1950,"c":"art","i":5,"k":"span","g":"Depression-era aerodynamics on toasters and trains"},{"t":"Massimo Vignelli","s":1931,"e":2014,"c":"art","i":4,"k":"span","g":"the NYC subway map and a life in Helvetica"},{"t":"Dieter Rams","s":1932,"e":2026,"c":"art","i":3,"k":"span","g":"less but better: Braun and the ten principles (living)"},{"t":"London Underground map","s":1933,"e":0,"c":"art","i":4,"k":"span","g":"Harry Beck's circuit-diagram of the city"},{"t":"Mid-century Modern","s":1945,"e":1969,"c":"art","i":3,"k":"span","g":"optimistic postwar modernism for the home"},{"t":"April Greiman","s":1948,"e":2026,"c":"art","i":5,"k":"span","g":"took graphic design digital before it was safe (living)"},{"t":"Swiss Style","s":1950,"e":1980,"c":"art","i":3,"k":"span","g":"the International Typographic Style: grids, Helvetica, objectivity"},{"t":"Ulm School of Design","s":1953,"e":1968,"c":"art","i":4,"k":"span","g":"the Bauhaus's rationalist heir; systematic design, Braun's brain"},{"t":"Susan Kare","s":1954,"e":2026,"c":"art","i":4,"k":"span","g":"the Macintosh's icons and typefaces, pixel by pixel (living)"},{"t":"Braun SK4","s":1956,"e":0,"c":"art","i":5,"k":"span","g":"Rams and Gugelot's 'Snow White's coffin' record player"},{"t":"Helvetica released","s":1957,"e":0,"c":"art","i":4,"k":"span","g":"the neutral typeface that swallowed the world"},{"t":"Jony Ive","s":1967,"e":2026,"c":"art","i":4,"k":"span","g":"Apple's chief designer, iMac to iPhone (living)"},{"t":"Postmodern design","s":1972,"e":1995,"c":"art","i":4,"k":"span","g":"ornament and irony return against modernist rules"},{"t":"Memphis Group","s":1981,"e":1987,"c":"art","i":4,"k":"span","g":"Sottsass's loud laminate rebellion"},{"t":"Digital product design","s":1984,"e":2026,"c":"art","i":3,"k":"span","g":"design's centre of gravity moves onto screens, Macintosh to now"},{"t":"Macintosh launches","s":1984,"e":0,"c":"art","i":4,"k":"span","g":"the GUI reaches the desk, Kare's icons included"},{"t":"iPhone unveiled","s":2007,"e":0,"c":"art","i":4,"k":"span","g":"a multitouch glass slab resets product design"},{"t":"Flat design","s":2010,"e":2020,"c":"art","i":5,"k":"span","g":"Metro and iOS 7 kill skeuomorphism, then it softens"}]},"mozart":{"name":"Mozart","cat":"art","kind":"person","items":[{"t":"Wolfgang Amadeus Mozart","s":1756,"e":1791,"c":"art","i":1,"k":"life","g":"lifespan","life":1},{"t":"Born in Salzburg, Jan 27","s":1756,"e":0,"c":"art","i":3,"k":"moment","g":"mozart salzburg"},{"t":"First compositions, age 5","s":1761,"e":0,"c":"art","i":4,"k":"moment","g":"mozart prodigy"},{"t":"Grand tour: Munich, Paris, London","s":1763,"e":1766,"c":"art","i":4,"k":"episode","g":"mozart tour prodigy"},{"t":"Transcribes the Vatican's secret Miserere from memory, age 14","s":1770,"e":0,"c":"art","i":5,"k":"moment","g":"mozart rome"},{"t":"Three Italian journeys","s":1770,"e":1773,"c":"art","i":5,"k":"episode","g":"mozart italy"},{"t":"Job-hunting in Paris; his mother dies there","s":1778,"e":0,"c":"art","i":4,"k":"moment","g":"mozart paris"},{"t":"Quits Salzburg, goes freelance in Vienna","s":1781,"e":0,"c":"art","i":4,"k":"moment","g":"mozart vienna"},{"t":"Marries Constanze · Abduction premieres","s":1782,"e":0,"c":"art","i":5,"k":"moment","g":"mozart vienna opera"},{"t":"Joins the Freemasons","s":1784,"e":0,"c":"belief","i":5,"k":"moment","g":"mozart freemason"},{"t":"The Marriage of Figaro","s":1786,"e":0,"c":"art","i":4,"k":"moment","g":"mozart opera figaro"},{"t":"Don Giovanni premieres in Prague — 'my Praguers understand me'","s":1787,"e":0,"c":"art","i":4,"k":"moment","g":"mozart opera prague"},{"t":"Last three symphonies in six weeks","s":1788,"e":0,"c":"art","i":5,"k":"moment","g":"mozart symphony"},{"t":"Magic Flute · unfinished Requiem · dies Dec 5","s":1791,"e":0,"c":"art","i":4,"k":"moment","g":"mozart death requiem"}]}},"library":{"religion":{"name":"Religion","cat":"belief","kind":"movements","items":[{"t":"Prehistoric animism and shamanism","s":-10000,"e":-3000,"c":"belief","i":3,"k":"span","g":"spirits, ancestors and shamans; the water table every later religion drew from"},{"t":"Folk and indigenous traditions","s":-3000,"e":2026,"c":"belief","i":3,"k":"span","g":"African, Amerindian, Pacific and Siberian traditions; still some 400 million people"},{"t":"Ancient Near Eastern polytheism","s":-3000,"e":550,"c":"belief","i":3,"k":"span","g":"Sumer, Babylon, Egypt and Canaan; the last temple at Philae closed in 537"},{"t":"Indo-European polytheism","s":-3000,"e":-1500,"c":"belief","i":3,"k":"span","g":"reconstructed sky-father religion of the steppe, ancestor of half of Eurasia's gods"},{"t":"Greco-Roman paganism","s":-1500,"e":529,"c":"belief","i":3,"k":"span","g":"outlawed by Theodosius in 392; the Athenian Academy closed in 529"},{"t":"Norse, Celtic and Slavic paganism","s":-1500,"e":1054,"c":"belief","i":3,"k":"span","g":"absorbed rather than erased; Baltic paganism held out until 1387"},{"t":"Zoroastrianism","s":-1500,"e":2026,"c":"belief","i":3,"k":"span","g":"state faith of three Persian empires; lent dualism and judgement day to its neighbours"},{"t":"Vedic religion","s":-1500,"e":-500,"c":"belief","i":3,"k":"span","g":"fire sacrifice and the Vedas; dissolved into the questioning age of the Upanishads"},{"t":"Judaism","s":-1200,"e":2026,"c":"belief","i":3,"k":"span","g":"Israelite Yahwism turned exclusive monotheism in exile; parent of half the world's believe"},{"t":"Babylon destroys Jerusalem's temple","s":-586,"e":0,"c":"belief","i":4,"k":"moment","g":"judea babylon religion"},{"t":"Buddha born","s":-563,"e":0,"c":"belief","i":2,"k":"moment","g":"india buddhism religion"},{"t":"Confucius born","s":-551,"e":0,"c":"belief","i":3,"k":"moment","g":"china philosophy"},{"t":"Hinduism","s":-500,"e":2026,"c":"belief","i":3,"k":"span","g":"never founded and never unified; a federation of paths around karma and rebirth"},{"t":"Jainism","s":-500,"e":2026,"c":"belief","i":3,"k":"span","g":"radical non-violence; tiny for 2,500 years, yet it gave Gandhi his method"},{"t":"Buddhism","s":-500,"e":100,"c":"belief","i":3,"k":"span","g":"the Buddha's middle way, made an empire-wide project by Ashoka"},{"t":"Plato founds the Academy","s":-387,"e":0,"c":"belief","i":3,"k":"moment","g":"philosophy greece plato"},{"t":"Ashoka turns to Buddhism","s":-268,"e":0,"c":"belief","i":3,"k":"moment","g":"india buddhism"},{"t":"Christianity","s":30,"e":451,"c":"belief","i":3,"k":"span","g":"a Jewish sect that became the Roman state religion within three centuries"},{"t":"Crucifixion of Jesus","s":30,"e":0,"c":"belief","i":2,"k":"moment","g":"christianity religion"},{"t":"Theravada","s":100,"e":2026,"c":"belief","i":3,"k":"span","g":"the elders' canon in Pali; Sri Lanka and mainland Southeast Asia"},{"t":"Mahayana","s":100,"e":2026,"c":"belief","i":3,"k":"span","g":"the great vehicle of bodhisattvas; took China, Korea, Japan and Vietnam"},{"t":"Christianity legalized","s":313,"e":0,"c":"belief","i":3,"k":"moment","g":"rome christianity religion"},{"t":"Chalcedonian Christianity","s":451,"e":1054,"c":"belief","i":3,"k":"span","g":"the imperial church of Rome and Constantinople, one body for six more centuries"},{"t":"Oriental Orthodoxy","s":451,"e":2026,"c":"belief","i":3,"k":"span","g":"Copts, Armenians, Syriacs and Ethiopians who rejected Chalcedon's two natures"},{"t":"Church of the East","s":451,"e":2026,"c":"belief","i":3,"k":"span","g":"condemned at Ephesus 431, formally separate by 486; reached China by 635"},{"t":"Chan and Zen","s":600,"e":2026,"c":"belief","i":3,"k":"span","g":"meditation over scripture, Daoism-inflected; Chan in China, Zen in Japan"},{"t":"The Hijra — Islam begins","s":622,"e":0,"c":"belief","i":2,"k":"moment","g":"islam religion"},{"t":"Sunni Islam","s":632,"e":2026,"c":"belief","i":3,"k":"span","g":"authority through consensus and the caliphs; about 85 percent of Muslims"},{"t":"Shia Islam","s":632,"e":2026,"c":"belief","i":3,"k":"span","g":"authority through Ali's bloodline; made a state religion by Safavid Iran in 1501"},{"t":"Sufism","s":800,"e":2026,"c":"belief","i":3,"k":"span","g":"a mystical current, not a sect; carried Islam into Africa, India and Anatolia"},{"t":"Catholicism","s":1054,"e":1517,"c":"belief","i":3,"k":"span","g":"Latin Christendom after the Great Schism, having swallowed pagan Europe whole"},{"t":"Eastern Orthodoxy","s":1054,"e":2026,"c":"belief","i":3,"k":"span","g":"Greek Christendom; lost Constantinople in 1453 and was reborn through Russia"},{"t":"Great Schism east/west","s":1054,"e":0,"c":"belief","i":4,"k":"moment","g":"christianity schism"},{"t":"Jan Hus burned at Konstanz","s":1415,"e":0,"c":"belief","i":4,"k":"moment","g":"czech religion reformation"},{"t":"Roman Catholicism","s":1517,"e":2026,"c":"belief","i":3,"k":"span","g":"the church that survived the Reformation by remaking itself at Trent"},{"t":"Lutheranism","s":1517,"e":2026,"c":"belief","i":3,"k":"span","g":"justification by faith alone, and the first vernacular Bible in mass print"},{"t":"Reformed and Calvinist","s":1517,"e":2026,"c":"belief","i":3,"k":"span","g":"Zwingli from 1519 and Calvin from 1536; the Reformation's disciplined wing"},{"t":"Luther's 95 theses — Reformation","s":1517,"e":0,"c":"belief","i":3,"k":"moment","g":"religion reformation"},{"t":"Anabaptism","s":1525,"e":2026,"c":"belief","i":3,"k":"span","g":"the radical wing that broke with Zurich over adult baptism and the sword"},{"t":"Anglicanism","s":1534,"e":2026,"c":"belief","i":3,"k":"span","g":"a dynastic break from Rome that became a global communion on imperial rails"},{"t":"Baptists","s":1609,"e":2026,"c":"belief","i":3,"k":"span","g":"English Separatists in Amsterdam who took believer's baptism from the Mennonites"},{"t":"Methodism","s":1738,"e":2026,"c":"belief","i":3,"k":"span","g":"Wesley's revival inside the Church of England, formally separate from 1784"},{"t":"Wahhabism and Salafism","s":1744,"e":2026,"c":"belief","i":3,"k":"span","g":"a purifying revival pacted with the house of Saud, later exported on oil money"},{"t":"The Encyclopédie — Enlightenment engine","s":1751,"e":0,"c":"belief","i":4,"k":"moment","g":"enlightenment france philosophy"},{"t":"Adam Smith's Wealth of Nations","s":1776,"e":0,"c":"belief","i":4,"k":"moment","g":"economics enlightenment"},{"t":"Joins the Freemasons","s":1784,"e":0,"c":"belief","i":5,"k":"moment","g":"mozart freemason"},{"t":"Mormonism","s":1830,"e":2026,"c":"belief","i":3,"k":"span","g":"restorationism from the American revival belt, with a new scripture and a new continent"},{"t":"Marx's Das Kapital","s":1867,"e":0,"c":"belief","i":4,"k":"moment","g":"communism economics philosophy"},{"t":"Pentecostalism","s":1906,"e":2026,"c":"belief","i":3,"k":"span","g":"out of Wesleyan Holiness at Azusa Street; the fastest-growing religion on Earth"}]},"ideology":{"name":"Ideologies","cat":"society","kind":"movements","items":[{"t":"Enlightenment rationalism","s":1680,"e":1789,"c":"society","i":3,"k":"span","g":"reason, rights and progress; it ended as a movement by becoming a revolution"},{"t":"Classical economics","s":1776,"e":1871,"c":"society","i":3,"k":"span","g":"Smith, Ricardo and the labour theory of value, which Marx turned against it"},{"t":"Liberalism","s":1789,"e":2026,"c":"society","i":3,"k":"span","g":"Locke and Smith wrote first, but 1789 is when it became a governing programme"},{"t":"Conservatism","s":1789,"e":2026,"c":"society","i":3,"k":"span","g":"born as Burke's answer to the Revolution: inherited order over abstract reason"},{"t":"Nationalism","s":1789,"e":2026,"c":"society","i":3,"k":"span","g":"sovereignty relocated from the king to the nation; the century's deadliest idea"},{"t":"Socialism","s":1800,"e":1848,"c":"society","i":3,"k":"span","g":"Owen, Fourier and Saint-Simon; the Revolution's promise turned on the factory"},{"t":"Marxism","s":1848,"e":1917,"c":"society","i":3,"k":"span","g":"French socialism plus English political economy plus German philosophy"},{"t":"Anarchism","s":1848,"e":2026,"c":"society","i":3,"k":"span","g":"Proudhon from 1840; the definitive rupture with Marx came in 1872"},{"t":"Feminism","s":1848,"e":2026,"c":"society","i":3,"k":"span","g":"liberal rights taken at their word: Seneca Falls, the vote, then the private sphere"},{"t":"Neoclassical economics","s":1871,"e":2026,"c":"society","i":3,"k":"span","g":"the marginal revolution moved value from labour to the buyer's last preference"},{"t":"Marxism-Leninism","s":1917,"e":2026,"c":"society","i":3,"k":"span","g":"revolution now, by a vanguard party; ruled a third of humanity at its peak"},{"t":"Social democracy","s":1917,"e":2026,"c":"society","i":3,"k":"span","g":"the reformist half of the 1917 split: socialism through the ballot box"},{"t":"Fascism","s":1919,"e":1945,"c":"society","i":3,"k":"span","g":"led by an ex-socialist; nation and state above class, party and violence above law"},{"t":"National Socialism","s":1920,"e":1945,"c":"society","i":3,"k":"span","g":"fascism plus biological race theory, which took it from tyranny to extermination"},{"t":"Keynesianism","s":1936,"e":2026,"c":"society","i":3,"k":"span","g":"demand management as state duty; orthodoxy for thirty years, then again after 2008"},{"t":"Neoliberalism","s":1947,"e":2026,"c":"society","i":3,"k":"span","g":"Mont Pelerin to Thatcher and Reagan: markets as the organising principle of the state"},{"t":"Maoism","s":1949,"e":2026,"c":"society","i":3,"k":"span","g":"revolution carried by peasants, not workers; the template for the rural Third World"},{"t":"Environmentalism","s":1962,"e":2026,"c":"society","i":3,"k":"span","g":"roots in Romantic nature and 19th-century conservation; political from Silent Spring"},{"t":"Modern populism","s":2008,"e":2026,"c":"society","i":3,"k":"span","g":"the pure people against a corrupt elite; left variants exist, national ones dominate"}]},"tech":{"name":"Technology","cat":"sci","kind":"movements","items":[{"t":"Farming and the Neolithic package","s":-9500,"e":-500,"c":"sci","i":2,"k":"span","g":"technology"},{"t":"Bronze metallurgy","s":-3300,"e":-1150,"c":"sci","i":2,"k":"span","g":"technology"},{"t":"Writing","s":-3200,"e":2026,"c":"sci","i":2,"k":"span","g":"technology"},{"t":"Ironworking","s":-1300,"e":1750,"c":"sci","i":2,"k":"span","g":"technology"},{"t":"The Silk Road","s":-130,"e":1450,"c":"sci","i":2,"k":"span","g":"economy"},{"t":"Paper","s":105,"e":2026,"c":"sci","i":2,"k":"span","g":"technology"},{"t":"Gunpowder","s":850,"e":1900,"c":"sci","i":2,"k":"span","g":"technology"},{"t":"First printed book (Diamond Sutra)","s":868,"e":0,"c":"sci","i":4,"k":"moment","g":"china printing"},{"t":"Printing technology","s":1439,"e":2026,"c":"sci","i":2,"k":"span","g":"technology"},{"t":"Gutenberg's printing press","s":1439,"e":0,"c":"sci","i":2,"k":"moment","g":"printing revolution information"},{"t":"The Columbian Exchange","s":1492,"e":1800,"c":"sci","i":2,"k":"span","g":"economy"},{"t":"The Atlantic slave trade","s":1526,"e":1888,"c":"sci","i":2,"k":"span","g":"economy"},{"t":"Industrial Revolution","s":1760,"e":1914,"c":"sci","i":2,"k":"span","g":"economy"},{"t":"Watt's steam engine goes commercial","s":1776,"e":0,"c":"sci","i":3,"k":"moment","g":"industrial-revolution steam technology"},{"t":"Vaccination and modern medicine","s":1796,"e":2026,"c":"sci","i":2,"k":"span","g":"technology"},{"t":"Railways","s":1825,"e":2026,"c":"sci","i":2,"k":"span","g":"technology"},{"t":"Electrification","s":1831,"e":2026,"c":"sci","i":2,"k":"span","g":"technology"},{"t":"Faraday: electricity from motion","s":1831,"e":0,"c":"sci","i":4,"k":"moment","g":"physics electricity"},{"t":"Telegraph and telecommunications","s":1837,"e":2026,"c":"sci","i":2,"k":"span","g":"technology"},{"t":"Electric light bulb","s":1879,"e":0,"c":"sci","i":4,"k":"moment","g":"technology electricity"},{"t":"Computing","s":1936,"e":2026,"c":"sci","i":2,"k":"span","g":"technology"},{"t":"Turing defines computation","s":1936,"e":0,"c":"sci","i":4,"k":"moment","g":"computing turing"},{"t":"Atomic bomb","s":1945,"e":0,"c":"sci","i":2,"k":"moment","g":"physics war nuclear"},{"t":"Transistor invented","s":1947,"e":0,"c":"sci","i":3,"k":"moment","g":"computing electronics"},{"t":"The Internet","s":1969,"e":2026,"c":"sci","i":2,"k":"span","g":"technology"},{"t":"ARPANET: internet's first packet","s":1969,"e":0,"c":"sci","i":4,"k":"moment","g":"internet computing"},{"t":"World Wide Web proposed","s":1989,"e":0,"c":"sci","i":2,"k":"moment","g":"internet web information"},{"t":"AI goes mainstream (ChatGPT)","s":2022,"e":0,"c":"sci","i":3,"k":"moment","g":"ai computing"}]},"wars":{"name":"Wars (world)","cat":"war","kind":"region","items":[{"t":"Battle of Kadesh (first recorded treaty)","s":-1274,"e":0,"c":"war","i":4,"k":"moment","g":"egypt hittite war"},{"t":"Alexander conquers the East","s":-334,"e":-323,"c":"war","i":2,"k":"episode","g":"greece macedonia conquest"},{"t":"Alexander takes Egypt","s":-332,"e":0,"c":"war","i":4,"k":"moment","g":"egypt greece"},{"t":"Punic Wars: Rome vs Carthage","s":-264,"e":-146,"c":"war","i":3,"k":"episode","g":"rome carthage war"},{"t":"Arab conquests: Spain to Persia","s":632,"e":750,"c":"war","i":3,"k":"episode","g":"islam conquest"},{"t":"Viking age begins (Lindisfarne)","s":793,"e":0,"c":"war","i":3,"k":"moment","g":"viking raid"},{"t":"Norman conquest of England","s":1066,"e":0,"c":"war","i":3,"k":"moment","g":"england war"},{"t":"First Crusade launched","s":1095,"e":0,"c":"war","i":3,"k":"moment","g":"crusade religion war"},{"t":"Mongols sack Baghdad","s":1258,"e":0,"c":"war","i":3,"k":"moment","g":"mongol islam"},{"t":"Constantinople falls to Ottomans","s":1453,"e":0,"c":"war","i":3,"k":"moment","g":"byzantium ottoman war"},{"t":"Cortés destroys the Aztecs","s":1519,"e":1521,"c":"war","i":3,"k":"episode","g":"spain aztec conquest"},{"t":"Pizarro seizes the Inca","s":1532,"e":0,"c":"war","i":3,"k":"moment","g":"spain inca conquest"},{"t":"Thirty Years' War","s":1618,"e":1648,"c":"war","i":3,"k":"episode","g":"war religion germany"},{"t":"Seven Years' War — first world war","s":1756,"e":1763,"c":"war","i":3,"k":"episode","g":"war britain france prussia"},{"t":"Napoleon invades Egypt","s":1798,"e":0,"c":"war","i":4,"k":"moment","g":"egypt france napoleon"},{"t":"Waterloo — Napoleon done","s":1815,"e":0,"c":"war","i":3,"k":"moment","g":"france napoleon war"},{"t":"Opium War humiliates China","s":1839,"e":1842,"c":"war","i":3,"k":"episode","g":"china britain war"},{"t":"US Civil War","s":1861,"e":1865,"c":"war","i":3,"k":"episode","g":"usa war slavery"},{"t":"World War I","s":1914,"e":1918,"c":"war","i":1,"k":"episode","g":"war"},{"t":"World War II","s":1939,"e":1945,"c":"war","i":1,"k":"episode","g":"war"},{"t":"September 11 attacks","s":2001,"e":0,"c":"war","i":3,"k":"moment","g":"usa terrorism"}]},"explore":{"name":"Exploration","cat":"reach","kind":"region","items":[{"t":"Out of Africa migration","s":-70000,"e":0,"c":"reach","i":2,"k":"moment","g":"human migration"},{"t":"First peoples reach the Americas","s":-15000,"e":0,"c":"reach","i":2,"k":"moment","g":"migration"},{"t":"The Silk Road","s":-130,"e":1450,"c":"reach","i":2,"k":"span","g":""},{"t":"Vikings land in Newfoundland","s":1000,"e":0,"c":"reach","i":4,"k":"moment","g":"viking exploration"},{"t":"Zheng He's treasure fleets","s":1405,"e":1433,"c":"reach","i":3,"k":"episode","g":"china exploration"},{"t":"Columbus reaches the Americas","s":1492,"e":0,"c":"reach","i":2,"k":"moment","g":"exploration spain"},{"t":"The Columbian Exchange","s":1492,"e":1800,"c":"reach","i":2,"k":"span","g":""},{"t":"The Atlantic slave trade","s":1526,"e":1888,"c":"reach","i":2,"k":"span","g":""},{"t":"Jamestown — English America begins","s":1607,"e":0,"c":"reach","i":4,"k":"moment","g":"usa colony"},{"t":"Mayflower lands","s":1620,"e":0,"c":"reach","i":4,"k":"moment","g":"usa colony"},{"t":"Dutch found Cape Colony","s":1652,"e":0,"c":"reach","i":4,"k":"moment","g":"africa colonialism"},{"t":"Perry forces Japan open","s":1853,"e":0,"c":"reach","i":3,"k":"moment","g":"japan usa"},{"t":"Suez Canal opens","s":1869,"e":0,"c":"reach","i":3,"k":"moment","g":"egypt trade"},{"t":"Berlin Conference carves up Africa","s":1884,"e":0,"c":"reach","i":3,"k":"moment","g":"africa colonialism"}]},"philos":{"name":"Philosophy","cat":"belief","kind":"region","items":[{"t":"Confucius born","s":-551,"e":0,"c":"belief","i":3,"k":"moment","g":"china philosophy"},{"t":"Confucius","s":-551,"e":-479,"c":"belief","i":2,"k":"life","g":"china philosophy confucius"},{"t":"Plato","s":-428,"e":-348,"c":"belief","i":2,"k":"life","g":"greece philosophy plato"},{"t":"Plato founds the Academy","s":-387,"e":0,"c":"belief","i":3,"k":"moment","g":"philosophy greece plato"},{"t":"Aristotle","s":-384,"e":-322,"c":"belief","i":2,"k":"life","g":"greece philosophy aristotle science"},{"t":"The Renaissance","s":1350,"e":1600,"c":"belief","i":2,"k":"span","g":""},{"t":"The Scientific Revolution","s":1543,"e":1727,"c":"belief","i":2,"k":"span","g":""},{"t":"Jan Amos Komenský (Comenius)","s":1592,"e":1670,"c":"society","i":4,"k":"life","g":"czech education philosophy"},{"t":"The Enlightenment","s":1680,"e":1800,"c":"belief","i":2,"k":"span","g":""},{"t":"The Encyclopédie — Enlightenment engine","s":1751,"e":0,"c":"belief","i":4,"k":"moment","g":"enlightenment france philosophy"},{"t":"Adam Smith's Wealth of Nations","s":1776,"e":0,"c":"belief","i":4,"k":"moment","g":"economics enlightenment"},{"t":"Karl Marx","s":1818,"e":1883,"c":"belief","i":2,"k":"life","g":"communism economics philosophy germany"},{"t":"Marx's Das Kapital","s":1867,"e":0,"c":"belief","i":4,"k":"moment","g":"communism economics philosophy"}]},"liter":{"name":"Literature","cat":"art","kind":"region","items":[{"t":"Writing invented (Sumer)","s":-3200,"e":0,"c":"sci","i":1,"k":"moment","g":"writing"},{"t":"Shang dynasty — Chinese writing","s":-1600,"e":-1046,"c":"power","i":3,"k":"zone","g":"china bronze writing"},{"t":"First printed book (Diamond Sutra)","s":868,"e":0,"c":"sci","i":4,"k":"moment","g":"china printing"},{"t":"Gutenberg's printing press","s":1439,"e":0,"c":"sci","i":2,"k":"moment","g":"printing revolution information"},{"t":"William Shakespeare","s":1564,"e":1616,"c":"art","i":2,"k":"life","g":"england literature theatre"},{"t":"Meiji Restoration — Japan sprints","s":1868,"e":0,"c":"power","i":3,"k":"moment","g":"japan modernization"},{"t":"Franz Kafka","s":1883,"e":1924,"c":"art","i":4,"k":"life","g":"literature prague czech"}]},"music":{"name":"Music","cat":"art","kind":"movements","items":[{"t":"Gregorian chant codified","s":600,"e":0,"c":"art","i":4,"k":"moment","g":"music church medieval"},{"t":"Guido invents staff notation","s":1030,"e":0,"c":"art","i":4,"k":"moment","g":"music notation"},{"t":"Opera born (Monteverdi's Orfeo)","s":1607,"e":0,"c":"art","i":4,"k":"moment","g":"music opera baroque"},{"t":"Bach & Handel born","s":1685,"e":0,"c":"art","i":3,"k":"moment","g":"music baroque bach"},{"t":"Johann Sebastian Bach","s":1685,"e":1750,"c":"art","i":3,"k":"life","g":"music baroque bach germany"},{"t":"Vivaldi's Four Seasons","s":1723,"e":0,"c":"art","i":5,"k":"moment","g":"music baroque"},{"t":"Bach dies — Baroque ends","s":1750,"e":0,"c":"art","i":4,"k":"moment","g":"music baroque bach"},{"t":"Mozart born","s":1756,"e":0,"c":"art","i":3,"k":"moment","g":"music classical mozart"},{"t":"Wolfgang Amadeus Mozart","s":1756,"e":1791,"c":"art","i":2,"k":"life","g":"music classical mozart salzburg vienna"},{"t":"Beethoven born","s":1770,"e":0,"c":"art","i":4,"k":"moment","g":"music beethoven"},{"t":"Ludwig van Beethoven","s":1770,"e":1827,"c":"art","i":3,"k":"life","g":"music beethoven romanticism germany"},{"t":"Mozart dies at 35","s":1791,"e":0,"c":"art","i":4,"k":"moment","g":"music mozart"},{"t":"Eroica — Romanticism opens","s":1804,"e":0,"c":"art","i":4,"k":"moment","g":"music beethoven romanticism"},{"t":"Beethoven's Ninth","s":1824,"e":0,"c":"art","i":4,"k":"moment","g":"music beethoven"},{"t":"Bedřich Smetana","s":1824,"e":1884,"c":"art","i":5,"k":"life","g":"music czech smetana prague"},{"t":"Dvořák born","s":1841,"e":0,"c":"art","i":5,"k":"moment","g":"music czech dvorak"},{"t":"Antonín Dvořák","s":1841,"e":1904,"c":"art","i":5,"k":"life","g":"music czech dvorak prague"},{"t":"Smetana begins Má vlast","s":1874,"e":0,"c":"art","i":5,"k":"moment","g":"music czech smetana prague"},{"t":"Recorded sound (phonograph)","s":1877,"e":0,"c":"sci","i":4,"k":"moment","g":"music technology"},{"t":"Rite of Spring riot","s":1913,"e":0,"c":"art","i":4,"k":"moment","g":"music stravinsky modernism"},{"t":"Jazz age roars","s":1925,"e":0,"c":"art","i":4,"k":"moment","g":"music jazz"},{"t":"Rock'n'roll breaks out","s":1954,"e":0,"c":"art","i":4,"k":"moment","g":"music rock"},{"t":"Beatlemania","s":1963,"e":0,"c":"art","i":4,"k":"moment","g":"music rock beatles"},{"t":"Hip-hop born in the Bronx","s":1973,"e":0,"c":"art","i":4,"k":"moment","g":"music hip-hop"},{"t":"MTV: video kills the radio star","s":1981,"e":0,"c":"art","i":5,"k":"moment","g":"music tv"}]},"medicine":{"name":"Medicine","cat":"sci","kind":"region","items":[{"t":"Black Death kills a third of Europe","s":1347,"e":1351,"c":"nature","i":2,"k":"episode","g":"plague pandemic"},{"t":"First vaccine (smallpox)","s":1796,"e":0,"c":"sci","i":3,"k":"moment","g":"medicine vaccine"},{"t":"Vaccination and modern medicine","s":1796,"e":2026,"c":"sci","i":2,"k":"span","g":""},{"t":"Penicillin discovered","s":1928,"e":0,"c":"sci","i":3,"k":"moment","g":"medicine antibiotics"},{"t":"DNA structure solved","s":1953,"e":0,"c":"sci","i":3,"k":"moment","g":"biology dna"}]},"czech":{"name":"Czech history","cat":"power","kind":"region","items":[{"t":"Charles University founded in Prague","s":1348,"e":0,"c":"society","i":5,"k":"moment","g":"prague czech university"},{"t":"Jan Hus","s":1372,"e":1415,"c":"belief","i":4,"k":"life","g":"czech religion reformation prague"},{"t":"Jan Hus burned at Konstanz","s":1415,"e":0,"c":"belief","i":4,"k":"moment","g":"czech religion reformation"},{"t":"Jan Amos Komenský (Comenius)","s":1592,"e":1670,"c":"society","i":4,"k":"life","g":"czech education philosophy"},{"t":"Defenestration of Prague","s":1618,"e":0,"c":"power","i":4,"k":"moment","g":"prague czech war"},{"t":"Don Giovanni premieres in Prague — 'my Praguers understand me'","s":1787,"e":0,"c":"art","i":4,"k":"moment","g":"mozart opera prague"},{"t":"Bedřich Smetana","s":1824,"e":1884,"c":"art","i":5,"k":"life","g":"music czech smetana prague"},{"t":"Dvořák born","s":1841,"e":0,"c":"art","i":5,"k":"moment","g":"music czech dvorak"},{"t":"Antonín Dvořák","s":1841,"e":1904,"c":"art","i":5,"k":"life","g":"music czech dvorak prague"},{"t":"Smetana begins Má vlast","s":1874,"e":0,"c":"art","i":5,"k":"moment","g":"music czech smetana prague"},{"t":"Franz Kafka","s":1883,"e":1924,"c":"art","i":4,"k":"life","g":"literature prague czech"},{"t":"Prague Spring crushed","s":1968,"e":0,"c":"power","i":4,"k":"moment","g":"czech communism prague"},{"t":"Berlin Wall falls · Velvet Revolution","s":1989,"e":0,"c":"power","i":3,"k":"moment","g":"communism revolution czech prague"},{"t":"EU founded · Czechoslovakia splits","s":1993,"e":0,"c":"power","i":4,"k":"moment","g":"europe union czech"}]},"america":{"name":"Americas · Essentials","cat":"power","kind":"region","items":[{"t":"First peoples reach the Americas","s":-15000,"e":0,"c":"reach","i":2,"k":"moment","g":"migration"},{"t":"Olmec — first American civilization","s":-1500,"e":-400,"c":"power","i":3,"k":"zone","g":"mexico olmec"},{"t":"Maya classic period","s":250,"e":900,"c":"power","i":3,"k":"zone","g":"maya mexico"},{"t":"Vikings land in Newfoundland","s":1000,"e":0,"c":"reach","i":4,"k":"moment","g":"viking exploration"},{"t":"Tenochtitlan founded","s":1325,"e":0,"c":"power","i":4,"k":"moment","g":"aztec mexico"},{"t":"Inca Empire","s":1438,"e":1533,"c":"power","i":3,"k":"zone","g":"inca peru"},{"t":"Cortés destroys the Aztecs","s":1519,"e":1521,"c":"war","i":3,"k":"episode","g":"spain aztec conquest"},{"t":"Pizarro seizes the Inca","s":1532,"e":0,"c":"war","i":3,"k":"moment","g":"spain inca conquest"},{"t":"Jamestown — English America begins","s":1607,"e":0,"c":"reach","i":4,"k":"moment","g":"usa colony"},{"t":"First enslaved Africans in Virginia","s":1619,"e":0,"c":"society","i":4,"k":"moment","g":"usa slavery"},{"t":"Mayflower lands","s":1620,"e":0,"c":"reach","i":4,"k":"moment","g":"usa colony"},{"t":"Declaration of Independence","s":1776,"e":0,"c":"power","i":2,"k":"moment","g":"usa revolution independence"},{"t":"Treaty of Paris: USA recognized","s":1783,"e":0,"c":"power","i":4,"k":"moment","g":"usa britain"},{"t":"US Constitution written","s":1787,"e":0,"c":"power","i":3,"k":"moment","g":"usa law"},{"t":"Haitian Revolution","s":1791,"e":1804,"c":"power","i":3,"k":"episode","g":"haiti slavery revolution"},{"t":"Abraham Lincoln","s":1809,"e":1865,"c":"power","i":3,"k":"life","g":"usa slavery war"},{"t":"Bolívar & Latin American independence","s":1810,"e":1826,"c":"power","i":3,"k":"episode","g":"latin-america independence revolution"},{"t":"US Civil War","s":1861,"e":1865,"c":"war","i":3,"k":"episode","g":"usa war slavery"},{"t":"Slavery abolished in the US","s":1865,"e":0,"c":"society","i":3,"k":"moment","g":"usa slavery"},{"t":"Canada confederates","s":1867,"e":0,"c":"power","i":4,"k":"moment","g":"canada"},{"t":"Wall Street crash — Great Depression","s":1929,"e":0,"c":"society","i":3,"k":"moment","g":"usa economy"},{"t":"UN founded · US superpower era","s":1945,"e":0,"c":"power","i":3,"k":"moment","g":"usa un"},{"t":"Cuban Revolution","s":1959,"e":0,"c":"power","i":4,"k":"moment","g":"cuba communism revolution"},{"t":"Cuban Missile Crisis","s":1962,"e":0,"c":"power","i":4,"k":"moment","g":"usa ussr cold-war"},{"t":"Apollo 11: humans on the Moon","s":1969,"e":0,"c":"sci","i":2,"k":"moment","g":"usa space"},{"t":"September 11 attacks","s":2001,"e":0,"c":"war","i":3,"k":"moment","g":"usa terrorism"},{"t":"Global financial crisis","s":2008,"e":0,"c":"society","i":4,"k":"moment","g":"usa economy"}]},"mideast":{"name":"Middle East · Essentials","cat":"power","kind":"region","items":[{"t":"Egypt unified under one crown","s":-3100,"e":0,"c":"power","i":2,"k":"moment","g":"egypt"},{"t":"Great Pyramid built","s":-2560,"e":0,"c":"art","i":2,"k":"moment","g":"egypt pyramid"},{"t":"Hammurabi writes his law code","s":-1792,"e":0,"c":"society","i":3,"k":"moment","g":"babylon law"},{"t":"Battle of Kadesh (first recorded treaty)","s":-1274,"e":0,"c":"war","i":4,"k":"moment","g":"egypt hittite war"},{"t":"Babylon destroys Jerusalem's temple","s":-586,"e":0,"c":"belief","i":4,"k":"moment","g":"judea babylon religion"},{"t":"Cyrus founds the Persian Empire","s":-550,"e":0,"c":"power","i":2,"k":"moment","g":"persia empire"},{"t":"Alexander takes Egypt","s":-332,"e":0,"c":"war","i":4,"k":"moment","g":"egypt greece"},{"t":"Cleopatra","s":-69,"e":-30,"c":"power","i":3,"k":"life","g":"egypt rome ptolemaic"},{"t":"Cleopatra dies — Egypt goes Roman","s":-30,"e":0,"c":"power","i":3,"k":"moment","g":"egypt rome"},{"t":"Crucifixion of Jesus","s":30,"e":0,"c":"belief","i":2,"k":"moment","g":"christianity religion"},{"t":"The Hijra — Islam begins","s":622,"e":0,"c":"belief","i":2,"k":"moment","g":"islam religion"},{"t":"Arab conquests: Spain to Persia","s":632,"e":750,"c":"war","i":3,"k":"episode","g":"islam conquest"},{"t":"Baghdad founded — Islamic golden age","s":762,"e":0,"c":"sci","i":3,"k":"moment","g":"islam baghdad science"},{"t":"Saladin rules Egypt & Syria","s":1171,"e":0,"c":"power","i":4,"k":"moment","g":"islam crusade"},{"t":"Mongols sack Baghdad","s":1258,"e":0,"c":"war","i":3,"k":"moment","g":"mongol islam"},{"t":"Mansa Musa's golden hajj","s":1324,"e":0,"c":"society","i":4,"k":"moment","g":"mali africa gold"},{"t":"Ottomans take Egypt & the caliphate","s":1517,"e":0,"c":"power","i":4,"k":"moment","g":"ottoman egypt"},{"t":"Dutch found Cape Colony","s":1652,"e":0,"c":"reach","i":4,"k":"moment","g":"africa colonialism"},{"t":"Napoleon invades Egypt","s":1798,"e":0,"c":"war","i":4,"k":"moment","g":"egypt france napoleon"},{"t":"Suez Canal opens","s":1869,"e":0,"c":"reach","i":3,"k":"moment","g":"egypt trade"},{"t":"Berlin Conference carves up Africa","s":1884,"e":0,"c":"reach","i":3,"k":"moment","g":"africa colonialism"},{"t":"State of Israel founded","s":1948,"e":0,"c":"power","i":3,"k":"moment","g":"israel"},{"t":"Year of Africa — 17 nations born","s":1960,"e":0,"c":"power","i":3,"k":"moment","g":"africa independence"},{"t":"Mandela elected president","s":1994,"e":0,"c":"power","i":3,"k":"moment","g":"africa south-africa"}]}}};
+
+</script>
+<script>
+'use strict';
+const D = window.TLDATA;
+const $ = s => document.querySelector(s);
+const el = (t,c,h)=>{const n=document.createElement(t); if(c)n.className=c; if(h!=null)n.innerHTML=h; return n;};
+const CSS = getComputedStyle(document.documentElement);
+const catCol = c => CSS.getPropertyValue('--tl-cat-'+c).trim() || CSS.getPropertyValue('--tl-cat-power').trim();
+const tok = n => CSS.getPropertyValue(n).trim();
+
+/* ── DETAIL LEVELS — words, and each word means something concrete ───────── */
+const LEVELS = ['low','normal','detailed'];
+const LVLTEXT = {
+  person:[['low','Just when they lived — the lifespan bar, nothing else.'],
+          ['normal','Lifespan plus the landmark moments: birth, death, the works that matter.'],
+          ['detailed','Everything — every premiere, every move, the minor business too.']],
+  region:[['low','Only the turning points — what a one-page history would name.'],
+          ['normal','The turning points plus the events a course would cover.'],
+          ['detailed','Everything in the topic, down to the local detail.']],
+  movements:[['low','The long dominant movements only — the periods you can name.'],
+             ['normal','Every movement, plus the moments that started them.'],
+             ['detailed','Everything, including the short-lived and the marginal.']]
+};
+function filterItems(l){
+  const lv = l.level, K = l.kind, sp = it => it.e && it.e !== it.s;
+  if(K === 'person'){
+    if(lv===0) return l.items.filter(it=> it.life || it.k==='life');
+    if(lv===1) return l.items.filter(it=> it.life || it.i<=3);
+    return l.items;
+  }
+  if(K === 'movements'){
+    if(lv===0) return l.items.filter(it=> sp(it) && it.i<=3);
+    if(lv===1) return l.items.filter(it=> sp(it) ? it.i<=4 : it.i<=2);
+    return l.items;
+  }
+  if(lv===0) return l.items.filter(it=> it.i<=2 || (sp(it) && (it.e-it.s)>=200 && it.i<=3));
+  if(lv===1) return l.items.filter(it=> it.i<=3);
+  return l.items;
+}
+
+/* ── MODEL — a FLAT list; groups are optional nodes in the same list ─────── */
+let uid=0; const nid=p=>p+(++uid);
+const L={};
+function mkLayer(k){
+  const t = D.topics[k] || D.library[k];
+  const id = nid('L');
+  L[id] = {id, tk:k, name:t.name, cat:t.cat, kind:t.kind||'region', items:t.items, level:1, hidden:false};
+  return {t:'L', id};
+}
+/* default state is FLAT — one group exists only to show grouping is available */
+let root = [
+  mkLayer('eu-ess'), mkLayer('eu-war'), mkLayer('eu-sci'),
+  {t:'G', id:nid('G'), name:'Mozart study', collapsed:false, kids:[mkLayer('mozart'), mkLayer('arts')]},
+  mkLayer('as-ess'), mkLayer('deep'),
+];
+let libAvail = Object.keys(D.library).concat(['eu-art','as-dyn','design']);
+let dragging = null;
+
+function allNodes(){                       // [{node, parent(list), idx, depth, group}]
+  const out=[];
+  root.forEach((n,i)=>{
+    out.push({n, list:root, i, depth:0});
+    if(n.t==='G' && !n.collapsed) n.kids.forEach((k,j)=> out.push({n:k, list:n.kids, i:j, depth:1, g:n}));
+  });
+  return out;
+}
+const layers = () => allNodes().filter(x=>x.n.t==='L').map(x=>({...x, l:L[x.n.id]}));
+
+/* ── PANEL ───────────────────────────────────────────────────────────────── */
+const EYE='<svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.3"><path d="M1.5 8s2.4-4.2 6.5-4.2S14.5 8 14.5 8 12.1 12.2 8 12.2 1.5 8 1.5 8Z"/><circle cx="8" cy="8" r="1.9"/></svg>';
+const EYEOFF='<svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.3"><path d="M2.6 5.4C1.9 6.3 1.5 8 1.5 8S3.9 12.2 8 12.2c1 0 1.9-.2 2.7-.6M6.2 4c.6-.1 1.2-.2 1.8-.2 4.1 0 6.5 4.2 6.5 4.2s-.6 1.1-1.7 2.2"/><path d="M2.5 2.5l11 11"/></svg>';
+const treeEl = $('#tree');
+function layerRow(id, indent){
+  const l = L[id];
+  const r = el('div','row'+(indent?' ind':'')+(l.hidden?' off':''));
+  r.dataset.lid = id;
+  const e = el('div','eye', l.hidden?EYEOFF:EYE); e.dataset.a='eye';
+  const d = el('div','dot'); d.style.background = catCol(l.cat);
+  const n = el('div','nm'); n.textContent = l.name; n.dataset.a='drag';
+  const v = el('div','lvl'); v.textContent = LEVELS[l.level]; v.dataset.a='lvl';
+  const x = el('div','x','×'); x.dataset.a='del'; x.title='remove';
+  r.append(e,d,n,v,x);
+  return r;
+}
+let panelList=[];
+function renderPanel(){
+  treeEl.innerHTML=''; panelList=[];
+  root.forEach((node,i)=>{
+    if(node.t==='L'){
+      const r = layerRow(node.id,false); treeEl.append(r);
+      panelList.push({el:r, key:'l'+node.id, type:'row', list:root, i});
+      return;
+    }
+    const gh = el('div','ghead'); gh.dataset.gid = node.id;
+    const c = el('div','chev', node.collapsed?'▶':'▼'); c.dataset.a='col';
+    const nm = el('div','gname'); nm.textContent = node.name; nm.dataset.a='gdrag';
+    const ct = el('div','gcount'); ct.textContent = node.kids.length;
+    const x = el('div','x','×'); x.dataset.a='gdel'; x.title='ungroup (layers move back to the list)';
+    gh.append(c,nm,ct,x); treeEl.append(gh);
+    panelList.push({el:gh, key:'g'+node.id, type:'ghead', list:root, i, g:node});
+    if(!node.collapsed) node.kids.forEach((k,j)=>{
+      const r = layerRow(k.id,true); treeEl.append(r);
+      panelList.push({el:r, key:'l'+k.id, type:'row', list:node.kids, i:j, g:node});
+    });
+  });
+  const ls = layers();
+  $('#hcount').textContent = ls.filter(x=>!x.l.hidden).length+'/'+ls.length+' shown';
+  positionRows();
+}
+/* THE ALIGNMENT: the canvas layout is the only source of lane geometry, and every
+   panel row is positioned and sized from the very same numbers. A lane that packs
+   six rows of rectangles gets a six-rows-tall row in the panel, at the same y. */
+function positionRows(){
+  for(const p of panelList){
+    const pl = planByKey[p.key];
+    if(!pl){ p.el.style.display='none'; continue; }
+    p.el.style.display='flex';
+    let h = pl.h;
+    if(p.type==='ghead' && p.g.collapsed){ const m = planByKey['m'+p.g.id]; h = GLAB + (m?m.h:0); }
+    p.el.style.top = (anim[p.key]==null?pl.y:anim[p.key])+'px';
+    p.el.style.height = h+'px';
+  }
+}
+treeEl.addEventListener('click', e=>{
+  const t = e.target.closest('[data-a]'); if(!t) return;
+  const a = t.dataset.a, row = e.target.closest('.row'), gh = e.target.closest('.ghead');
+  const lid = row && row.dataset.lid, gid = gh && gh.dataset.gid;
+  if(a==='eye'){ L[lid].hidden = !L[lid].hidden; renderPanel(); layout(); }
+  else if(a==='del'){ removeLayer(lid); }
+  else if(a==='lvl'){ openLvl(t, lid); }
+  else if(a==='col'){ const g=root.find(n=>n.id===gid); g.collapsed=!g.collapsed; renderPanel(); layout(); }
+  else if(a==='gdel'){ ungroup(gid); }
+});
+function removeLayer(lid){
+  for(const n of allNodes()) if(n.n.t==='L' && n.n.id===lid){ n.list.splice(n.i,1); break; }
+  libAvail.push(L[lid].tk); delete L[lid];
+  closePops(); renderPanel(); layout();
+}
+function ungroup(gid){                      // group disappears, its layers stay in the list
+  const i = root.findIndex(n=>n.id===gid);
+  const g = root[i]; root.splice(i,1,...g.kids);
+  renderPanel(); layout();
+}
+$('#addGroup').onclick = ()=>{ root.push({t:'G', id:nid('G'), name:'New group', collapsed:false, kids:[]}); renderPanel(); layout(); };
+
+/* ── popovers ────────────────────────────────────────────────────────────── */
+const lvlpop=$('#lvlpop'), libpop=$('#libpop');
+function closePops(){ lvlpop.style.display='none'; libpop.style.display='none';
+  document.querySelectorAll('.lvl.open').forEach(n=>n.classList.remove('open')); }
+document.addEventListener('mousedown', e=>{ if(!e.target.closest('.pop') && !e.target.closest('[data-a="lvl"]') && !e.target.closest('#addLane')) closePops(); });
+function place(pop, a){ pop.style.display='block'; const r=a.getBoundingClientRect();
+  pop.style.left = Math.min(r.left, innerWidth-pop.offsetWidth-10)+'px';
+  pop.style.top  = Math.min(r.bottom+4, innerHeight-pop.offsetHeight-10)+'px'; }
+function openLvl(anchor, lid){
+  closePops(); anchor.classList.add('open');
+  const l = L[lid]; lvlpop.innerHTML='';
+  lvlpop.append(el('h4',null,'How much of “'+l.name+'”'));
+  LVLTEXT[l.kind].forEach(([w,desc],i)=>{
+    const o = el('div','opt'+(i===l.level?' on':''));
+    o.append(el('b',null,w), el('span',null,desc));
+    o.onclick = ()=>{ l.level=i; closePops(); renderPanel(); layout(); };
+    lvlpop.append(o);
+  });
+  place(lvlpop, anchor);
+}
+$('#addLane').onclick = e=>{
+  closePops(); libpop.innerHTML=''; libpop.append(el('h4',null,'Add a lane'));
+  if(!libAvail.length) libpop.append(el('div','item','everything is already on the board'));
+  for(const k of libAvail.slice().sort()){
+    const t = D.library[k]||D.topics[k];
+    const it = el('div','item'); const d=el('span'); d.style.cssText='width:7px;height:7px;border-radius:50%;background:'+catCol(t.cat);
+    it.append(d, el('span',null,t.name), el('span','n',''+t.items.length));
+    it.onclick = ()=>{ root.push(mkLayer(k)); libAvail=libAvail.filter(x=>x!==k); closePops(); renderPanel(); layout(); };
+    libpop.append(it);
+  }
+  place(libpop, e.currentTarget);
+};
+
+/* ── DRAG — live move, root ⇄ group, both directions ─────────────────────── */
+const ghost=$('#ghost');
+treeEl.addEventListener('mousedown', e=>{
+  const t = e.target.closest('[data-a="drag"],[data-a="gdrag"]'); if(!t||e.button!==0) return;
+  e.preventDefault();
+  const isG = t.dataset.a==='gdrag';
+  const host = e.target.closest(isG?'.ghead':'.row');
+  dragging = {isG, id: isG?host.dataset.gid:host.dataset.lid, x:e.clientX, y:e.clientY, live:false};
+});
+window.addEventListener('mousemove', e=>{
+  if(!dragging) return;
+  if(!dragging.live){
+    if(Math.abs(e.clientY-dragging.y)+Math.abs(e.clientX-dragging.x) < 4) return;
+    dragging.live = true; closePops();
+    ghost.style.display='block';
+    ghost.textContent = dragging.isG ? root.find(n=>n.id===dragging.id).name : L[dragging.id].name;
+  }
+  ghost.style.left=(e.clientX+12)+'px'; ghost.style.top=(e.clientY-10)+'px';
+  const slot = slotAt(e.clientY); if(!slot) return;
+  moveTo(slot);
+});
+window.addEventListener('mouseup', ()=>{ if(!dragging) return; dragging=null; ghost.style.display='none'; renderPanel(); layout(); });
+/* insertion points: (list, index) over root rows and inside every open group */
+function slotAt(py){
+  const cands=[];
+  const push=(list,i,y)=>cands.push({list,i,y});
+  for(const p of panelList){
+    const b = p.el.getBoundingClientRect();
+    if(p.type==='row'){ push(p.list,p.i,b.top); push(p.list,p.i+1,b.bottom); }
+    else {
+      push(root, p.i, b.top);
+      if(p.g.collapsed) push(root, p.i+1, b.bottom);
+      else if(!p.g.kids.length) push(p.g.kids, 0, b.bottom);
+    }
+  }
+  if(panelList.length){
+    const lb = panelList[panelList.length-1].el.getBoundingClientRect();
+    push(root, root.length, lb.bottom);
+  }
+  let best=null,bd=1e9;
+  for(const c of cands){ const d=Math.abs(py-c.y); if(d<bd){bd=d;best=c;} }
+  return best;
+}
+function moveTo(slot){
+  const cur = allNodes().find(n=> (n.n.t==='G'? n.n.id : n.n.id) === dragging.id && (dragging.isG ? n.n.t==='G' : n.n.t==='L'));
+  if(!cur) return;
+  if(dragging.isG && slot.list !== root) return;          // groups don't nest
+  let at = slot.i;
+  if(cur.list === slot.list){ if(cur.i < at) at--; if(at === cur.i) return; }
+  cur.list.splice(cur.i,1);
+  slot.list.splice(Math.max(0,Math.min(at,slot.list.length)),0,cur.n);
+  renderPanel(); layout();
+  const sel = dragging.isG ? treeEl.querySelector(`.ghead[data-gid="${dragging.id}"]`)
+                           : treeEl.querySelector(`.row[data-lid="${dragging.id}"]`);
+  if(sel) sel.classList.add('dragging');
+}
+
+/* ════ WORKSPACE — canvas, like the product ══════════════════════════════ */
+const stage=$('#stage'), cv=$('#cv'), ctx=cv.getContext('2d');
+const NOW=2030, U=y=>Math.log10(Math.max(1,NOW-y));
+const uMin=U(2026), uMax=U(-13.8e9);
+let view={u0:U(-12000), k:300};
+const xOf=y=>(view.u0-U(y))*view.k;
+const AX=24, ROW=13, DOTROW=15, GAP=6, GLAB=17;
+let plan=[], planByKey={}, anim={}, raf=0;
+
+/* interval packing, copied from the product: biggest-first, no visual overlap */
+function pack(items){
+  const spans = items.filter(it=> it.e && it.e!==it.s)
+    .sort((a,b)=> a.i-b.i || (b.e-b.s)-(a.e-a.s) || a.s-b.s);
+  const rows=[];
+  for(const it of spans){
+    let r=0;
+    for(; r<rows.length; r++) if(!rows[r].some(o=> it.s < o.e && o.s < it.e)) break;
+    if(r===rows.length) rows.push([]);
+    rows[r].push(it);
+  }
+  const dots = items.filter(it=> !(it.e && it.e!==it.s)).sort((a,b)=>a.s-b.s);
+  return {rows, dots};
+}
+function layout(){
+  plan=[]; planByKey={}; let y=6;
+  for(const node of root){
+    if(node.t==='L'){ y = emitLane(node.id, y, null); continue; }
+    plan.push({kind:'glab', key:'g'+node.id, text:node.name, y, h:GLAB}); y += GLAB;
+    const shown = node.kids.filter(k=>!L[k.id].hidden);
+    if(node.collapsed){                       // collapsed = merged digest lane
+      if(shown.length){
+        const items=[]; for(const k of shown) for(const it of filterItems({...L[k.id], level:0})) items.push(it);
+        y = emitItems('m'+node.id, node.name+' — '+shown.length+' layers merged', items, y, true);
+      }
+    } else for(const k of node.kids) y = emitLane(k.id, y, node.name);
+  }
+  for(const n of plan){ planByKey[n.key]=n; if(anim[n.key]==null) anim[n.key]=n.y; }
+  hud(); positionRows(); paint(); tick();
+}
+const HIDDEN_H = 22;
+function emitLane(lid, y, gname){
+  const l=L[lid];
+  if(l.hidden){                       // keeps its slot: an empty band, so the row still aligns
+    plan.push({kind:'lane', key:'l'+lid, label:l.name, rows:[], dots:[], y, h:HIDDEN_H, hidden:true, n:0});
+    return y + HIDDEN_H;
+  }
+  let name = l.name;
+  if(gname && name.startsWith(gname+' · ')) name = name.slice(gname.length+3);
+  return emitItems('l'+lid, name, filterItems(l), y, false);
+}
+function emitItems(key, label, items, y, merged){
+  const p = pack(items);
+  const h = Math.max(1, p.rows.length)*ROW + (p.dots.length?DOTROW:0) + GAP;
+  plan.push({kind:'lane', key, label, rows:p.rows, dots:p.dots, y, h, merged, n:items.length});
+  return y + h;
+}
+function hud(){
+  const n = plan.filter(p=>p.kind==='lane' && !p.hidden);
+  $('#hud').textContent = n.length+' lanes · '+n.reduce((a,b)=>a+b.n,0)+' marks';
+}
+/* ease each row toward its target y so a reorder reads as motion */
+function tick(){
+  if(raf) return;
+  raf = requestAnimationFrame(()=>{
+    raf=0; let moving=false;
+    for(const n of plan){
+      const d = n.y - anim[n.key];
+      if(Math.abs(d) > .4){ anim[n.key] += d*0.28; moving=true; } else anim[n.key]=n.y;
+    }
+    positionRows(); paint();
+    if(moving) tick();
+  });
+}
+function resize(){
+  const w=stage.clientWidth, h=stage.clientHeight, dpr=devicePixelRatio||1;
+  cv.width=w*dpr; cv.height=h*dpr; ctx.setTransform(dpr,0,0,dpr,0,0);
+  paint();
+}
+const TICKS=[-13e9,-1e9,-100e6,-1e6,-100000,-10000,-5000,-3000,-2000,-1000,-500,0,500,1000,1200,1400,1500,1600,1700,1800,1850,1900,1925,1950,1975,2000,2020];
+const fmt=y=>{const a=Math.abs(y);
+  if(a>=1e9) return (a/1e9).toFixed(a>=1e10?0:1)+' bn'+(y<0?' BCE':'');
+  if(a>=1e6) return (a/1e6).toFixed(0)+' m'+(y<0?' BCE':'');
+  if(a>=10000) return (a/1000).toFixed(0)+'k'+(y<0?' BCE':'');
+  return y<0?a+' BCE':(y===0?'0':''+y); };
+
+function paint(){
+  const W=stage.clientWidth, H=stage.clientHeight;
+  const bg=tok('--tl-canvas-bg'), ink=tok('--tl-ink'), ink2=tok('--tl-ink-2'), ink3=tok('--tl-ink-3');
+  const rule=tok('--tl-rule'), grat=tok('--tl-graticule'), surf=tok('--tl-surface'), hov=tok('--tl-hover');
+  ctx.fillStyle=bg; ctx.fillRect(0,0,W,H);
+
+  // grid
+  ctx.strokeStyle=grat; ctx.lineWidth=1; ctx.beginPath();
+  let last=-1e9; const shown=[];
+  for(const t of TICKS){ const x=Math.round(xOf(t))+.5;
+    if(x<-20||x>W) continue; if(x-last<58) continue; last=x; shown.push([x,t]);
+    ctx.moveTo(x,AX); ctx.lineTo(x,H); }
+  ctx.stroke();
+
+  ctx.save(); ctx.translate(0, AX); ctx.beginPath(); ctx.rect(0,0,W,H-AX); ctx.clip();
+  for(const n of plan){
+    const y = anim[n.key] == null ? n.y : anim[n.key];
+    if(n.kind==='glab'){                       // the panel names the group; here it is just a rule
+      ctx.strokeStyle=rule; ctx.beginPath();
+      ctx.moveTo(0, y+8.5); ctx.lineTo(W, y+8.5); ctx.stroke();
+      continue;
+    }
+    if(n.hidden){                              // an empty band where a hidden layer sits
+      ctx.strokeStyle=grat; ctx.setLineDash([3,5]); ctx.beginPath();
+      ctx.moveTo(0, y+11.5); ctx.lineTo(W, y+11.5); ctx.stroke(); ctx.setLineDash([]);
+      continue;
+    }
+    if(n.merged){ ctx.fillStyle=hov; ctx.fillRect(0,y-2,W,n.h-2); }
+    // span rows, stacked one below another
+    let ry = y+2;
+    for(const row of n.rows){
+      for(const it of row){
+        const x0=xOf(it.s), x1=xOf(it.e), w=Math.max(2,x1-x0);
+        if(x1<0||x0>W) continue;
+        const col=catCol(it.c);
+        ctx.globalAlpha = it.k==='life' ? .55 : .8;
+        ctx.fillStyle=col; ctx.beginPath(); ctx.roundRect(x0, ry, w, ROW-3, 2); ctx.fill();
+        ctx.globalAlpha=1;
+        if(w>44){
+          ctx.save(); ctx.beginPath(); ctx.rect(x0,ry,w,ROW-3); ctx.clip();
+          ctx.fillStyle='#fff'; ctx.font='10px "Instrument Sans",sans-serif'; ctx.textAlign='left';
+          ctx.fillText(it.t, x0+5, ry+ROW-6);
+          ctx.restore();
+        }
+      }
+      ry += ROW;
+    }
+    // one dot row, labels where they fit
+    if(n.dots.length){
+      const cy = ry + DOTROW/2 - 2;
+      ctx.font='10.5px "Instrument Sans",sans-serif'; ctx.textAlign='left';
+      let lastR=-1e9;
+      for(let i=0;i<n.dots.length;i++){
+        const it=n.dots[i], x=xOf(it.s);
+        if(x<-30||x>W+30) continue;
+        ctx.fillStyle=catCol(it.c);
+        ctx.beginPath(); ctx.arc(x, cy, it.i<=2?4:3, 0, 7); ctx.fill();
+        const lw = ctx.measureText(it.t).width;
+        const nx = i<n.dots.length-1 ? xOf(n.dots[i+1].s) : 1e9;
+        if(x>lastR+8 && (nx-x > lw+14 || (it.i<=2 && nx-x>24))){
+          ctx.fillStyle=ink2; ctx.fillText(it.t, x+7, cy+3.5);
+          lastR = x+lw+10;
+        }
+      }
+      ry += DOTROW;
+    }
+    // no lane name drawn here — the panel row alongside it is the label
+    ctx.strokeStyle=grat; ctx.beginPath(); ctx.moveTo(0, Math.round(y+n.h-3)+.5); ctx.lineTo(W, Math.round(y+n.h-3)+.5); ctx.stroke();
+  }
+  ctx.restore();
+
+  // axis strip on top
+  ctx.fillStyle=surf; ctx.fillRect(0,0,W,AX);
+  ctx.strokeStyle=rule; ctx.beginPath(); ctx.moveTo(0,AX-.5); ctx.lineTo(W,AX-.5); ctx.stroke();
+  ctx.font='9.5px "IBM Plex Mono",monospace'; ctx.textAlign='left';
+  for(const [x,t] of shown){
+    ctx.strokeStyle=tok('--tl-rule-soft'); ctx.beginPath(); ctx.moveTo(x,0); ctx.lineTo(x,AX); ctx.stroke();
+    ctx.fillStyle=ink3; ctx.fillText(fmt(t), x+4, 15);
+  }
+}
+
+/* pan: content follows the hand (same sign as the product) + wheel zoom */
+function clampView(){ const W=stage.clientWidth;
+  view.u0 = Math.max(uMin+.05, Math.min(uMax + W/view.k - .05, view.u0)); }
+let pan=null;
+stage.addEventListener('mousedown', e=>{ if(e.button)return; pan={x:e.clientX,u0:view.u0}; stage.classList.add('pan'); });
+window.addEventListener('mousemove', e=>{
+  if(!pan) return;
+  view.u0 = pan.u0 + (e.clientX - pan.x)/view.k;   // drag right → travel back in time, content follows
+  clampView(); paint();
+});
+window.addEventListener('mouseup', ()=>{ pan=null; stage.classList.remove('pan'); });
+stage.addEventListener('wheel', e=>{
+  e.preventDefault();
+  const px = e.clientX - stage.getBoundingClientRect().left;
+  if(e.ctrlKey || Math.abs(e.deltaX) <= Math.abs(e.deltaY)){
+    const uAt = view.u0 - px/view.k;
+    view.k = Math.max(26, Math.min(6000, view.k*Math.exp(-e.deltaY*0.0018)));
+    view.u0 = uAt + px/view.k;
+  } else view.u0 += e.deltaX/view.k;
+  clampView(); paint();
+},{passive:false});
+
+/* crude hit test for a tooltip */
+const tip=$('#tip');
+stage.addEventListener('mousemove', e=>{
+  if(pan){ tip.style.display='none'; return; }
+  const r=stage.getBoundingClientRect(), mx=e.clientX-r.left, my=e.clientY-r.top-AX;
+  let hit=null;
+  for(const n of plan){
+    if(n.kind!=='lane') continue;
+    const y=anim[n.key]??n.y;
+    if(my < y || my > y+n.h) continue;
+    let ry=y+2;
+    for(const row of n.rows){
+      if(my>=ry && my<=ry+ROW) for(const it of row){ const x0=xOf(it.s), x1=xOf(it.e);
+        if(mx>=x0 && mx<=Math.max(x0+2,x1)) hit=it; }
+      ry+=ROW;
+    }
+    if(!hit && n.dots.length && my>=ry && my<=ry+DOTROW)
+      for(const it of n.dots){ if(Math.abs(xOf(it.s)-mx)<5) hit=it; }
+  }
+  if(!hit){ tip.style.display='none'; return; }
+  tip.innerHTML = hit.t+'<br><em>'+fmt(hit.s)+(hit.e&&hit.e!==hit.s?' – '+fmt(hit.e):'')+' · '+hit.c+'</em>';
+  tip.style.display='block'; tip.style.left=Math.min(e.clientX+12, innerWidth-260)+'px'; tip.style.top=(e.clientY+14)+'px';
+});
+stage.addEventListener('mouseleave', ()=>tip.style.display='none');
+
+addEventListener('resize', ()=>{ clampView(); resize(); });
+renderPanel(); resize(); layout();
+window.__tl2 = {get root(){return root;}, L, layers, get plan(){return plan;}};
+</script>
+</body>
+</html>

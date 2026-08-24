@@ -1,0 +1,54 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>Zoom concepts</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500&family=Instrument+Sans:wght@400;500;600&display=swap">
+<style>
+:root{
+  color-scheme:light;
+  --tl-ground:#E3E8E6; --tl-surface:#F5F7F6; --tl-ink:#12181A; --tl-ink-2:#505E63; --tl-ink-3:#6D7B7F;
+  --tl-rule:#C7D0CD; --tl-accent:#B4382A;
+  --sans:"Instrument Sans",system-ui,sans-serif; --mono:"IBM Plex Mono",monospace;
+}
+@media (prefers-color-scheme:dark){:root{
+  color-scheme:dark;
+  --tl-ground:#14191B; --tl-surface:#1B2225; --tl-ink:#E9F0EE; --tl-ink-2:#A9B7B9; --tl-ink-3:#7E8D90;
+  --tl-rule:#2E393C; --tl-accent:#E06B58;
+}}
+*{box-sizing:border-box;margin:0;padding:0}
+body{font-family:var(--sans);background:var(--tl-ground);color:var(--tl-ink);
+     display:grid;place-items:center;min-height:100vh;padding:40px 20px}
+main{width:100%;max-width:560px}
+h1{font-size:15px;font-weight:600}
+.sub{font-family:var(--mono);font-size:10px;color:var(--tl-ink-3);text-transform:uppercase;
+     letter-spacing:.06em;margin:6px 0 20px}
+a{display:block;text-decoration:none;color:inherit;background:var(--tl-surface);
+  border:1px solid var(--tl-rule);border-radius:8px;padding:13px 15px;margin-bottom:10px}
+a:hover{border-color:var(--tl-accent)}
+a b{display:block;font-size:14px;font-weight:600;margin-bottom:3px}
+a span{font-size:12.5px;color:var(--tl-ink-2);line-height:1.45}
+p.note{font-family:var(--mono);font-size:10.5px;color:var(--tl-ink-3);line-height:1.6;margin-top:16px}
+</style>
+</head>
+<body>
+<main>
+  <h1>Zoom concepts</h1>
+  <p class="sub">One question · three cameras · same 10 lanes, 273 marks</p>
+
+  <a href="./a.html"><b>A — The true 2D camera</b>
+    <span>One rigid world. Zoom scales both axes about the cursor; nothing ever moves relative to anything else. Press Y for the sqrt-damped variant.</span></a>
+
+  <a href="./b.html"><b>B — Zoom-stepped layout</b>
+    <span>X zooms continuously; lane heights are bit-frozen between six LOD steps and re-settle in 250 ms as you cross one.</span></a>
+
+  <a href="./c.html"><b>C — Fixed slots, detail within</b>
+    <span>Lane heights never change. Zooming opens more packed rows inside each fixed slot until the interior compresses.</span></a>
+
+  <p class="note">wheel = zoom under the cursor · drag = pan · no hover, no panel<br>
+  B also pans vertically; C deliberately does not.</p>
+</main>
+</body>
+</html>

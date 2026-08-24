@@ -22,9 +22,11 @@
    ============================================================================= */
 
 import { useCallback, useEffect, useRef, useState, useSyncExternalStore } from 'react';
-import { initData, setGotoTab, setLanes, SelStore, TimeStore, YMAX, YMIN, type Datasets } from '@/render/shared';
+import {
+  catColor, fmtBig, fmtY, initData, setGotoTab, setLanes, SelStore, TimeStore, tokens, YMAX, YMIN,
+  type Datasets,
+} from '@/render/shared';
 import { buildRelIndex } from '@/render/relations';
-import { setPolityAliases } from '@/render/subject';
 import { SelCard } from '@/render/selcard';
 import { WorldMap } from '@/render/map';
 import { TL } from '@/render/timeline';
@@ -37,6 +39,8 @@ import { Horizon } from '@/render/horizon';
 import { Pop, loadPopulation } from '@/render/population';
 import { buildGallery } from '@/render/gallery';
 import { Conn, initConn, loadRelations } from '@/render/connections';
+import { searchCorpus, type Hit } from '@/render/search';
+import { describe, perspectiveSpan, setPolityAliases } from '@/render/subject';
 import { railPos, railYear, railNum, railEraOf, SNAPSHOTS } from './rail';
 
 // ── The information architecture ────────────────────────────────────────────
@@ -163,7 +167,7 @@ const NOTES: Record<ViewId, Notes> = {
   map: {
     body: <>
       <p>The <strong>&ldquo;Google Earth of history&rdquo;</strong> answer to <em>&ldquo;I see 1776 and can&rsquo;t imagine the world.&rdquo;</em> Drag the index along the bottom rail and every border on the map moves with it.</p>
-      <p>Territories are real research data &mdash; 18 snapshots between 3000 BCE and 1994 &mdash; coloured by sovereign, the British Empire in its traditional atlas pink. Scroll to zoom, drag to pan, and <strong>click any spot to drill a core sample</strong> through everything that ever happened there.</p>
+      <p>Territories are real research data &mdash; 18 snapshots between 3000 BCE and 1994 &mdash; coloured by sovereign, the British Empire in its traditional atlas pink. Scroll to zoom, drag to pan, and <strong>click any territory to select it</strong> &mdash; the card that comes up can drill a core sample through everything that ever happened at that exact spot.</p>
     </>,
     src: <>Snapshots: 3000 · 1000 · 323 BCE · 1 CE · 400 · 800 · 1000 · 1279 · 1492 · 1600 · 1715 · 1783 · 1815 · 1880 · 1914 · 1938 · 1960 · 1994. Border data: aourednik/historical-basemaps (GPL-3.0) &mdash; scholarly approximation, since historical borders are fuzzy and contested by nature.</>,
   },
@@ -341,6 +345,50 @@ function paintUnread(seen: Set<string>, view: string) {
   else b.setAttribute('data-unread', 'true');
 }
 
+/* ── THE URL REMEMBERS WHICH VIEW YOU WERE ON ─────────────────────────────────
+   "when I refresh keep the browser on the same tab (probably by saving to the
+   URL query?)" — yes, and it makes a link shareable rather than merely
+   refresh-proof.
+
+   replaceState, NEVER pushState: eleven views one keystroke apart would turn
+   the back button into a tab-history stepper, and the way out of the app would
+   be forty presses deep.
+
+   Three params, all optional and all independently ignorable:
+     v — the view id, validated against ORDER; anything else falls back silently
+     y — the global moment, which on the timeline IS the window's centre
+     s — the timeline window's span in years, so y ± s/2 restores the framing
+
+   Read once at mount and never again: the URL is an OUTPUT of app state after
+   that, so nothing here can fight the centre-year observer for control of d0/d1. */
+/* ── ONE SEARCH ───────────────────────────────────────────────────────────────
+   "Keep only one search - one at the top."
+
+   There were two: a thread-search in the timeline's control panel that dimmed
+   the canvas and offered a dropdown of things in history, and a ⌘K palette that
+   went to views. The panel one is gone, which left content search unreachable —
+   so the field in the top bar takes both jobs. One query, one dropdown, two
+   kinds of row: what happened, and where to look at it. */
+type SRow = { k: 'c'; h: Hit } | { k: 'v'; v: ViewId };
+
+interface UrlState { v: ViewId | null; y: number | null; s: number | null }
+
+function readUrl(): UrlState {
+  const none: UrlState = { v: null, y: null, s: null };
+  if (typeof location === 'undefined') return none;
+  try {
+    const q = new URLSearchParams(location.search);
+    const rv = q.get('v'), ry = q.get('y'), rs = q.get('s');
+    const y = ry === null ? NaN : Number(ry);
+    const sp = rs === null ? NaN : Number(rs);
+    return {
+      v: rv && (ORDER as string[]).includes(rv) ? rv as ViewId : null,
+      y: Number.isFinite(y) && y >= YMIN && y <= YMAX ? Math.round(y) : null,
+      s: Number.isFinite(sp) && sp > 0 ? sp : null,
+    };
+  } catch { return none; }
+}
+
 // ── Icons ───────────────────────────────────────────────────────────────────
 const I = {
   mark: <svg viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.3"><circle cx="8" cy="8" r="6" /><path d="M8 2v12M2 8h12" /><ellipse cx="8" cy="8" rx="2.7" ry="6" /></svg>,
@@ -357,9 +405,6 @@ export default function Lab() {
   const [ready, setReady] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [notesOpen, setNotesOpen] = useState(false);
-  const [palette, setPalette] = useState(false);
-  const [pq, setPq] = useState('');
-  const [psel, setPsel] = useState(0);
   const [collapsedBy, setCollapsedBy] = useState<boolean | null>(null);
   // THE DOCKED "RELATED" PANEL IS CLOSED BY DEFAULT. The selection card carries
   // the top three or four relations already; the dock exists for the moment you
@@ -367,7 +412,6 @@ export default function Lab() {
   // "All connections →". Opening it costs 92px of a shared column otherwise.
   const [relOpen, setRelOpen] = useState(false);
   const booted = useRef(false);
-  const pinput = useRef<HTMLInputElement>(null);
   // Coming back to a group should return you to where you were in it. Seeded
   // from GROUP_DEFAULT; the vertical port flips that seed, not this.
   const lastMember = useRef<Record<string, ViewId>>({ ...GROUP_DEFAULT });
@@ -399,6 +443,55 @@ export default function Lab() {
   }, []);
   useEffect(() => { setGotoTab(go); }, [go]);
 
+  /**
+   * The URL, written from state. Every route into a view goes through setView
+   * — the switcher, the seg, ⌘K, the gallery's data-goto, the card's actions —
+   * so writing it from the view EFFECT covers all of them at once instead of
+   * from five call sites.
+   *
+   * Throttled at 500ms rather than the 300 you would guess: Safari rate-limits
+   * replaceState to 100 calls per 30 seconds and starts throwing after that,
+   * and 300ms of continuous panning sits exactly on that limit. The string is
+   * compared first, so a still app writes nothing at all, and the rAF loop this
+   * rides keeps running after a gesture ends — so the last state always lands.
+   */
+  const urlRef = useRef({ t: 0, q: '' });
+  const writeUrl = useCallback((force = false) => {
+    if (typeof history === 'undefined' || !history.replaceState) return;
+    try {
+      const p = new URLSearchParams(location.search);
+      p.set('v', viewRef.current);
+      p.set('y', String(Math.round(TimeStore.year)));
+      const span = Math.round(TL.d1 - TL.d0);
+      if (Number.isFinite(span) && span > 0) p.set('s', String(span));
+      const q = p.toString();
+      if (q === urlRef.current.q) return;
+      const now = performance.now();
+      if (!force && now - urlRef.current.t < 500) return;
+      urlRef.current = { t: now, q };
+      history.replaceState(history.state, '', location.pathname + '?' + q + location.hash);
+    } catch { /* a URL is a convenience; it may never break the app */ }
+  }, []);
+
+  // READ ONCE, DURING THE FIRST RENDER, and never again — because writeUrl()
+  // starts overwriting these params from the view effect on the very same
+  // commit, and the boot fetches only land several hundred milliseconds later.
+  // Reading the URL again inside boot() would read our own default state back.
+  // Populating a ref during render is safe here: it is not rendered output, so
+  // there is nothing for hydration to mismatch on.
+  const url0 = useRef<UrlState | undefined>(undefined);
+  if (!url0.current) url0.current = readUrl();
+
+  // Restoring the VIEW is a mount effect rather than a lazy useState initial
+  // value, because the page is prerendered: reading location during the first
+  // render would be a hydration mismatch. It costs one extra render, which is
+  // invisible — the data has not landed yet, so the loading overlay is still up
+  // and no canvas has painted.
+  useEffect(() => {
+    const v0 = url0.current?.v;
+    if (v0) setView(v0);
+  }, []);
+
   // ── boot ──────────────────────────────────────────────────────────────────
   useEffect(() => {
     if (booted.current) return;
@@ -428,20 +521,38 @@ export default function Lab() {
         setLanes(lanes);                         // AFTER initData: lane members append to EVENTS pre-classified
         setPolityAliases(polities);
         boot();
+        // THE TIME STATE, restored before the first paint. Both halves matter:
+        // the window WITHOUT the moment would be undone the instant the tab
+        // renders, because ensureYearVisible() re-centres the window on a
+        // moment that falls outside it — the restored framing would lose an
+        // argument with a courtesy. Setting the moment to the window's centre
+        // is exactly what the centre-year observer would do a frame later, so
+        // the two agree from the start and nothing moves.
+        const u0 = url0.current ?? readUrl();
+        if (u0.y !== null) {
+          if (u0.s !== null) { TL.d0 = u0.y - u0.s / 2; TL.d1 = u0.y + u0.s / 2; }
+          WorldMap.syncToYear(u0.y);
+          TimeStore.set(u0.y, 'ui');
+        }
         // WHAT THE SELECTION CARD CAN DO. Lab is the only module that knows all
         // eleven views, so the card's verbs are injected from here rather than
         // imported — which is also why selcard.ts can be imported BY the
         // renderers without a cycle.
         SelCard.wire({
-          // THE CORE LOOP. Frames the window and shows the horizontal
-          // projection. It does not touch TimeStore, and TL.frameTo holds off
-          // the tab-entry ensureYearVisible() so the framing is not undone by a
-          // courtesy meant for a different situation.
+          // THE CORE LOOP. "Zoom to X" on the timeline and "See on timeline" on
+          // the map are the same move: frame the window on its span and show
+          // the horizontal projection. It writes no year of its own — the
+          // centre-year observer below turns the new window into the new
+          // moment, once, in one place.
           perspective: (a, b) => { TL.clearSearch(); TL.frameTo(a, b); go('zoom'); },
           // AT THE CURRENT GLOBAL YEAR — syncToYear moves the map to the nearest
           // snapshot without writing TimeStore back.
           seeOnMap: () => { WorldMap.syncToYear(TimeStore.year); go('map'); },
           traceInCube: (pid) => { Cube.select(pid); go('cube'); },
+          // Fix a place, show every moment. This is where the map's old
+          // click-to-drill went: it is now a named action on the card, at the
+          // point the user actually pointed at.
+          drillAt: (lon, lat, label) => { Core.drill(lon, lat, label); go('core'); },
           allConnections: () => setRelOpen(true),
           mapYear: () => (WorldMap as any).year(),
           anchorOf: (id) => {
@@ -568,8 +679,9 @@ export default function Lab() {
     const g = groupOf(view);
     if (view !== 'concepts') lastMember.current[g] = view;
     paintUnread(seen.current, view);
+    writeUrl(true);                       // the view is a deliberate move: write it now
     if (ready) { renderTab(view); syncRail(); SelCard.setView(view); }
-  }, [view, ready, syncRail]);
+  }, [view, ready, syncRail, writeUrl]);
 
   // Selecting something else closes the full list again — the dock is a place
   // you go on purpose, not a panel that latches open for the rest of the session.
@@ -599,6 +711,41 @@ export default function Lab() {
     target?.scrollIntoView({ inline: 'nearest', block: 'nearest' });
   }, [view]);
 
+  // ═══ THE CENTRE-YEAR RULE ════════════════════════════════════════════════
+  //
+  // "when I move on the timeline the time changes always to be that at the
+  // center of screen — when I move right or left the time (year) changes."
+  //
+  // So on the timeline the global moment IS the centre of the viewport, and it
+  // follows the pan continuously rather than waiting for a click on the axis.
+  // Implemented HERE, as an observer, for two reasons: timeline.ts is owned by
+  // another agent this round, and — more permanently — the timeline should not
+  // have to know that a global moment exists in order to be panned.
+  //
+  // NO FEEDBACK LOOP, by construction:
+  //   · the flow is one-way, d0/d1 → TimeStore, and never back. Nothing that
+  //     subscribes to TimeStore writes d0/d1: timeline.ts's subscriber is
+  //     `() => this.paint()`, the map re-indexes its own snapshot, the card
+  //     repaints. The one thing that CAN move the window from the year —
+  //     ensureYearVisible() — runs on tab entry only, and cannot fire from a
+  //     pan anyway: the centre of the window is by definition inside it.
+  //   · TimeStore.set is a no-op when the rounded year is unchanged, so a
+  //     still timeline publishes nothing at all;
+  //   · and every publication is stamped 'tl' — the timeline's own source tag,
+  //     the one the axis click already uses — so any future subscriber can
+  //     recognise its own echo the way the map already does with 'map'.
+  //     (shared.ts belongs to another agent this round, so the observer reuses
+  //     the existing tag rather than minting a sixth one.)
+  //
+  // THROTTLE: at most one publication every CENTRE_MS, and only when the centre
+  // has moved a whole year. The floor exists because each publication fans out
+  // to a full TL.paint(), which the drag is already doing — 11/s of overlap is
+  // invisible, 60/s would double the paint cost of every pan. There is no
+  // trailing-edge problem: the loop keeps running after the gesture ends, so
+  // the last centre is published within CENTRE_MS of the pan stopping.
+  const CENTRE_MS = 90;
+  const centreRef = useRef({ t: 0, y: NaN });
+
   // Renderers own their own state and emit no events, so the rail follows them
   // by watching. One rAF loop, four number reads, DOM touched only on change.
   useEffect(() => {
@@ -606,6 +753,19 @@ export default function Lab() {
     let raf = 0, last = '';
     const tick = () => {
       const v = viewRef.current;
+      // the centre-year observer rides the rail's loop: same cadence, same
+      // reads, and one rAF for the app instead of two
+      if (v === 'zoom' || v === 'vertical') {
+        const c = Math.round((TL.d0 + TL.d1) / 2);
+        const st = centreRef.current;
+        const now = performance.now();
+        if (c !== st.y && now - st.t >= CENTRE_MS && Number.isFinite(c)) {
+          st.t = now; st.y = c;
+          TimeStore.set(c, 'tl');
+        }
+      } else {
+        centreRef.current.y = NaN;     // off the timeline: forget the last centre
+      }
       const key = (v === 'map' ? `m${WorldMap.ix}`
         : v === 'pop' ? `p${Pop.ix.toFixed(3)}`
           : v === 'horizon' ? `h${Horizon.year}`
@@ -614,19 +774,67 @@ export default function Lab() {
                 : v === 'conn' ? `c${Conn.d0}|${Conn.d1}`
                   : `t${TL.d0}|${TL.d1}|${TL.log}`)
         + `|${TimeStore.year}|${SelStore.id ?? ''}`;   // the global stores nudge the rail too
-      if (key !== last) { last = key; syncRail(); }
+      if (key !== last) { last = key; syncRail(); writeUrl(); }
       raf = requestAnimationFrame(tick);
     };
     raf = requestAnimationFrame(tick);
     return () => cancelAnimationFrame(raf);
-  }, [ready, syncRail]);
+  }, [ready, syncRail, writeUrl]);
 
-  // The generic scale drag surface. Horizon writes into #hzYear and dispatches
-  // 'input' — horizon.ts already listens there, so no renderer changes.
-  const onRailRange = (e: React.FormEvent<HTMLInputElement>) => {
-    const pct = +(e.currentTarget.value) / 10;
-    const y = railYear(pct);
+  /* ═══ THE RAIL IS A DRAG SURFACE ═════════════════════════════════════════
+
+     "make it possible to drag bottom line. Cursor changes now but you cant
+     drag."
+
+     It really was only a cursor. The scale's drag surface was a transparent
+     <input type=range> stretched over it, and on the three window views every
+     one of its `input` events called TL.animTo() — a 650ms eased tween. Held
+     down, that is sixty tweens a second, each starting from wherever the
+     previous one had got to and re-targeting: they damp each other almost to a
+     standstill, so the window creeps a few years and stops. What looked like a
+     dead control was a control fighting itself.
+
+     So the gesture is taken over properly. The whole scale is the surface, the
+     pointer is CAPTURED on press, and every move writes the window DIRECTLY and
+     repaints — no tween in the loop. A press that never moves still eases, via
+     the same animTo: a jump of four millennia that teleports is unreadable,
+     while a drag that eases is broken.
+
+     The <input>s stay for the keyboard (they are the only reason the rail is
+     operable without a mouse) but give up their pointer events in app.css, so
+     there is exactly ONE thing handling the gesture. That also fixes a quieter
+     lie: the map slider was a linear 0..17 index laid over a NON-linear scale,
+     so dragging to the engraved 1492 stop landed on 1279. Everything now goes
+     through railYear(), which is the same mapping the engraving is drawn with.
+  */
+  const railDrag = useRef<{ down: boolean; moved: boolean; y: number }>({ down: false, moved: false, y: 0 });
+
+  /** The year under a client x on the scale, clamped to the scale's extent. */
+  const railYearAt = (clientX: number): number | null => {
+    const scale = document.getElementById('railScale');
+    if (!scale) return null;
+    const r = scale.getBoundingClientRect();
+    if (!r.width) return null;
+    return railYear(Math.max(0, Math.min(100, (clientX - r.left) / r.width * 100)));
+  };
+
+  /**
+   * Move to a year. `live` is true while the pointer is down: the window is
+   * written and painted directly, so it tracks the finger frame for frame.
+   */
+  const scrubTo = (y: number, live: boolean) => {
     const v = viewRef.current;
+    if (v === 'map') {
+      WorldMap.stop(); WorldMap.syncToYear(y); WorldMap.render();
+      TimeStore.set((WorldMap as any).year(), 'map'); return;
+    }
+    if (v === 'pop') {
+      const S = Pop.slices();
+      if (!S.length) return;
+      let best = 0;
+      for (let i = 0; i < S.length; i++) if (Math.abs(S[i].year - y) < Math.abs(S[best].year - y)) best = i;
+      Pop.stop(); Pop.ix = best; Pop.render(); return;
+    }
     if (v === 'horizon') {
       const inp = document.getElementById('hzYear') as HTMLInputElement | null;
       if (inp) { inp.value = String(y); inp.dispatchEvent(new Event('input', { bubbles: true })); }
@@ -634,17 +842,222 @@ export default function Lab() {
     }
     const src: any = v === 'flow' ? Flow : v === 'braid' ? Braid : v === 'conn' ? Conn : TL;
     const half = (Number(src.d1) - Number(src.d0)) / 2;
+    // the same domain clamp-shift the wheel enforces — a rail grab near the
+    // edge must not centre the window past YMIN/YMAX (defect: d1 landed at 4464)
+    let a = y - half, b = y + half;
+    if (b > YMAX) { a -= b - YMAX; b = YMAX; }
+    if (a < YMIN) { b += YMIN - a; a = YMIN; }
+    b = Math.min(b, YMAX);
     if (v === 'zoom' || v === 'vertical') {
-      // same domain clamp-shift the wheel enforces — a rail click near the edge
-      // must not centre the window past YMIN/YMAX (defect: d1 landed at 4464)
-      let a = y - half, b = y + half;
-      if (b > YMAX) { a -= b - YMAX; b = YMAX; }
-      if (a < YMIN) { b += YMIN - a; a = YMIN; }
-      TL.animTo(a, Math.min(b, YMAX)); return;
+      if (live) { TL.d0 = a; TL.d1 = b; TL.paint(); }   // paint() also drives the vertical projection
+      else TL.animTo(a, b);
+      return;
     }
-    src.d0 = y - half; src.d1 = y + half;
+    src.d0 = a; src.d1 = b;
     if (v === 'conn') Conn.dirty = true;
     src.render();
+  };
+
+  /* ═══ THE SEARCH DROPDOWN ════════════════════════════════════════════════
+
+     "When searching add a dropdown with the listed options so that I can click
+     them."
+
+     The box has always dimmed the canvas to 12% and left you to FIND the lit
+     ones — on a surface that at a five-thousand-year span is wider than the
+     window. Dimming answers "how many"; it never answered "which", and it can
+     never be clicked.
+
+     So the same keystrokes now also fill a list. It is chrome, not canvas: it
+     is drawn here, from search.ts, and timeline.ts is untouched — the box keeps
+     its own input listener and its own dimming, and this one rides alongside on
+     the same element. Two listeners, one input, no coordination needed.
+
+     Choosing a row does the whole gesture at once: select it, clear the query
+     (so the framing lands on a full world rather than on 12% of one), and frame
+     it — the same frameTo path as the card's "Zoom to view", so the two ways of
+     arriving at a thing agree about where they leave you.
+
+     The list is FIXED-positioned against the box's rect rather than absolutely
+     positioned inside the panel: .tl-panel__bd scrolls, and an absolute child
+     of a scroll container is clipped by it. Same reasoning as the card and the
+     tooltip, which are both out at document level for exactly this. */
+  const SEARCH_CAP = 10;
+  const VIEW_CAP = 5;
+  const [sRows, setSRows] = useState<SRow[]>([]);
+  const [sTotal, setSTotal] = useState(0);          // content matches BEYOND the cap
+  const [sSel, setSSel] = useState(0);
+  const [sBox, setSBox] = useState<{ left: number; top: number; width: number } | null>(null);
+  const sOpen = sRows.length > 0 && !!sBox;
+  const sRowsRef = useRef<SRow[]>([]);
+  const sSelRef = useRef(0);
+  useEffect(() => { sRowsRef.current = sRows; sSelRef.current = sSel; });
+
+  const placeSearch = useCallback(() => {
+    const box = document.getElementById('cmdk');
+    if (!box) { setSBox(null); return; }
+    const r = box.getBoundingClientRect();
+    if (!r.width) { setSBox(null); return; }
+    // hung off the FIELD, not the input inside it, so the list lines up with the
+    // control the user can see
+    const field = box.closest('.tl-field') as HTMLElement | null;
+    const fr = field ? field.getBoundingClientRect() : r;
+    setSBox({ left: fr.left, top: fr.bottom + 4, width: Math.max(fr.width, 320) });
+  }, []);
+
+  const closeSearch = useCallback(() => { setSRows([]); setSTotal(0); setSSel(0); }, []);
+
+  /**
+   * ONE QUERY, TWO KINDS OF ANSWER.
+   *
+   * Content comes from search.ts (the same corpus the canvas dims); views come
+   * from the VIEWS table, which only this file has. They are ranked as one list
+   * with content first — because "what happened" is the question this app is
+   * for, and the eleven views are a fixed set the user learns once.
+   *
+   * The exception is a query that IS the beginning of a view's name: someone
+   * typing "cube" or "conn" is navigating, and making them arrow past four
+   * empires to reach the view they named would be the wrong default. Prefix
+   * match only, so "cubism" still leads with the movement.
+   */
+  const buildRows = useCallback((raw: string): { rows: SRow[]; total: number } => {
+    const q = raw.trim().toLowerCase();
+    if (q.length < 2) return { rows: [], total: 0 };
+    const { hits, total } = searchCorpus(raw, SEARCH_CAP);
+    const views = ORDER.filter(v => {
+      const m = VIEWS[v];
+      return (m.name + ' ' + m.seg + ' ' + m.gist).toLowerCase().includes(q);
+    }).slice(0, VIEW_CAP);
+    const navFirst = views.some(v =>
+      VIEWS[v].seg.toLowerCase().startsWith(q) || VIEWS[v].name.toLowerCase().startsWith(q));
+    const cRows: SRow[] = hits.map(h => ({ k: 'c', h }));
+    const vRows: SRow[] = views.map(v => ({ k: 'v', v }));
+    return { rows: navFirst ? [...vRows, ...cRows] : [...cRows, ...vRows], total: total - hits.length };
+  }, []);
+
+  /** Take a row: navigate to a view, or select + frame a thing in history. */
+  const takeRow = useCallback((r: SRow) => {
+    closeSearch();
+    const box = document.getElementById('cmdk') as HTMLInputElement | null;
+    if (box) { box.value = ''; box.blur(); }
+    if (r.k === 'v') { go(r.v); return; }
+    const sub = describe(r.h.id);
+    SelCard.select(r.h.id, null);
+    TL.clearSearch();                      // any dim comes off before the framing lands
+    if (sub) { const [a, b] = perspectiveSpan(sub); TL.frameTo(a, b); }
+    go('zoom');
+  }, [closeSearch, go]);
+
+  // The box is markup this file owns but timeline.ts wires; these listeners are
+  // additional, never replacements, so nothing about the dimming changes.
+  useEffect(() => {
+    if (!ready) return;
+    const box = document.getElementById('cmdk') as HTMLInputElement | null;
+    if (!box) return;
+
+    const onInput = () => {
+      const { rows, total } = buildRows(box.value);
+      setSRows(rows); setSTotal(total); setSSel(0);
+      if (rows.length) placeSearch(); else setSBox(null);
+    };
+    const onKey = (ev: KeyboardEvent) => {
+      const k = ev.key;
+      if ((k === 'k' || k === 'K') && (ev.metaKey || ev.ctrlKey)) return;   // ⌘K refocuses
+      const rows = sRowsRef.current;
+      if (k === 'Escape') {
+        // Escape in the field closes the LIST first and gives the field up
+        // second — two meanings, in the order a person expects them. The
+        // selcard's global handler refuses to act on an input either way, so
+        // the selection and the map highlight are never collateral.
+        ev.stopPropagation();
+        if (rows.length) { ev.preventDefault(); closeSearch(); }
+        else { box.value = ''; box.blur(); }
+        return;
+      }
+      if (!rows.length) return;
+      if (k === 'ArrowDown') { ev.preventDefault(); setSSel(i => (i + 1) % rows.length); }
+      else if (k === 'ArrowUp') { ev.preventDefault(); setSSel(i => (i - 1 + rows.length) % rows.length); }
+      else if (k === 'Enter') { ev.preventDefault(); takeRow(rows[sSelRef.current] || rows[0]); }
+    };
+    const onFocus = () => { if (box.value.trim().length >= 2) onInput(); };
+    const onBlurOut = (ev: FocusEvent) => {
+      // a click on a row is a mousedown that never blurs (the row prevents it),
+      // so any real blur means the field has genuinely been left
+      const to = ev.relatedTarget as HTMLElement | null;
+      if (to && to.closest('.tl-sugg')) return;
+      closeSearch();
+    };
+    box.addEventListener('input', onInput);
+    box.addEventListener('keydown', onKey);
+    box.addEventListener('focus', onFocus);
+    box.addEventListener('blur', onBlurOut);
+    return () => {
+      box.removeEventListener('input', onInput);
+      box.removeEventListener('keydown', onKey);
+      box.removeEventListener('focus', onFocus);
+      box.removeEventListener('blur', onBlurOut);
+    };
+  }, [ready, placeSearch, closeSearch, takeRow, buildRows]);
+
+  // The list hangs off a rect, so anything that moves the rect moves it too.
+  useEffect(() => {
+    if (!sOpen) return;
+    const onMove = () => placeSearch();
+    addEventListener('resize', onMove);
+    return () => removeEventListener('resize', onMove);
+  }, [sOpen, placeSearch]);
+
+  // The field is global chrome now, so the list no longer belongs to one view —
+  // but a NAVIGATION away from it (a row taken, ⌘K to somewhere else) should
+  // still put it away.
+  useEffect(() => { closeSearch(); }, [view, closeSearch]);
+
+  const railMode = () => VIEWS[viewRef.current].rail;
+
+  const onRailDown = (e: React.PointerEvent<HTMLDivElement>) => {
+    const m = railMode();
+    if (m === 'off' || m === 'legend') return;          // the cube's rail is a legend
+    const y = railYearAt(e.clientX); if (y === null) return;
+    e.preventDefault();
+    railDrag.current = { down: true, moved: false, y };
+    // capture so the gesture survives the pointer leaving the 64px rail — which
+    // it does constantly, because the useful direction is horizontal and the
+    // hand drifts. try/catch: a synthetic or already-released pointer id throws
+    // InvalidStateError, and losing the capture must not lose the drag.
+    try { e.currentTarget.setPointerCapture(e.pointerId); } catch { /* uncaptured, still dragging */ }
+    // NOTHING MOVES ON THE PRESS. The eased jump belongs to a CLICK, and a
+    // click is not known to be one until the pointer comes up without having
+    // travelled — start the tween here and the next 650ms of a drag are spent
+    // fighting it. (Measured: a drag that ended at 1500 settled at 1538 as the
+    // press's tween finished on top of it.)
+  };
+  const onRailMove = (e: React.PointerEvent<HTMLDivElement>) => {
+    const g = railDrag.current;
+    if (!g.down) return;
+    const y = railYearAt(e.clientX); if (y === null) return;
+    if (!g.moved && y === g.y) return;                  // jitter inside one year is not a drag
+    g.moved = true;
+    scrubTo(y, true);                                   // continuous, written straight through
+  };
+  const onRailUp = (e: React.PointerEvent<HTMLDivElement>) => {
+    const g = railDrag.current;
+    if (!g.down) return;
+    railDrag.current = { down: false, moved: false, y: 0 };
+    try {
+      if (e.currentTarget.hasPointerCapture(e.pointerId)) e.currentTarget.releasePointerCapture(e.pointerId);
+    } catch { /* never captured */ }
+    if (!g.moved) {
+      const y = railYearAt(e.clientX);                  // a click: now it can ease
+      if (y !== null) scrubTo(y, false);
+    }
+  };
+
+  // The keyboard path. The range inputs keep their arrow keys — they are the
+  // only way to operate the rail without a pointer — and land on the same code.
+  const onRailRange = (e: React.FormEvent<HTMLInputElement>) => {
+    if (railDrag.current.down) return;                  // the pointer owns the gesture
+    const y = railYear(+(e.currentTarget.value) / 10);
+    scrubTo(y, false);
   };
 
   const step = (d: number) => {
@@ -680,28 +1093,22 @@ export default function Lab() {
   };
 
   // ── ⌘K ────────────────────────────────────────────────────────────────────
-  const hits = ORDER.filter(v => {
-    const q = pq.trim().toLowerCase();
-    if (!q) return true;
-    return (VIEWS[v].name + ' ' + VIEWS[v].seg + ' ' + VIEWS[v].gist).toLowerCase().includes(q);
-  });
-  const openPalette = (open: boolean) => {
-    setPalette(open);
-    if (open) { setPq(''); setPsel(0); requestAnimationFrame(() => pinput.current?.focus()); }
+  // It used to open a modal palette. There is no modal any more — the shortcut
+  // puts the cursor in the one field, selecting whatever is already there so a
+  // second query replaces the first without a trip to the delete key.
+  const focusSearch = () => {
+    const box = document.getElementById('cmdk') as HTMLInputElement | null;
+    if (!box) return;
+    box.focus(); box.select();
+    if (box.value.trim().length >= 2) box.dispatchEvent(new Event('input', { bubbles: true }));
   };
 
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
       const t = e.target as HTMLElement | null;
       const typing = !!t && (t.tagName === 'INPUT' || t.tagName === 'TEXTAREA' || t.tagName === 'SELECT');
-      if ((e.key === 'k' || e.key === 'K') && (e.metaKey || e.ctrlKey)) { e.preventDefault(); openPalette(!palette); return; }
-      if (e.key === 'Escape') { if (palette) openPalette(false); else if (notesOpen) { setNotesOpen(false); document.getElementById('notesBtn')?.focus(); } return; }
-      if (palette) {
-        if (e.key === 'ArrowDown') { e.preventDefault(); setPsel(s => Math.min(hits.length - 1, s + 1)); }
-        if (e.key === 'ArrowUp') { e.preventDefault(); setPsel(s => Math.max(0, s - 1)); }
-        if (e.key === 'Enter') { e.preventDefault(); const v = hits[psel]; if (v) { go(v); openPalette(false); } }
-        return;
-      }
+      if ((e.key === 'k' || e.key === 'K') && (e.metaKey || e.ctrlKey)) { e.preventDefault(); focusSearch(); return; }
+      if (e.key === 'Escape') { if (notesOpen) { setNotesOpen(false); document.getElementById('notesBtn')?.focus(); } return; }
       if (typing) return;
       if (e.key === '?') { e.preventDefault(); openNotes(true); return; }
       const m = VIEWS[viewRef.current].rail;
@@ -726,7 +1133,18 @@ export default function Lab() {
     : meta.rail === 'span' ? 'railRange' : 'none';
   const yearCell = view === 'map' ? 'map' : view === 'pop' ? 'pop' : 'rail';
   const tpCell = view === 'map' ? 'map' : view === 'pop' ? 'pop' : 'none';
+  // THE HEADER CARRIES NAVIGATION AND GLOBAL CHROME, NOTHING ELSE.
+  //
+  // Two of the three multi-member groups are genuinely navigation: Map's seg
+  // moves between three different questions (borders, people, what could be
+  // known), Flow's between two different subjects. The Timeline group's seg was
+  // the odd one out — the same timeline, drawn down the page or across it,
+  // sharing one span, one set of lenses, one search and ONE CONTROL PANEL. A
+  // control of the view does not belong in the application header, so it now
+  // sits at the top of that shared panel and the group shows no seg up here.
   const seg = members.length > 1;
+  const projSeg = group === 'g-time';                   // …the one that moved
+  const segInHeader = seg && !projSeg;
   // The engraving on the scale: the 18 world snapshots for Map and Cube, the
   // population slices for People, nothing for the span views (they get a bracket).
   const stopYears: number[] =
@@ -786,8 +1204,14 @@ export default function Lab() {
               ))}
             </nav>
 
-            <div className="tl-seg" id="viewSeg" role="group" aria-label="Projection"
-              style={seg ? undefined : { display: 'none' }}>
+            {/* The seg is NAVIGATION between sibling views — Borders / People /
+                Horizon, Empires / Beliefs. The Timeline group's seg was not:
+                vertical and horizontal are two PROJECTIONS of one state, which
+                is a control of the view rather than a way to another one. It
+                has moved down to the view's own panel, where the founder went
+                looking for it. See segInHeader. */}
+            <div className="tl-seg" id="viewSeg" role="group" aria-label="View"
+              style={segInHeader ? undefined : { display: 'none' }}>
               {members.map(m => (
                 <button key={m} className="tl-seg__item" aria-pressed={m === view} onClick={() => setView(m)}>
                   {VIEWS[m].seg}
@@ -795,17 +1219,23 @@ export default function Lab() {
               ))}
             </div>
 
-            <p className="tl-gist" id="viewGist">{meta.gist}</p>
           </div>
 
           <div className="tl-rail__end">
-            <span className="tl-meta" id="viewMeta">{meta.meta}</span>
-            <button className="tl-field" id="cmdk" style={{ width: 186 }} aria-label="Search views"
-              onClick={() => openPalette(true)}>
+            {/* THE ONE SEARCH. A real input, not a button that opens a modal:
+                the founder asked for one search at the top, and a field you can
+                type into on sight is the whole point of putting it there.
+                .tl-field already styles an input, an icon and a kbd hint as one
+                control (shell.css §Field), so this is the design system's own
+                shape rather than a new one. */}
+            <div className="tl-field" style={{ width: 232 }}>
               {I.search}
-              <span style={{ flex: 1, textAlign: 'left', fontSize: 'var(--tl-text-sm)' }}>Search</span>
+              <input id="cmdk" type="text" autoComplete="off" spellCheck={false}
+                aria-label="Search history and views" aria-autocomplete="list"
+                aria-expanded={sOpen} aria-controls="searchSugg" role="combobox"
+                placeholder="Search anything…" />
               <kbd className="tl-kbd">⌘K</kbd>
-            </button>
+            </div>
             <button className="tl-iconbtn" id="notesBtn" aria-expanded={notesOpen} aria-controls="fieldNotes"
               aria-label="Field notes for this view" title="Field notes  ?"
               data-unread="true"
@@ -922,10 +1352,9 @@ export default function Lab() {
               {hd('Controls')}
               <div className="tl-panel__bd">
                 <div className="tl-cluster">
-                  <button className="btn hero" id="btn1776">Show me 1776</button>
                   <button className="btn" id="btnReset" title="Reset zoom and pan">Reset view</button>
                 </div>
-                <p className="note">Scroll to zoom · drag to pan · click any spot to drill a core sample.</p>
+                <p className="note">Scroll to zoom · drag to pan · click any territory to select it.</p>
               </div>
             </aside>
             {/* pop */}
@@ -960,24 +1389,32 @@ export default function Lab() {
             {/* THE TIMELINE GROUP SHARES ITS CONTROLS ON PURPOSE.
                 vertical and horizontal are two projections of ONE timeline state —
                 span, lenses, domains, search. The vertical port must reuse these
-                ids, not duplicate them: #catRow, #searchBox, #searchCnt,
-                #grammarRowV, #zoomReadout, #btnMozart, #btn1776z, #btnDeep,
-                #btnResetZ. The seg switches only which canvas is visible. */}
+                ids, not duplicate them: #catRow, #lensRow, #grammarRowV,
+                #zoomReadout. The seg switches only which canvas is visible. */}
             <aside {...panel('tl', ['zoom', 'vertical'], 'Controls')}>
               <div className="tl-panel__grip" aria-hidden="true" />
               {hd('Controls')}
               <div className="tl-panel__bd">
-                <div className="tl-cluster">
-                  <button className="btn hero" id="btnMozart">Mozart&rsquo;s world</button>
-                  <button className="btn" id="btn1776z">1776 in context</button>
-                  <button className="btn" id="btnDeep">Deep time</button>
-                  <button className="btn" id="btnResetZ">Reset</button>
+                {/* THE PROJECTION TOGGLE, in the panel that already owns every
+                    other thing these two views share. */}
+                <div className="tl-field-group">
+                  <span className="tl-label">Projection</span>
+                  <div className="tl-seg" id="projSeg" role="group" aria-label="Projection">
+                    {GROUPS.find(g => g.id === 'g-time')!.members.map(m => (
+                      <button key={m} className="tl-seg__item" aria-pressed={m === view}
+                        onClick={() => setView(m)}>{VIEWS[m].seg}</button>
+                    ))}
+                  </div>
                 </div>
-                <div className="searchwrap">
-                  <input type="text" id="searchBox" style={{ width: '100%' }}
-                    placeholder="Search a thread… (revolution, Prague, plague)" />
-                  <span className="cnt" id="searchCnt" />
-                </div>
+                {/* THE FOUR PRESETS AND THE PANEL SEARCH BOX ARE GONE.
+                    "Remove the random controls!" — Mozart's world, 1776 in context,
+                    Deep time and Reset were canned framings sitting where the panel's
+                    first screenful is; the wheel reaches all four spans and the rail
+                    transport reaches the rest. And "Keep only one search - one at the
+                    top": this box duplicated the search in the top bar.
+                    timeline.ts binds #searchBox and #searchCnt defensively, so their
+                    absence costs nothing; TL.q, TL.clearSearch() and TL.frameTo() are
+                    untouched and the search dropdown above still uses them. */}
                 <hr className="tl-hr" />
                 <div className="tl-field-group">
                   <span className="tl-label">Lanes</span>
@@ -1390,7 +1827,12 @@ export default function Lab() {
             </div>
           </div>
 
-          <div className="tl-scale" id="railScale" data-inert={String(meta.rail === 'legend')}>
+          {/* THE DRAG SURFACE. The pointer gesture is handled here, not by the
+              range inputs stacked on top of it — see scrubTo() above. They keep
+              the keyboard; app.css takes their pointer events away. */}
+          <div className="tl-scale" id="railScale" data-inert={String(meta.rail === 'legend')}
+            onPointerDown={onRailDown} onPointerMove={onRailMove}
+            onPointerUp={onRailUp} onPointerCancel={onRailUp}>
             <div className="tl-scale__bands" aria-hidden="true" />
             <span className="tl-scale__label tl-scale__label--start" data-edge>3000 BCE</span>
             {([[-1000, '1000 BCE', true], [1, '1 CE', false], [500, '500', true], [1000, '1000', true],
@@ -1455,23 +1897,32 @@ export default function Lab() {
           positioned ancestor would silently shift every one of them. */}
       <div className="tl-selcard" id="selCard" role="dialog" aria-label="Selection" hidden />
 
-      {/* ⌘K — required, not optional: five of eleven views sit behind a seg. */}
-      <div className="tl-cmdk" hidden={!palette} onClick={e => { if (e.target === e.currentTarget) openPalette(false); }}>
-        <div className="tl-cmdk__box" role="dialog" aria-label="Go to a view">
-          <input className="tl-cmdk__in" placeholder="Go to a view…" ref={pinput}
-            value={pq} onChange={e => { setPq(e.target.value); setPsel(0); }} />
-          <div className="tl-cmdk__list">
-            {hits.length === 0 && <div className="tl-cmdk__empty">Nothing matches that.</div>}
-            {hits.map((v, i) => (
-              <button key={v} className="tl-cmdk__row" data-sel={String(i === psel)}
-                onMouseEnter={() => setPsel(i)} onClick={() => { go(v); openPalette(false); }}>
-                <span>{VIEWS[v].name}</span>
-                <em>{GROUPS.find(g => g.members.includes(v))?.label || 'Concepts'}</em>
-              </button>
-            ))}
-          </div>
+      {/* THE SEARCH SUGGESTIONS. Out here with #tip and #selCard, for the same
+          reason: it is positioned in VIEWPORT coordinates against the box's
+          rect, so a positioned ancestor would silently shift it — and
+          .tl-panel__bd scrolls, which would clip it. */}
+      {sOpen && sBox && (
+        <div className="tl-sugg" role="listbox" aria-label="Search results"
+          style={{ left: sBox.left, top: sBox.top, width: sBox.width }}>
+          {sHits.map((h, i) => (
+            <button key={h.id} className="tl-sugg__row" role="option" aria-selected={i === sSel}
+              data-sel={String(i === sSel)}
+              onMouseDown={e => e.preventDefault()}
+              onMouseEnter={() => setSSel(i)}
+              onClick={() => takeHit(h)}>
+              <i className="tl-sugg__dot" style={{ background: catColor(h.cat, tokens()) }} aria-hidden="true" />
+              <span className="tl-sugg__name">{h.name}</span>
+              <span className="tl-sugg__meta">
+                {h.end > h.start ? `${fmtBig(h.start)} – ${fmtY(h.end)}` : fmtBig(h.start)}
+                {h.lane ? ` · ${h.lane}` : ''}
+              </span>
+            </button>
+          ))}
+          {sTotal > sHits.length && (
+            <div className="tl-sugg__more">+{sTotal - sHits.length} more — keep typing</div>
+          )}
         </div>
-      </div>
+      )}
 
       {!ready && (
         <div className="bootstate" role="status">

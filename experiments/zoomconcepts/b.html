@@ -1,0 +1,348 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>B — Zoom-stepped layout</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500;600&family=Instrument+Sans:wght@400;500;600;700&display=swap">
+<style>
+/* tokens — cheap copy of design/tokens.css */
+:root{
+  color-scheme:light;
+  --tl-ground:#E3E8E6; --tl-canvas-bg:#E7ECEA; --tl-surface:#F5F7F6; --tl-surface-2:#EDF0EF;
+  --tl-surface-over:rgba(245,247,246,.96);
+  --tl-ink:#12181A; --tl-ink-2:#505E63; --tl-ink-3:#6D7B7F;
+  --tl-rule:#C7D0CD; --tl-rule-soft:#D6DEDB; --tl-rule-strong:#ADB9B6;
+  --tl-graticule:rgba(18,24,26,.055);
+  --tl-accent:#B4382A;
+  --tl-cat-power:#2C4E8F; --tl-cat-war:#8B4A31; --tl-cat-belief:#6B3F79; --tl-cat-sci:#1F6E63;
+  --tl-cat-art:#A33A63; --tl-cat-nature:#4F6B2B; --tl-cat-society:#8A6B15; --tl-cat-reach:#16657E;
+  --sans:"Instrument Sans",system-ui,sans-serif; --mono:"IBM Plex Mono",monospace;
+}
+@media (prefers-color-scheme:dark){:root{
+  color-scheme:dark;
+  --tl-ground:#14191B; --tl-canvas-bg:#171D1F; --tl-surface:#1B2225; --tl-surface-2:#20282B;
+  --tl-surface-over:rgba(27,34,37,.96);
+  --tl-ink:#E9F0EE; --tl-ink-2:#A9B7B9; --tl-ink-3:#7E8D90;
+  --tl-rule:#2E393C; --tl-rule-soft:#283134; --tl-rule-strong:#41504F;
+  --tl-graticule:rgba(233,240,238,.06);
+  --tl-accent:#E06B58;
+  --tl-cat-power:#7098DC; --tl-cat-war:#C98058; --tl-cat-belief:#B287C0; --tl-cat-sci:#45B39D;
+  --tl-cat-art:#E0789F; --tl-cat-nature:#92B85C; --tl-cat-society:#D2A63C; --tl-cat-reach:#4FAFC9;
+}}
+*{box-sizing:border-box;margin:0;padding:0}
+html,body{height:100%}
+body{font-family:var(--sans);background:var(--tl-canvas-bg);color:var(--tl-ink);overflow:hidden;user-select:none;-webkit-font-smoothing:antialiased}
+#stage{position:absolute;inset:0;cursor:grab}
+#stage.pan{cursor:grabbing}
+canvas{display:block;width:100%;height:100%}
+#hud{position:absolute;right:10px;bottom:9px;font-family:var(--mono);font-size:9.5px;line-height:1.5;
+  color:var(--tl-ink-3);background:var(--tl-surface-over);border:1px solid var(--tl-rule);
+  border-radius:5px;padding:4px 8px;text-align:right;pointer-events:none;white-space:pre}
+#steps{position:absolute;left:10px;bottom:11px;display:flex;gap:4px;pointer-events:none}
+#steps i{width:16px;height:3px;border-radius:2px;background:var(--tl-rule);display:block}
+#steps i.on{background:var(--tl-accent)}
+</style>
+</head>
+<body>
+<div id="stage"><canvas id="cv"></canvas><div id="steps"></div><div id="hud"></div></div>
+<script src="./data.js"></script>
+<script>
+'use strict';
+/* ══════════════════════════════════════════════════════════════════════════
+   B — ZOOM-STEPPED LAYOUT
+   X zooms continuously. The vertical layout is BIT-FROZEN between LOD steps:
+   six whole layouts are computed once at load and never recomputed. Crossing
+   a step swaps one frozen layout for the next in a single 250ms settle, so
+   the movement lands inside the zoom gesture and never drifts on its own.
+   ══════════════════════════════════════════════════════════════════════════ */
+const D = window.TLDATA;
+const CSS = getComputedStyle(document.documentElement);
+const tok = n => CSS.getPropertyValue(n).trim();
+const catCol = c => tok('--tl-cat-'+c) || tok('--tl-cat-power');
+
+const SEED = ['eu-ess','eu-war','eu-sci','eu-art','as-ess','as-dyn','deep','arts','design','mozart'];
+const NOW = 2030, U = y => Math.log10(Math.max(1, NOW - y));
+const uMin = U(2026), uMax = U(-13.8e9);
+
+/* give every item a stable identity so it can be tracked across a step */
+const TOPICS = SEED.map(id => {
+  const t = D.topics[id];
+  t.items.forEach((it,i) => { it._id = id+':'+i; });
+  return {id, name:t.name, items:t.items};
+});
+const NMARKS = TOPICS.reduce((a,t) => a + t.items.length, 0);
+
+function pack(items){                                 /* cribbed from layers/v2.html */
+  const spans = items.filter(it => it.e && it.e !== it.s)
+    .sort((a,b) => a.i-b.i || (b.e-b.s)-(a.e-a.s) || a.s-b.s);
+  const rows = [];
+  for(const it of spans){
+    let r = 0;
+    for(; r < rows.length; r++) if(!rows[r].some(o => it.s < o.e && o.s < it.e)) break;
+    if(r === rows.length) rows.push([]);
+    rows[r].push(it);
+  }
+  const dots = items.filter(it => !(it.e && it.e !== it.s)).sort((a,b) => a.s - b.s);
+  return {rows, dots};
+}
+
+/* ── SIX FROZEN LAYOUTS ───────────────────────────────────────────────────
+   Each is a complete vertical world. Nothing between the steps recomputes.  */
+const NLOD = 6;
+const ROWH = [11,13,15,17,19,21], DOTH = [15,16,18,20,22,24];
+const HEADH = [13,13,14,15,15,16], GAPH = [8,9,10,12,13,14];
+const isSpan = it => it.e && it.e !== it.s;
+function filterFor(items, lod){
+  if(lod === 0) return items.filter(it => it.i <= 2);
+  if(lod === 1) return items.filter(it => it.i <= 3);
+  if(lod === 2) return items.filter(it => it.i <= 3 || (isSpan(it) && it.i <= 4));
+  if(lod === 3) return items.filter(it => it.i <= 4);
+  return items;
+}
+function buildLayout(lod){
+  const rh = ROWH[lod], dh = DOTH[lod], hh = HEADH[lod], gp = GAPH[lod];
+  const lanes = [], marks = new Map();
+  let y = 10, n = 0;
+  for(const t of TOPICS){
+    const items = filterFor(t.items, lod);
+    const p = pack(items);
+    const top = y, h = hh + p.rows.length*rh + (p.dots.length ? dh : 0) + 4;
+    let ry = top + hh;
+    for(const row of p.rows){
+      for(const it of row) marks.set(it._id, {it, y:ry, h:rh-3, dot:false});
+      ry += rh;
+    }
+    if(p.dots.length){
+      const cy = ry + dh/2;
+      for(const it of p.dots) marks.set(it._id, {it, y:cy, h:dh, dot:true});
+    }
+    lanes.push({id:t.id, name:t.name, y:top, h, n:items.length, dots:p.dots});
+    n += items.length;
+    y = top + h + gp;
+  }
+  return {lanes, marks, total:y + 10, n, lod};
+}
+const LAYOUT = []; for(let i=0;i<NLOD;i++) LAYOUT.push(buildLayout(i));
+
+/* ── LOD SELECTION — hysteresis so a step never flaps ─────────────────── */
+const UPT = [70, 150, 320, 700, 1500];
+const DOWNT = UPT.map(v => v * 0.78);
+let lod = 0;
+function pickLod(k){
+  let L = lod;
+  while(L < NLOD-1 && k >= UPT[L]) L++;
+  while(L > 0 && k < DOWNT[L-1]) L--;
+  return L;
+}
+
+/* ── VIEW ─────────────────────────────────────────────────────────────── */
+const AX = 26, SETTLE = 250;
+const stage = document.getElementById('stage'), cv = document.getElementById('cv'), ctx = cv.getContext('2d');
+let W = 0, H = 0;
+const view = {u0: U(-3000), k: 210, camY: 0};
+const xOf = y => (view.u0 - U(y)) * view.k;
+let from = null, to = LAYOUT[0], t0 = 0, tt = 1, raf = 0;
+
+const easeOut = x => 1 - Math.pow(1-x, 3);
+const lerp = (a,b,t) => a + (b-a)*t;
+const blendT = () => tt >= 1 ? 1 : easeOut(Math.min(1, (performance.now()-t0)/SETTLE));
+const laneIn = (layout, id) => layout && layout.lanes.find(l => l.id === id);
+
+function snapshotRendered(){        /* freeze exactly what is on screen right now */
+  const t = blendT(), lanes = [], marks = new Map();
+  for(const L of to.lanes){
+    const f = laneIn(from, L.id);
+    lanes.push(f ? {id:L.id, y:lerp(f.y,L.y,t), h:lerp(f.h,L.h,t)} : {id:L.id, y:L.y, h:L.h});
+  }
+  for(const [id,m] of to.marks){
+    const f = from && from.marks.get(id);
+    marks.set(id, f ? {it:m.it, y:lerp(f.y,m.y,t), h:lerp(f.h,m.h,t), dot:m.dot}
+                    : {it:m.it, y:m.y, h:m.h*t, dot:m.dot});
+  }
+  if(from) for(const [id,m] of from.marks)
+    if(!to.marks.has(id)) marks.set(id, {it:m.it, y:m.y, h:m.h*(1-t), dot:m.dot});
+  return {lanes, marks, total: from ? lerp(from.total, to.total, t) : to.total};
+}
+function setLod(L){
+  if(L === to.lod) return;
+  from = snapshotRendered();
+  to = LAYOUT[L]; lod = L; t0 = performance.now(); tt = 0;
+  loop();
+}
+function loop(){
+  if(raf) return;
+  raf = requestAnimationFrame(() => {
+    raf = 0;
+    tt = Math.min(1, (performance.now()-t0)/SETTLE);
+    paint();
+    if(tt < 1) loop();
+  });
+}
+function clampV(){
+  view.u0 = Math.max(uMin+.05, Math.min(uMax + W/view.k - .05, view.u0));
+  const tot = from ? lerp(from.total, to.total, blendT()) : to.total;
+  view.camY = Math.max(0, Math.min(Math.max(0, tot - (H-AX)), view.camY));
+}
+function resize(){
+  W = stage.clientWidth; H = stage.clientHeight;
+  const dpr = devicePixelRatio || 1;
+  cv.width = W*dpr; cv.height = H*dpr; ctx.setTransform(dpr,0,0,dpr,0,0);
+  clampV(); paint();
+}
+
+/* ── PAINT ─────────────────────────────────────────────────────────────── */
+const TICKS=[-13e9,-1e9,-100e6,-1e6,-100000,-10000,-5000,-3000,-2000,-1000,-500,0,500,1000,1200,1400,1500,1600,1700,1800,1850,1900,1950,2000,2020];
+const fmt = y => { const a = Math.abs(y);
+  if(a>=1e9) return (a/1e9).toFixed(a>=1e10?0:1)+' bn'+(y<0?' BCE':'');
+  if(a>=1e6) return (a/1e6).toFixed(0)+' m'+(y<0?' BCE':'');
+  if(a>=10000) return (a/1000).toFixed(0)+'k'+(y<0?' BCE':'');
+  return y<0 ? a+' BCE' : (y===0?'0':''+y); };
+
+function paint(){
+  const t = blendT();
+  const bg=tok('--tl-canvas-bg'), ink2=tok('--tl-ink-2'), ink3=tok('--tl-ink-3');
+  const rule=tok('--tl-rule'), grat=tok('--tl-graticule'), surf=tok('--tl-surface');
+  ctx.fillStyle = bg; ctx.fillRect(0,0,W,H);
+
+  const shown = [];
+  ctx.strokeStyle = grat; ctx.lineWidth = 1; ctx.beginPath();
+  let last = -1e9;
+  for(const tk of TICKS){
+    const x = Math.round(xOf(tk)) + .5;
+    if(x < -20 || x > W) continue;
+    if(x - last < 56) continue;
+    last = x; shown.push([x,tk]);
+    ctx.moveTo(x, AX); ctx.lineTo(x, H);
+  }
+  ctx.stroke();
+
+  ctx.save(); ctx.beginPath(); ctx.rect(0, AX, W, H-AX); ctx.clip();
+  ctx.translate(0, AX - view.camY);
+
+  /* lane grounds + names — heights lerp only across a settle */
+  for(const L of to.lanes){
+    const f = laneIn(from, L.id);
+    const ly = f ? lerp(f.y, L.y, t) : L.y, lh = f ? lerp(f.h, L.h, t) : L.h;
+    if(ly - view.camY > H || ly + lh - view.camY < 0) continue;
+    ctx.strokeStyle = grat;
+    ctx.beginPath(); ctx.moveTo(0, Math.round(ly+lh)+.5); ctx.lineTo(W, Math.round(ly+lh)+.5); ctx.stroke();
+    ctx.font = '9.5px "IBM Plex Mono",monospace'; ctx.textAlign = 'left';
+    const lab = L.name + '  ' + L.n;
+    ctx.fillStyle = bg; ctx.fillRect(0, ly, ctx.measureText(lab).width + 14, 12);
+    ctx.fillStyle = ink3; ctx.fillText(lab, 9, ly+9);
+  }
+
+  const drawMark = (m, alpha) => {
+    const it = m.it;
+    if(m.dot){
+      const x = xOf(it.s);
+      if(x < -40 || x > W+40) return;
+      ctx.globalAlpha = alpha; ctx.fillStyle = catCol(it.c);
+      ctx.beginPath(); ctx.arc(x, m.y, it.i<=2 ? 4 : 3, 0, 7); ctx.fill();
+      ctx.globalAlpha = 1;
+    } else {
+      const x0 = xOf(it.s), x1 = xOf(it.e), w = Math.max(2, x1-x0);
+      if(x1 < 0 || x0 > W) return;
+      const h = Math.max(1, m.h);
+      ctx.globalAlpha = alpha * (it.k === 'life' ? .55 : .82);
+      ctx.fillStyle = catCol(it.c);
+      ctx.beginPath(); ctx.roundRect(x0, m.y, w, h, 2); ctx.fill();
+      ctx.globalAlpha = 1;
+      if(w > 46 && h > 8){
+        ctx.save(); ctx.beginPath(); ctx.rect(x0, m.y, w, h); ctx.clip();
+        ctx.globalAlpha = alpha;
+        ctx.fillStyle = '#fff'; ctx.font = '10px "Instrument Sans",sans-serif'; ctx.textAlign='left';
+        ctx.fillText(it.t, x0+5, m.y + h/2 + 3.5);
+        ctx.restore(); ctx.globalAlpha = 1;
+      }
+    }
+  };
+  if(from && t < 1) for(const [id,m] of from.marks){
+    if(to.marks.has(id)) continue;
+    drawMark(m, 1-t);                                  /* leaving in the same settle */
+  }
+  for(const [id,m] of to.marks){
+    const f = from && from.marks.get(id);
+    if(f) drawMark({it:m.it, y:lerp(f.y,m.y,t), h:lerp(f.h,m.h,t), dot:m.dot}, 1);
+    else  drawMark(m, t);                              /* newly revealed by the step */
+  }
+
+  /* dot labels where they fit — density follows k, continuously */
+  ctx.font = '10.5px "Instrument Sans",sans-serif'; ctx.textAlign='left';
+  for(const L of to.lanes){
+    if(!L.dots.length) continue;
+    let lastR = -1e9;
+    for(let i=0;i<L.dots.length;i++){
+      const it = L.dots[i], m = to.marks.get(it._id); if(!m) continue;
+      const f = from && from.marks.get(it._id);
+      const my = f ? lerp(f.y, m.y, t) : m.y;
+      const x = xOf(it.s); if(x < -30 || x > W+30) continue;
+      const lw = ctx.measureText(it.t).width;
+      const nx = i < L.dots.length-1 ? xOf(L.dots[i+1].s) : 1e9;
+      if(x > lastR + 8 && (nx - x > lw + 14 || (it.i<=2 && nx-x > 26))){
+        ctx.globalAlpha = f ? 1 : t;
+        ctx.fillStyle = ink2; ctx.fillText(it.t, x+7, my+3.5);
+        ctx.globalAlpha = 1;
+        lastR = x + lw + 10;
+      }
+    }
+  }
+  ctx.restore();
+
+  ctx.fillStyle = surf; ctx.fillRect(0,0,W,AX);
+  ctx.strokeStyle = rule; ctx.beginPath(); ctx.moveTo(0,AX-.5); ctx.lineTo(W,AX-.5); ctx.stroke();
+  ctx.font = '9.5px "IBM Plex Mono",monospace'; ctx.textAlign='left';
+  for(const [x,tk] of shown){
+    ctx.strokeStyle = tok('--tl-rule-soft'); ctx.beginPath(); ctx.moveTo(x,0); ctx.lineTo(x,AX); ctx.stroke();
+    ctx.fillStyle = ink3; ctx.fillText(fmt(tk), x+4, 16);
+  }
+  hud();
+}
+const hudEl = document.getElementById('hud'), stepsEl = document.getElementById('steps');
+for(let i=0;i<NLOD;i++) stepsEl.appendChild(document.createElement('i'));
+function hud(){
+  hudEl.textContent =
+    'B · zoom-stepped layout\n' +
+    'px/decade ' + Math.round(view.k) + '   step ' + lod + ' of ' + (NLOD-1) + '\n' +
+    to.n + ' of ' + NMARKS + ' marks · ' + (tt < 1 ? 'settling' : 'frozen');
+  for(let i=0;i<NLOD;i++) stepsEl.children[i].className = i <= lod ? 'on' : '';
+}
+
+/* ── INPUT ─────────────────────────────────────────────────────────────── */
+let pan = null;
+stage.addEventListener('mousedown', e => {
+  if(e.button) return;
+  pan = {x:e.clientX, y:e.clientY, u0:view.u0, cy:view.camY};
+  stage.classList.add('pan');
+});
+window.addEventListener('mousemove', e => {
+  if(!pan) return;
+  view.u0 = pan.u0 + (e.clientX - pan.x)/view.k;      /* content follows the hand */
+  view.camY = pan.cy - (e.clientY - pan.y);
+  clampV(); paint();
+});
+window.addEventListener('mouseup', () => { pan = null; stage.classList.remove('pan'); });
+
+stage.addEventListener('wheel', e => {
+  e.preventDefault();
+  const px = e.clientX - stage.getBoundingClientRect().left;
+  if(!e.ctrlKey && Math.abs(e.deltaX) > Math.abs(e.deltaY)){
+    view.u0 += e.deltaX/view.k; clampV(); paint(); return;
+  }
+  if(e.shiftKey){ view.camY += e.deltaY; clampV(); paint(); return; }
+  const uAt = view.u0 - px/view.k;                    /* year under the cursor */
+  view.k = Math.max(26, Math.min(6000, view.k * Math.exp(-e.deltaY * 0.0016)));
+  view.u0 = uAt + px/view.k;                          /* ...stays under the cursor */
+  const L = pickLod(view.k);
+  clampV();
+  if(L !== to.lod) setLod(L); else paint();
+}, {passive:false});
+addEventListener('resize', resize);
+
+lod = pickLod(view.k); to = LAYOUT[lod];
+resize();
+</script>
+</body>
+</html>

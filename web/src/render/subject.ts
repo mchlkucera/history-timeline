@@ -18,7 +18,7 @@
    without dragging three.js into the first-paint bundle.
    ============================================================================= */
 
-import { BELIEFS, EVENTS, POLITIES, evId, CATBY, LANES, sharpnessOf, clamp } from './shared';
+import { BELIEFS, EVENTS, GEO, PLACES, POLITIES, evId, CATBY, LANES, pip, sharpnessOf, clamp } from './shared';
 import { REL, SPREADCAT, lvlOfWeight, peakOf, relDir, relIndex } from './relations';
 
 // ---------- the polity alias table ----------
@@ -47,7 +47,43 @@ export function territoryAt(polityId: string | null, snapshotYear: number): Set<
   return out;
 }
 
+/**
+ * THE REVERSE JOIN: the border feature the map just drew → the curated polity
+ * it belongs to IN THAT SNAPSHOT. Same time-gated table as territoryAt, read
+ * the other way, because a click on the map arrives as a sovereign STRING and
+ * the card, the cube and the relation index all speak polity ids.
+ *
+ * Sixteen (year, sovereign) pairs in the table are claimed by more than one
+ * polity — 1815 "France" is both the Kingdom and the First Empire, 1279
+ * "Mongol Empire" is both the Mongol Empire and the Yuan Dynasty. They are
+ * RANKED, never guessed: a sovereign string that IS the polity's name wins
+ * outright, then a span that actually contains the snapshot year, then the
+ * shorter span — the more specific claim. (1815 France → French Empire; 1279
+ * Mongol Empire → Mongol Empire, not Yuan; 1938 Germany → Nazi Germany.)
+ */
+export function polityForFeature(sov: string, name: string, snapshotYear: number): string | null {
+  const key = String(snapshotYear);
+  let best: PolityAlias | null = null, bestScore = -1, bestSpan = Infinity;
+  for (const a of ALIAS.values()) {
+    const list = a.match[key];
+    if (!list || !list.length) continue;
+    let hit = '';
+    for (const s of list) if (s === sov || s === name) { hit = s; break; }
+    if (!hit) continue;
+    const score = (hit.toLowerCase() === a.name.toLowerCase() ? 4 : 0)
+      + (snapshotYear >= a.start && snapshotYear <= a.end ? 2 : 0);
+    const span = Math.max(1, a.end - a.start);
+    if (score > bestScore || (score === bestScore && span < bestSpan)) {
+      best = a; bestScore = score; bestSpan = span;
+    }
+  }
+  return best ? best.id : null;
+}
+
 // ---------- the subject ----------
+/** A point on the globe, in the order Core.drill() takes it. */
+export interface Place { lon: number; lat: number; label: string }
+
 export interface Subject {
   id: string;
   name: string;
@@ -61,6 +97,21 @@ export interface Subject {
   hasCurve: boolean;           // was the peak read off a curve, or guessed?
   polity: string | null;       // the id to join the map / cube through
   band: string | null;         // lane KEY it lives in, when it lives in one
+  // ── only ever set on an AD-HOC subject minted from a map click ──
+  place?: Place | null;        // the exact point that was clicked
+  sovs?: string[];             // the sovereign strings the map draws it under
+  minimal?: boolean;           // a border feature with no curated record
+}
+
+/**
+ * A BORDER FEATURE WITH NO CURATED RECORD, so the map click still has a
+ * subject to select. Held in a tiny ring rather than a cache: it is a click
+ * log, and the ids embed the snapshot they were minted in.
+ */
+const ADHOC = new Map<string, Subject>();
+export function registerSubject(s: Subject) {
+  if (ADHOC.size > 24) ADHOC.clear();
+  ADHOC.set(s.id, s);
 }
 
 /** argmax of a [[year, weight], …] curve; null when there is no curve. */
@@ -88,6 +139,9 @@ const laneLabel = (k: string) =>
 
 export function describe(id: string | null): Subject | null {
   if (!id) return null;
+
+  const ad = ADHOC.get(id);
+  if (ad) return ad;
 
   if (id.startsWith('polity:')) {
     const pid = id.slice(7);
@@ -180,6 +234,101 @@ export function perspectiveSpan(s: Subject): [number, number] {
 
 /** Does this thing exist at all at the global moment? */
 export const aliveAt = (s: Subject, year: number) => year >= s.start && year <= s.end;
+
+/* ---------------------------------------------------------------------------
+   WHERE IS IT? — the place the core sample drills.
+
+   "Drill down" on the card means "fix THIS thing's place and show me every
+   moment under it", so the point has to be the subject's own, and there are
+   three honest sources for one, in this order of specificity:
+
+     · a polity            → the centroid of its largest territory, in the
+                             snapshot nearest the middle of its life, taken
+                             from the same alias table the highlight uses;
+     · an event or a life  → PLACEMAP, the hand-curated lat/lon the horizon
+                             view already flies its news along;
+     · a spread            → the footprint sample nearest its peak year.
+
+   Anything with none of the three has no place, and the action is not offered
+   rather than being offered at 0°, 0°. Memoised per id: the polity centroid
+   costs up to 121 point-in-polygon tests, and only the first ask pays.
+--------------------------------------------------------------------------- */
+const placeMemo = new Map<string, Place | null>();
+
+export function placeOf(s: Subject | null): Place | null {
+  if (!s) return null;
+  if (s.place) return s.place;                       // a map click carries its own
+  const seen = placeMemo.get(s.id);
+  if (seen !== undefined) return seen;
+  const p = computePlace(s);
+  placeMemo.set(s.id, p);
+  return p;
+}
+
+function computePlace(s: Subject): Place | null {
+  if (s.polity) {
+    const c = polityCentroid(s.polity);
+    if (c) return c;
+  }
+  const pl = PLACES[s.name];                          // [lat, lon, place, scope]
+  if (Array.isArray(pl) && Number.isFinite(pl[0]) && Number.isFinite(pl[1])) {
+    return { lon: pl[1], lat: pl[0], label: pl[2] || s.name };
+  }
+  if (s.id.startsWith('spread:')) {
+    const sp: any = REL.spreads.find(x => x.id === s.id.slice(7));
+    const fp: any[] = sp && Array.isArray(sp.footprint) ? sp.footprint : [];
+    if (fp.length) {
+      let best = fp[0];
+      for (const f of fp) if (Math.abs(f.year - s.peakYear) < Math.abs(best.year - s.peakYear)) best = f;
+      if (Number.isFinite(best.lon) && Number.isFinite(best.lat)) {
+        return { lon: best.lon, lat: best.lat, label: s.name };
+      }
+    }
+  }
+  return null;
+}
+
+/** The middle of the polity's biggest patch of ground, in the snapshot nearest
+ *  the middle of its life — and a point that is actually INSIDE it. */
+function polityCentroid(pid: string): Place | null {
+  const a = ALIAS.get(pid);
+  if (!a) return null;
+  const years = Object.keys(a.match).map(Number)
+    .filter(y => (a.match[String(y)] || []).length && GEO[y]);
+  if (!years.length) return null;
+  const mid = Math.round((a.start + a.end) / 2);
+  years.sort((p, q) => Math.abs(p - mid) - Math.abs(q - mid));
+  for (const y of years) {
+    const want = new Set(a.match[String(y)]);
+    let big: any = null;
+    for (const f of GEO[y]) if (want.has(f.sov) || want.has(f.name)) if (!big || f.area > big.area) big = f;
+    if (!big) continue;
+    const pt = interiorPoint(big);
+    if (pt) return { lon: pt[0], lat: pt[1], label: a.name };
+  }
+  return null;
+}
+
+/**
+ * A bounding-box centre is not a place: for anything shaped like an archipelago
+ * or a horseshoe it lands in the sea, and the core sample would then read
+ * "beyond the mapped world" under an empire. So the label centre is TESTED, and
+ * a miss falls back to a coarse grid scan for the interior point nearest the
+ * middle.
+ */
+function interiorPoint(f: any): [number, number] | null {
+  if (f.lc && pip(f.lc[0], f.lc[1], f)) return [f.lc[0], f.lc[1]];
+  const [x0, y0, x1, y1] = f.bb;
+  const cx = (x0 + x1) / 2, cy = (y0 + y1) / 2;
+  let best: [number, number] | null = null, bd = Infinity;
+  for (let i = 1; i < 12; i++) for (let j = 1; j < 12; j++) {
+    const lon = x0 + (x1 - x0) * i / 12, lat = y0 + (y1 - y0) * j / 12;
+    if (!pip(lon, lat, f)) continue;
+    const d = (lon - cx) * (lon - cx) + (lat - cy) * (lat - cy);
+    if (d < bd) { bd = d; best = [lon, lat]; }
+  }
+  return best || (f.lc ? [f.lc[0], f.lc[1]] : null);
+}
 
 /** Its strongest relations, ranked, resolvable, deduped — the card shows 3–4. */
 export function topRelations(id: string, n: number) {

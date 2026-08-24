@@ -198,6 +198,41 @@ if (Math.abs(tv(YMIN) + 151448.14) > 0.5 || tv(YMAX) !== 74) {
   console.warn('piecewise time scale anchors are off:', tv(YMIN), tv(YMAX), VFULL);
 }
 
+/* ── THE DOMAIN CLAMP — one source of truth for how far the window may travel ──
+
+   It used to be the fixed year YMAX = 2100, i.e. a right margin of 74 years. At a
+   five-thousand-year span that is 1.5% of the canvas: "now" sits welded to the
+   right edge with nothing to scroll into. The founder: "keep some empty pixels on
+   the right so that we can scroll there."
+
+   So the margin is PROPORTIONAL — the window may travel until the present sits
+   OVER of the width in from the right edge — and it is proportional IN V-SPACE,
+   which is the only version that survives deep time. Fifteen percent of a
+   5,026-YEAR span is 754 years (fine); fifteen percent of a 13.9-BILLION-year span
+   would be two billion years of empty future, and since u() is the identity for
+   future years (years-ago goes negative and never reaches the log seam) those two
+   billion years are LINEAR in v — they would swallow the whole of history. Fifteen
+   percent of the v-span is 15% of the canvas at every zoom by construction, and
+   because tv(YREF) === 0 the rule is simply v1 ≤ OVER × (v1 − v0).
+
+   The deep end keeps YMIN untouched. Both edges SHIFT, never squash: the v-span
+   going in is the v-span coming out. At the absolute maximum zoom-out the v-span
+   IS VFULL and the YMIN clamp binds first, so the whole of time still fills the
+   canvas edge to edge — there is nothing to scroll to out there anyway. */
+export const OVER = 0.15;
+/** The clamp itself, in v-space — every pan and zoom path in the app routes here. */
+export function clampV(v0: number, v1: number): [number, number] {
+  const hi = OVER * Math.max(v1 - v0, 1e-6), lo = tv(YMIN);
+  if (v1 > hi) { v0 -= (v1 - hi); v1 = hi; }
+  if (v0 < lo) { v1 += (lo - v0); v0 = lo; if (v1 > hi) v1 = hi; }
+  return [v0, v1];
+}
+/** The same clamp in years, for callers that hold d0/d1. */
+export function clampDomain(d0: number, d1: number): [number, number] {
+  const [a, b] = clampV(tv(d0), tv(d1));
+  return [ty(a), ty(b)];
+}
+
 /** "10 kya" … "10 Gya" — the deep-time tick labels (a = years ago). */
 export const fmtAgo = (a: number) => {
   const f = (x: number) => String(parseFloat(x.toPrecision(3)));
@@ -285,28 +320,146 @@ export function hexHsl(hex: string): [number, number, number] | null {
   if (mx === r) h = 60 * (((g - b) / d) % 6); else if (mx === g) h = 60 * ((b - r) / d + 2); else h = 60 * ((r - g) / d + 4);
   return [(h + 360) % 360, sat * 100, l * 100];
 }
+/** hsl → #rrggbb. Everything downstream (withA, mix, getImageData probes) is happier
+ *  with one channel model, and hex is the form the tokens already arrive in. */
+export function hslHex(h: number, s: number, l: number): string {
+  h = ((h % 360) + 360) % 360; s /= 100; l /= 100;
+  const c = (1 - Math.abs(2 * l - 1)) * s, x = c * (1 - Math.abs(((h / 60) % 2) - 1)), m = l - c / 2;
+  let r = 0, g = 0, b = 0;
+  if (h < 60) { r = c; g = x; } else if (h < 120) { r = x; g = c; } else if (h < 180) { g = c; b = x; }
+  else if (h < 240) { g = x; b = c; } else if (h < 300) { r = x; b = c; } else { r = c; b = x; }
+  const q = (v: number) => Math.round((v + m) * 255).toString(16).padStart(2, '0');
+  return '#' + q(r) + q(g) + q(b);
+}
+/** Parse #rgb / #rrggbb / rgb() / rgba() to [r,g,b]. null on anything else. */
+export function toRgb(c: string): [number, number, number] | null {
+  let m = /^#([0-9a-f]{3,8})$/i.exec(c.trim());
+  if (m) {
+    let h = m[1]; if (h.length === 3 || h.length === 4) h = h[0] + h[0] + h[1] + h[1] + h[2] + h[2];
+    return [parseInt(h.slice(0, 2), 16), parseInt(h.slice(2, 4), 16), parseInt(h.slice(4, 6), 16)];
+  }
+  m = /rgba?\(([^)]+)\)/.exec(c);
+  if (m) { const p = m[1].split(/[,\s/]+/).map(Number); return [p[0] | 0, p[1] | 0, p[2] | 0]; }
+  return null;
+}
+/**
+ * Mix `a` toward `b` by t, in straight RGB, returning hex.
+ *
+ * THE COMPOSITE-AWARE FILL. A rectangle used to be painted at 0.75 alpha, which on the
+ * light ground silently dragged every category token 25% of the way to near-white: the
+ * indigo empires came out as grey-lavender and Byzantium, Assyria and the Ottomans landed
+ * within ΔRGB 4 of one another. The plateau is now drawn OPAQUE in a colour pre-mixed a
+ * little way toward the ground, so what lands on screen is the token — softened, not
+ * drained — and the LOD / dim / edge fades still multiply on top exactly as before.
+ */
+export function mix(a: string, b: string, t: number): string {
+  const A = toRgb(a), B = toRgb(b);
+  if (!A || !B) return a;
+  const q = (i: number) => Math.round(A[i] + (B[i] - A[i]) * t).toString(16).padStart(2, '0');
+  return '#' + q(0) + q(1) + q(2);
+}
+
 const strHash = (s: string) => { let h = 0; for (let i = 0; i < s.length; i++) h = (h * 31 + s.charCodeAt(i)) >>> 0; return h; };
-// returns [css colour, its lightness 0-100] — hue barely moves so a lane still reads
-// as ONE domain, lightness moves a lot so neighbours separate. Memoized: the timeline
-// calls this for every rectangle every frame.
+// returns [hex colour, its lightness 0-100]. THE JITTER IS THEME-AWARE. Every polity in
+// the corpus is cat 'power', so this jitter is the ONLY thing separating Rome from
+// Byzantium from Assyria — and on dark it can spend that separation on lightness, which
+// is exactly what fails on light: a pale-ground rectangle that is 15 points lighter does
+// not read as "another empire", it reads as "the same empire, faded". So on light the
+// separation moves into HUE (±12°, still inside the domain's band) and saturation, and
+// the lightness barely moves — which is also what keeps the plateau chromatic.
+//
+// THE SIGNED-SHIFT BUG, and why the empires all came out the same grey-lavender.
+// strHash returns an unsigned 32-bit number, so for every id whose hash has the top
+// bit set — almost exactly half the corpus, Byzantium, the Ottomans, the Mughals and
+// Assyria among them — `s0 >> 3` coerced to int32 and came out NEGATIVE, and JS's %
+// keeps the sign. `c[1] - 6 + (-17)` then undershot the clamp and every one of those
+// ids collapsed onto the SAME floor pair (sat 36, lightness 20): measured on screen,
+// Byzantium sat at rgb(58,74,90) and the Ottomans at rgb(58,75,90), ΔRGB 1. The other
+// half of the corpus — Rome, Britain, Qing — jittered correctly all along, which is
+// why the fault read as "some empires are washed out" rather than as a broken hash.
+// `>>>` is the fix; the widened bands below are what the jitter was always meant to be.
+// Memoized: the timeline calls this for every rectangle every frame.
 const _varyCache = new Map<string, [string, number]>();
-export function varyColor(hex: string, id: string): [string, number] {
-  const key = hex + '|' + id;
+export function varyColor(hex: string, id: string, light = false): [string, number] {
+  const key = hex + '|' + id + (light ? '|L' : '');
   const hit = _varyCache.get(key); if (hit) return hit;
   const c = hexHsl(hex);
   let out: [string, number];
   if (!c) out = [hex, 50];
   else {
     const s0 = strHash(id);
-    const h = (c[0] + ((s0 % 15) - 7) + 360) % 360;
-    const sa = clamp(c[1] - 7 + ((s0 >> 3) % 14), 28, 68);
-    const li = clamp(c[2] - 15 + ((s0 >> 7) % 33), 25, 70);
-    out = [`hsl(${h.toFixed(0)} ${sa.toFixed(0)}% ${li.toFixed(0)}%)`, li];
+    // hue takes its own slice of the hash, high up and away from the two the
+    // saturation and lightness use — with all three cut from the low bits, ids that
+    // happened to agree on one tended to agree on the next, and Byzantium and the
+    // Ottomans came out ΔRGB 14 apart even after the shift was fixed. ±16° is still
+    // well inside the domain's band: every 'power' spread is unmistakably indigo.
+    const h = light ? (c[0] + (((s0 >>> 17) % 33) - 16) + 360) % 360 : (c[0] + ((s0 % 15) - 7) + 360) % 360;
+    // light: saturation carries the separation and sits ABOVE the token (the 12% mix
+    // toward the ground costs a few points back); lightness barely moves, ±6 around
+    // the token, or a paler rectangle reads as "the same empire, faded".
+    const sa = light ? clamp(c[1] - 4 + ((s0 >>> 3) % 20), 40, 86) : clamp(c[1] - 7 + ((s0 >>> 3) % 14), 28, 68);
+    const li = light ? clamp(c[2] - 6 + ((s0 >>> 7) % 13), 22, 52) : clamp(c[2] - 15 + ((s0 >>> 7) % 33), 25, 70);
+    out = [hslHex(h, sa, li), li];
   }
   if (_varyCache.size > 4000) _varyCache.clear();
   _varyCache.set(key, out);
   return out;
 }
+
+// ---------- canvas text measurement, cached ----------
+// The timeline asks "does this name fit inside its rectangle" for every visible mark on
+// every frame, and then asks again for the ellipsis fit. measureText at 300 marks × 60fps
+// is a real cost and the answer only moves when the FONT moves — so the font string is
+// part of the key, and a webfont swap (which rewrites that string) cannot leave a stale
+// metric behind. Callers must have already assigned the same string to ctx.font.
+const _twCache = new Map<string, number>();
+let _twHit = 0, _twMiss = 0;                       // instrumentation: cache hit rate
+/** [cache entries, hits, real measureText calls] since the last reset. */
+export const textStats = () => [_twCache.size, _twHit, _twMiss] as const;
+export const resetTextStats = () => { _twHit = 0; _twMiss = 0; };
+export function textW(ctx: CanvasRenderingContext2D, text: string, font: string): number {
+  const k = font + ' ' + text;
+  const hit = _twCache.get(k); if (hit !== undefined) { _twHit++; return hit; }
+  const w = ctx.measureText(text).width; _twMiss++;
+  if (_twCache.size > 20000) _twCache.clear();
+  _twCache.set(k, w);
+  return w;
+}
+/**
+ * The founder's rule: a rectangle too narrow for its full name shows as much of the name
+ * as fits plus an ellipsis, never a blank bar. Returns the full text when it fits, the
+ * truncation when at least `min` characters plus "…" fit, and '' when even that does not
+ * (the caller then falls back to the outside-label algorithm, and only then to nothing).
+ *
+ * Cached per (font, text, ~8px width bucket) and measured against the bucket FLOOR, so a
+ * continuous zoom re-uses one answer across an 8px band of widths — the result always
+ * fits the real width, and the cache turns a measureText storm into a Map lookup.
+ */
+const _elCache = new Map<string, string>();
+export function ellipsize(ctx: CanvasRenderingContext2D, text: string, maxW: number, font: string, min = 3): string {
+  if (!(maxW > 0) || !text) return '';
+  const bucket = Math.floor(maxW / 8);
+  const k = font + '\u0000' + text + '\u0000' + bucket;
+  const hit = _elCache.get(k); if (hit !== undefined) return hit;
+  const w = bucket * 8;
+  let out = '';
+  if (w > 0) {
+    if (textW(ctx, text, font) <= w) out = text;
+    else if (text.length > min && textW(ctx, text.slice(0, min) + '…', font) <= w) {
+      let lo = min, hi = text.length - 1;
+      while (lo < hi) {
+        const m = (lo + hi + 1) >> 1;
+        if (textW(ctx, text.slice(0, m) + '…', font) <= w) lo = m; else hi = m - 1;
+      }
+      const cut = text.slice(0, lo), trimmed = cut.replace(/[\s,;:·-]+$/, '');
+      out = (trimmed.length >= min ? trimmed : cut) + '…';
+    }
+  }
+  if (_elCache.size > 8000) _elCache.clear();
+  _elCache.set(k, out);
+  return out;
+}
+export function clearTextCache() { _twCache.clear(); _elCache.clear(); _varyCache.clear(); }
 
 // ---------- the two global stores ----------
 // Framework-free, mirroring the PROJECTIONS callback pattern. THE ANTI-LOOP CONTRACT:
@@ -447,11 +600,15 @@ export function fitCanvas(cv: HTMLCanvasElement, h: number) {
   const ctx = cv.getContext('2d')!; ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
   return { cw, ch: h, ctx };
 }
-// year pill drawn at the cursor — "what year am I hovering on"
+// year pill drawn at the cursor — "what year am I hovering on".
+// THE CORNERS ARE MACHINED, NOT ROUNDED. It was a 10px radius on a 20px box, i.e. a
+// stadium — a bubble, and the house language is instrument-like. 3px reads as a tag
+// stamped out of metal. Every caller (both timeline projections, flow, connections)
+// wants the same tag, so the radius lives here and nothing overrides it.
 export function yearPill(ctx: CanvasRenderingContext2D, T: Tokens, x: number, y: number, text: string, accent?: string) {
   ctx.font = fontMono(12, 600);                    // a year is a measurement
   const w = ctx.measureText(text).width + 14;
-  ctx.fillStyle = accent || T.accent; ctx.beginPath(); ctx.roundRect(x - w / 2, y, w, 20, 10); ctx.fill();
+  ctx.fillStyle = accent || T.accent; ctx.beginPath(); ctx.roundRect(x - w / 2, y, w, 20, 3); ctx.fill();
   ctx.fillStyle = T.bg; ctx.textAlign = 'center'; ctx.fillText(text, x, y + 14); ctx.textAlign = 'left';
 }
 

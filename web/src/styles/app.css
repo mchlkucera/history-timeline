@@ -92,6 +92,21 @@
 .tl-timerail__year > [data-railcell][data-on="true"] { display: contents; }
 .tl-transport > [data-railcell][data-on="true"] { display: flex; align-items: center; gap: var(--tl-space-4); }
 
+/* ── Rail: the scale is the drag surface ──────────────────────────────────────
+   The founder: "make it possible to drag bottom line. Cursor changes now but
+   you cant drag." The cursor was the range input's; the drag it promised was
+   fighting a 650ms tween restarted on every input event (Lab.tsx scrubTo).
+
+   The gesture now belongs to #railScale, which pointer-captures it. The inputs
+   stay for the KEYBOARD — they are the only way to operate the rail without a
+   pointer, and arrow keys still fire `input` on a pointer-events:none control —
+   but they no longer intercept the press. One surface, one handler.
+
+   touch-action:none because the gesture is horizontal on an element inside a
+   fixed shell: without it the first few pixels are eaten by scroll detection. */
+.tl-scale { cursor: ew-resize; touch-action: none; }
+.tl-scale .tl-range { pointer-events: none; }
+
 /* A transport with nothing in it still draws its hairline and its padding. */
 .tl-transport[data-empty="true"] { display: none; }
 
@@ -132,6 +147,84 @@
   font-size: var(--tl-text-md);
   letter-spacing: var(--tl-track-xs);
   color: var(--tl-ink-2);
+}
+
+/* ── Search suggestions ───────────────────────────────────────────────────────
+   The founder: "When searching add a dropdown with the listed options so that I
+   can click them." The canvas dimming answers "how many"; this answers "which",
+   and unlike the dimming it can be clicked.
+
+   It wears the PANEL's chrome, not the palette's, because it belongs to the
+   control it hangs off — same glass, same hairline, same radius. It is
+   viewport-positioned (Lab.tsx measures the box) and therefore lives at
+   document level: .tl-panel__bd scrolls, and an absolute child of a scroll
+   container is clipped by it. Above the panels, below the tooltip. */
+.tl-sugg {
+  position: fixed;
+  z-index: calc(var(--tl-z-pop) - 1);
+  max-height: 46vh;
+  overflow-y: auto;
+  display: flex;
+  flex-direction: column;
+  background: var(--tl-surface-over);
+  -webkit-backdrop-filter: blur(14px) saturate(1.3);
+  backdrop-filter: blur(14px) saturate(1.3);
+  border: var(--tl-border) solid var(--tl-rule);
+  border-radius: var(--tl-radius-sm);
+  box-shadow: var(--tl-shadow-panel);
+  padding: var(--tl-space-2);
+  gap: 1px;
+}
+.tl-sugg__row {
+  display: grid;
+  grid-template-columns: 7px 1fr auto;
+  align-items: baseline;
+  gap: var(--tl-space-3);
+  width: 100%;
+  padding: var(--tl-space-3) var(--tl-space-3);
+  border: 0;
+  border-radius: var(--tl-radius-xs);
+  background: transparent;
+  text-align: left;
+  cursor: pointer;
+  font: inherit;
+  color: var(--tl-ink);
+}
+.tl-sugg__row[data-sel="true"] { background: var(--tl-hover); }
+.tl-sugg__dot {
+  width: 7px; height: 7px;
+  border-radius: var(--tl-radius-full);
+  align-self: center;
+}
+.tl-sugg__name {
+  font-size: var(--tl-text-xs);
+  line-height: 1.25;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+/* The dates are the disambiguator — two "Alexandria"s are told apart by them —
+   so they are quiet but never dropped. */
+.tl-sugg__meta {
+  font-family: var(--tl-font-mono);
+  font-size: var(--tl-text-2xs);
+  font-variant-numeric: tabular-nums;
+  color: var(--tl-ink-3);
+  white-space: nowrap;
+}
+.tl-sugg__more {
+  padding: var(--tl-space-3);
+  font-size: var(--tl-text-2xs);
+  color: var(--tl-ink-3);
+  border-top: var(--tl-border) solid var(--tl-rule-soft);
+  margin-top: var(--tl-space-2);
+}
+
+/* On a phone the panel is a bottom sheet, so the box's rect is already near the
+   bottom of the screen and a list hanging off it would run off. It keeps the
+   measured left/width but takes a shorter ceiling. */
+@media (max-width: 759px) {
+  .tl-sugg { max-height: 32vh; }
 }
 
 /* ── Command palette ──────────────────────────────────────────────────────────

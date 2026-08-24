@@ -1,0 +1,486 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Selection Card — Survey</title>
+<meta name="description" content="Review page for the Timeline selection card: eight real states, both themes, real corpus content.">
+
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500;600&family=Instrument+Sans:wght@400;500;600;700&family=Instrument+Serif&display=swap">
+
+<link rel="stylesheet" href="../tokens.css">
+<link rel="stylesheet" href="selcard.css">
+
+<style>
+/* ── Review-page scaffolding only. Not part of the component.
+      Uses shell tokens exclusively so it cannot flatter the design.
+      Each specimen lives in its own document (an iframe) so that BOTH themes
+      are live on one page through the real three-state :root theming, with no
+      duplicated palette anywhere. ── */
+html, body { margin: 0; }
+body {
+  background: var(--tl-ground);
+  color: var(--tl-ink);
+  font-family: var(--tl-font-ui);
+  font-size: var(--tl-text-base);
+  line-height: var(--tl-lh-ui);
+  -webkit-font-smoothing: antialiased;
+}
+.sheetonly { background: var(--tl-ground); }
+.wrap { padding: var(--tl-space-8) var(--tl-space-9) var(--tl-space-12); max-width: 1408px; margin: 0 auto; }
+
+.hd { display: flex; align-items: flex-end; justify-content: space-between; gap: var(--tl-space-6);
+      padding-bottom: var(--tl-space-5); border-bottom: 1px solid var(--tl-rule); }
+.hd__mark { font-family: var(--tl-font-mark); font-size: var(--tl-text-md); color: var(--tl-ink); }
+.hd h1 { margin: 2px 0 0; font-size: var(--tl-text-xl); font-weight: 600; letter-spacing: var(--tl-track-tight); }
+.hd p { margin: var(--tl-space-3) 0 0; font-size: var(--tl-text-sm); color: var(--tl-ink-2); max-width: 64ch; }
+.hd__btn { flex: none; height: var(--tl-ctl); padding: 0 var(--tl-space-5); border: 1px solid var(--tl-rule);
+  border-radius: var(--tl-radius-sm); background: var(--tl-surface); color: var(--tl-ink);
+  font: inherit; font-size: var(--tl-text-sm); cursor: pointer; }
+.hd__btn:hover { background: var(--tl-surface-3); }
+
+.legend { display: flex; flex-wrap: wrap; gap: var(--tl-space-4) var(--tl-space-8); margin-top: var(--tl-space-6);
+  font-size: var(--tl-text-xs); color: var(--tl-ink-3); }
+.legend b { color: var(--tl-ink-2); font-weight: 500; }
+
+.row { display: grid; grid-template-columns: minmax(240px, 1fr) 360px 360px; gap: var(--tl-space-8);
+  align-items: start; padding: var(--tl-space-9) 0; border-bottom: 1px solid var(--tl-rule-soft); }
+.row--sheet { grid-template-columns: minmax(240px, 1fr) 390px 390px; }
+@media (max-width: 1180px) { .row, .row--sheet { grid-template-columns: 1fr; } }
+
+.spec__id { font-family: var(--tl-font-mono); font-size: var(--tl-text-2xs); letter-spacing: var(--tl-track-caps);
+  text-transform: uppercase; color: var(--tl-ink-3); }
+.spec h2 { margin: var(--tl-space-2) 0 0; font-size: var(--tl-text-lg); font-weight: 600;
+  letter-spacing: var(--tl-track-tight); }
+.spec__ctx { margin-top: var(--tl-space-4); font-family: var(--tl-font-mono); font-size: var(--tl-text-2xs);
+  font-variant-numeric: tabular-nums; color: var(--tl-ink-3); line-height: 1.7; }
+.spec__ctx span { display: block; }
+.spec__ctx em { font-style: normal; color: var(--tl-ink-2); }
+.spec p { margin: var(--tl-space-5) 0 0; font-size: var(--tl-text-sm); color: var(--tl-ink-2); max-width: 54ch; }
+.spec p b { color: var(--tl-ink); font-weight: 600; }
+
+.pane { display: flex; flex-direction: column; gap: var(--tl-space-3); }
+.pane__t { font-family: var(--tl-font-mono); font-size: var(--tl-text-2xs); letter-spacing: var(--tl-track-caps);
+  text-transform: uppercase; color: var(--tl-ink-3); }
+.pane__win { width: 360px; overflow: hidden; border: 1px solid var(--tl-rule);
+  border-radius: var(--tl-radius-md); background: var(--tl-canvas-bg); }
+.pane__win--sheet { width: 390px; height: 844px; }
+iframe { border: 0; display: block; background: var(--tl-canvas-bg); color-scheme: normal; }
+</style>
+</head>
+<body>
+<div class="wrap" id="wrap"></div>
+
+<script>
+/* =============================================================================
+   REAL CONTENT ONLY. Every name, date, note, category, relation and weight
+   below is read out of the app's own corpus:
+     web/public/data/datasets.json   POLIS, LIVES, CATMAP, PLACEMAP
+     web/public/data/relations.json  spreads + weighted links
+     web/public/data/polities.json   the snapshot -> sovereign alias table
+     web/public/data/lanes.json      the Arts lane
+   Nothing here is invented, including the relation weights and the snapshot
+   years (the corpus has eighteen: -3000 … 1783, 1815, 1880, 1914, 1938, 1994).
+   ============================================================================= */
+
+var CARD_CSS = '<link rel="preconnect" href="https://fonts.googleapis.com">'
+  + '<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>'
+  + '<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500;600&family=Instrument+Sans:wght@400;500;600;700&display=swap">'
+  + '<link rel="stylesheet" href="../tokens.css">'
+  + '<link rel="stylesheet" href="selcard.css">';
+
+/* The card floats over a live canvas, so the specimen ground is the canvas
+   ground plus the shell's own CSS graticule — that is the only way to judge
+   the translucent surface and the shadow honestly. */
+var FRAME_CSS = ''
+  + 'html,body{margin:0}'
+  + 'body{background:var(--tl-canvas-bg);font-family:var(--tl-font-ui);'
+  + 'background-image:repeating-linear-gradient(to right,var(--tl-graticule) 0 1px,transparent 1px 32px),'
+  + 'repeating-linear-gradient(to bottom,var(--tl-graticule) 0 1px,transparent 1px 32px);}'
+  + '.stage{padding:14px;display:flex;align-items:flex-start;justify-content:flex-start;min-height:100%;box-sizing:border-box}'
+  + '.phone{min-height:100vh;display:flex;flex-direction:column;align-items:stretch;justify-content:flex-end;padding:0}'
+  + '.phone .tl-selcard{width:100%}'
+  + '.rail{height:56px;flex:none;border-top:1px solid var(--tl-rule);background:var(--tl-surface);'
+  + 'display:flex;align-items:center;padding:0 12px;gap:10px;font-family:var(--tl-font-mono);'
+  + 'font-size:11px;color:var(--tl-ink-2);font-variant-numeric:tabular-nums}'
+  + '.rail .sc{flex:1 1 auto;height:14px;position:relative;border-bottom:1px solid var(--tl-rule);'
+  + 'background-image:repeating-linear-gradient(to right,var(--tl-tick) 0 1px,transparent 1px 10%);'
+  + 'background-size:100% 5px;background-position:0 100%;background-repeat:no-repeat}'
+  + '.rail .sc::after{content:"";position:absolute;left:30%;top:0;bottom:-1px;width:1px;background:var(--tl-accent)}';
+
+function esc(s) { return String(s).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;'); }
+
+/* ── the card template — this is the markup contract the integration must emit ── */
+function destBtn(d) {
+  var cls = 'tl-selcard__dest' + (d.primary ? ' tl-selcard__dest--primary' : '');
+  var a = ['class="' + cls + '"', 'type="button"', 'title="' + esc(d.title) + '"'];
+  if (d.current) a.push('aria-current="true"');
+  if (d.off) a.push('aria-disabled="true"');
+  return '<button ' + a.join(' ') + '>' + esc(d.label)
+    + (d.primary ? '<kbd class="tl-selcard__cap">↵</kbd>' : '')
+    + (d.off ? '<span class="tl-selcard__sr">unavailable — ' + esc(d.title) + '</span>' : '')
+    + '</button>';
+}
+
+function relsBlock(s) {
+  if (!s.rels || !s.rels.length) {
+    return '<div class="tl-selcard__rels" data-empty="true">'
+      + '<div class="tl-selcard__relshd">'
+      + '<span class="tl-selcard__section">Connections</span>'
+      + '<span class="tl-selcard__none">None curated yet.</span>'
+      + '</div></div>';
+  }
+  var rows = s.rels.slice(0, 4).map(function (r) {
+    return '<li><button type="button" class="tl-selcard__rel" data-goid="' + esc(r.id) + '">'
+      + '<span class="tl-selcard__rel-n">' + esc(r.name) + '</span>'
+      + '<span class="tl-selcard__rel-k">' + esc(r.kind) + '</span>'
+      + '<span class="tl-selcard__bar" style="--sc-w:' + Math.round(r.w * 100) + '%" aria-hidden="true"><i></i></span>'
+      + '<span class="tl-selcard__sr">strength ' + r.w.toFixed(2) + '</span>'
+      + '</button></li>';
+  }).join('');
+  return '<div class="tl-selcard__rels">'
+    + '<div class="tl-selcard__relshd">'
+    + '<span class="tl-selcard__section">Connections</span>'
+    + '<button type="button" class="tl-selcard__all">All ' + s.total + ' →</button>'
+    + '</div><ul class="tl-selcard__rellist">' + rows + '</ul></div>';
+}
+
+function card(s) {
+  return '<div class="tl-selcard tl-selcard--flow" data-side="r" role="dialog" aria-label="' + esc(s.name) + '">'
+    + '<div class="tl-selcard__grip" aria-hidden="true"></div>'
+    + '<div class="tl-selcard__head">'
+    +   '<div class="tl-selcard__top">'
+    +     '<div class="tl-selcard__meta" style="--tl-dot: var(--tl-cat-' + s.cat + ')">'
+    +       '<span class="tl-selcard__dot" aria-hidden="true"></span>'
+    +       '<span><b>' + esc(s.domain) + '</b> · ' + esc(s.type)
+    +       (s.band ? ' · ' + esc(s.band) : '') + '</span>'
+    +     '</div>'
+    +     '<button type="button" class="tl-selcard__x" aria-label="Close" title="Close &nbsp;Esc">'
+    +       '<svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5" aria-hidden="true">'
+    +       '<path d="M4 4l8 8M12 4l-8 8"/></svg></button>'
+    +   '</div>'
+    +   '<h3 class="tl-selcard__name">' + esc(s.name) + '</h3>'
+    +   '<div class="tl-selcard__span" data-kind="' + (s.kind || 'span') + '"'
+    +     ' style="--sc-a:' + s.a + '%;--sc-b:' + s.b + '%;--sc-i:' + s.i + '%">'
+    +     '<div class="tl-selcard__track" aria-hidden="true">'
+    +       '<span class="tl-selcard__life"></span><span class="tl-selcard__idx"></span></div>'
+    +     '<div class="tl-selcard__ends"><b>' + esc(s.dates) + '</b><span>' + esc(s.year) + '</span></div>'
+    +     (s.present ? '<div class="tl-selcard__present">' + esc(s.present) + '</div>' : '')
+    +   '</div>'
+    +   (s.note ? '<p class="tl-selcard__note">' + esc(s.note) + '</p>' : '')
+    +   (s.folds && s.folds.length
+          ? '<div class="tl-selcard__folds">' + s.folds.map(function (f) {
+              return '<div class="tl-selcard__fold"><b>' + esc(f.role) + '</b> — ' + esc(f.title)
+                + ', <time>' + esc(f.year) + '</time></div>'; }).join('') + '</div>'
+          : '')
+    + '</div>'
+    + '<div class="tl-selcard__go">'
+    +   '<span class="tl-selcard__lead" id="showin">Show this in</span>'
+    +   '<div class="tl-selcard__dests" role="group" aria-labelledby="showin">'
+    +     s.dests.map(destBtn).join('') + '</div>'
+    + '</div>'
+    + relsBlock(s)
+    + '</div>';
+}
+
+/* ── the seven states ───────────────────────────────────────────────────────── */
+var T_TL   = 'Frame the timeline on its era — what else was going on';
+var T_MAP  = 'Highlight its territory on the map, at the year you are already on';
+var T_CUBE = 'Trace its territory through time as a solid';
+
+var STATES = [
+{
+  id: 'a', tag: 'A · everything',
+  h: 'An empire, fully documented',
+  ctx: ['view <em>timeline</em>', 'year <em>1783</em>', 'id <em>polity:british-empire</em>'],
+  why: '<b>The reference state.</b> Four destinations, a note, seven curated links. The eye lands on the name, '
+     + 'then falls straight into the span strip — the only graphic and the only colour on the card. '
+     + 'The subject’s name appears exactly once, in the headline; no action label repeats it.',
+  s: {
+    name: 'British Empire', cat: 'power', domain: 'Power & states', type: 'polity', band: 'Europe',
+    dates: '1707 – 1997', year: '1783', a: 8, b: 92, i: 30, present: null,
+    note: 'the largest empire in history, ruling a quarter of the world’s land at its height',
+    dests: [
+      { label: 'Timeline', primary: true, title: 'Frame the timeline on 1417 – 2287 — what else was going on' },
+      { label: 'Map',  title: T_MAP },
+      { label: 'Cube', title: T_CUBE },
+      { label: 'Core', title: 'Core sample where it stood — every sovereign that ever held that ground' }
+    ],
+    total: 7,
+    rels: [
+      { id: 'spread:industrial-revolution', name: 'Industrial Revolution', kind: 'part-of', w: 1 },
+      { id: 'spread:railways', name: 'Railways', kind: 'origin', w: 0.75 },
+      { id: 'spread:atlantic-slave-trade', name: 'The Atlantic slave trade', kind: 'part-of', w: 0.75 },
+      { id: 'spread:telecommunications', name: 'Telegraph and telecommunications', kind: 'part-of', w: 0.7 }
+    ]
+  }
+},
+{
+  id: 'g', tag: 'A′ · same card, on the map',
+  h: 'The same empire, seen from the map',
+  ctx: ['view <em>map</em>', 'year <em>1880</em>', 'id <em>polity:british-empire</em>'],
+  why: '<b>The card does not change shape between views.</b> The destination you are standing in takes the '
+     + 'top rail’s own 2px underline, and the presence line reports what the map is actually drawing. '
+     + 'This is what replaces the old verb-flip — the card no longer has to say “See on timeline” '
+     + 'on one view and “Zoom to view” on another.',
+  s: {
+    name: 'British Empire', cat: 'power', domain: 'Power & states', type: 'polity', band: 'Europe',
+    dates: '1707 – 1997', year: '1880', a: 8, b: 92, i: 58,
+    present: '3 territories shown at 1880',
+    note: 'the largest empire in history, ruling a quarter of the world’s land at its height',
+    dests: [
+      { label: 'Timeline', primary: true, title: 'Frame the timeline on 1417 – 2287 — what else was going on' },
+      { label: 'Map', current: true, title: 'Re-fit the map on its territory at 1880' },
+      { label: 'Cube', title: T_CUBE },
+      { label: 'Core', title: 'Core sample at the point you clicked — every sovereign that ever held that ground' }
+    ],
+    total: 7,
+    rels: [
+      { id: 'spread:industrial-revolution', name: 'Industrial Revolution', kind: 'part-of', w: 1 },
+      { id: 'spread:railways', name: 'Railways', kind: 'origin', w: 0.75 },
+      { id: 'spread:atlantic-slave-trade', name: 'The Atlantic slave trade', kind: 'part-of', w: 0.75 },
+      { id: 'spread:telecommunications', name: 'Telegraph and telecommunications', kind: 'part-of', w: 0.7 }
+    ]
+  }
+},
+{
+  id: 'b', tag: 'B · no territory',
+  h: 'A person',
+  ctx: ['view <em>timeline</em>', 'year <em>1783</em>', 'id <em>entity:Wolfgang Amadeus Mozart</em>'],
+  why: '<b>Map and Cube are absent, not greyed.</b> A life can never have a territory, so a disabled cell '
+     + 'would teach the user the app is broken and would sit there on all thirty-nine lives forever. '
+     + 'Timeline stays first and stays primary; Core survives because PLACEMAP has a point for him. '
+     + 'The corpus carries no note for a life, so the card simply has none.',
+  s: {
+    name: 'Wolfgang Amadeus Mozart', cat: 'art', domain: 'Art & culture', type: 'life', band: 'Music',
+    dates: '1756 – 1791', year: '1783', a: 8, b: 92, i: 73, present: null, note: null,
+    dests: [
+      { label: 'Timeline', primary: true, title: 'Frame the timeline on 1721 – 1826 — what else was going on' },
+      { label: 'Core', title: 'Core sample at Salzburg — every sovereign that ever held that ground' }
+    ],
+    total: 2,
+    rels: [
+      { id: 'event:Mozart born', name: 'Mozart born', kind: 'part-of', w: 1 },
+      { id: 'event:Magic Flute · unfinished Requiem · dies Dec 5',
+        name: 'Magic Flute · unfinished Requiem · dies Dec 5', kind: 'part-of', w: 0.95 }
+    ]
+  }
+},
+{
+  id: 'c', tag: 'C · no relations',
+  h: 'An art movement with nothing linked to it',
+  ctx: ['view <em>timeline</em>', 'year <em>1910</em>', 'id <em>lane:AR:cubism</em>'],
+  why: '<b>The empty relations block costs one line, not a hundred pixels.</b> The section header absorbs the '
+     + 'empty state, and the word “yet” says the corpus is growing rather than that the subject is '
+     + 'minor. The founder’s own example: “I want to see Cubism in perspective.” That sentence '
+     + 'is the ink-filled cell.',
+  s: {
+    name: 'Cubism', cat: 'art', domain: 'Art & culture', type: 'movement', band: 'Arts & movements',
+    dates: '1907 – 1922', year: '1910', a: 8, b: 92, i: 25, present: null,
+    note: 'Picasso and Braque shatter the single viewpoint',
+    dests: [
+      { label: 'Timeline', primary: true, title: 'Frame the timeline on 1875 – 1955 — what else was going on' },
+      { label: 'Core', title: 'Core sample at Paris — every sovereign that ever held that ground' }
+    ],
+    total: 0, rels: []
+  }
+},
+{
+  id: 'd', tag: 'D · almost nothing',
+  h: 'A bare moment',
+  ctx: ['view <em>timeline</em>', 'year <em>1783</em>', 'id <em>event:Cambrian explosion</em>'],
+  why: '<b>The floor of the design.</b> No note, no place, no territory, no links — one destination survives, '
+     + 'and a lone cell renders as a plain full-width primary rather than a one-cell segmented control. '
+     + 'A moment has no extent, so the strip shows a pip at one end and the index at the other, and the '
+     + 'ruled gap between them is the whole statement. The presence line is suppressed here because the '
+     + 'date label is already relative — “541 million yrs ago” and “541 million yrs before 1783” are one '
+     + 'sentence too many. Nothing is greyed, so nothing looks broken.',
+  s: {
+    name: 'Cambrian explosion', cat: 'nature', domain: 'Nature & catastrophe', type: 'moment', band: 'Deep time',
+    kind: 'moment', dates: '541 million yrs ago', year: '1783', a: 8, b: 8, i: 92,
+    present: null, note: null,
+    dests: [ { label: 'Timeline', primary: true, title: 'Frame the timeline on the 80 years around it' } ],
+    total: 0, rels: []
+  }
+},
+{
+  id: 'e', tag: 'E · not present at this year',
+  h: 'Outside its span',
+  ctx: ['view <em>timeline</em>', 'year <em>1783</em>', 'id <em>polity:roman-empire</em>'],
+  why: '<b>Absence is a picture first and a sentence second.</b> The index sits in the empty margin past the '
+     + 'end of the bar; the line under it gives the distance in mono and nothing else — no box, no tint, '
+     + 'no icon, because an absence is data, not an error. Only <em>one</em> of the four destinations is '
+     + 'year-sensitive: Map hatches out with its reason on the button, while Cube and Core stay live because '
+     + 'neither depends on the year. The old card let you press “See on map” and land on an empty map.',
+  s: {
+    name: 'Roman Empire', cat: 'power', domain: 'Power & states', type: 'polity', band: 'Europe',
+    dates: '27 BCE – 395', year: '1783', a: 8, b: 28, i: 92,
+    present: 'ended 1,388 yrs before 1783',
+    note: 'the whole Mediterranean world under one state, and the model every later European empire claimed',
+    dests: [
+      { label: 'Timeline', primary: true, title: 'Frame the timeline on 449 BCE – 817 — what else was going on' },
+      { label: 'Map', off: true, title: 'Nothing to highlight — no Roman borders at 1783' },
+      { label: 'Cube', title: T_CUBE },
+      { label: 'Core', title: 'Core sample where it stood — every sovereign that ever held that ground' }
+    ],
+    total: 2,
+    rels: [
+      { id: 'event:Christianity legalized', name: 'Christianity legalized', kind: 'part-of', w: 0.7 },
+      { id: 'event:Crucifixion of Jesus', name: 'Crucifixion of Jesus', kind: 'about', w: 0.45 }
+    ]
+  }
+}
+,
+{
+  id: 'h', tag: 'H · a folded cap',
+  h: 'A dynasty that swallowed its own founding',
+  ctx: ['view <em>map</em>', 'year <em>1783</em>', 'id <em>polity:qing-dynasty</em>'],
+  why: '<b>fold.ts folds a founding dot into the spread it caps</b>, so the card has to carry the event the '
+     + 'timeline no longer draws. It is one fact about the subject, not a connection to something else, '
+     + 'so it sits with the note as a ruled aside rather than in the Connections list. Note also the '
+     + 'weakest bar in the corpus — a 0.15 “caused” link — which is exactly why the rows carry bars: '
+     + 'a bare list would present it as the equal of the 0.75 above it.',
+  s: {
+    name: 'Qing Dynasty', cat: 'power', domain: 'Power & states', type: 'polity', band: 'Asia',
+    dates: '1644 – 1912', year: '1783', a: 8, b: 92, i: 52,
+    present: '1 territory shown at 1783',
+    note: 'Manchu conquerors who doubled China’s territory and ruled a third of humanity before collapsing under Western pressure',
+    folds: [ { role: 'Founded', title: 'Qing dynasty takes China', year: '1644' } ],
+    dests: [
+      { label: 'Timeline', primary: true, title: 'Frame the timeline on 1376 – 2180 — what else was going on' },
+      { label: 'Map', current: true, title: 'Re-fit the map on its territory at 1783' },
+      { label: 'Cube', title: T_CUBE },
+      { label: 'Core', title: 'Core sample at the point you clicked — every sovereign that ever held that ground' }
+    ],
+    total: 3,
+    rels: [
+      { id: 'event:Opium War humiliates China', name: 'Opium War humiliates China', kind: 'part-of', w: 0.75 },
+      { id: 'spread:columbian-exchange', name: 'The Columbian Exchange', kind: 'part-of', w: 0.4 },
+      { id: 'spread:industrial-revolution', name: 'Industrial Revolution', kind: 'caused', w: 0.15 }
+    ]
+  }
+}
+];
+
+var SHEET = {
+  id: 'f', tag: 'F · 390 × 844',
+  h: 'The bottom sheet',
+  ctx: ['viewport <em>390 × 844</em>', 'view <em>timeline</em>', 'year <em>1783</em>'],
+  why: '<b>One sheet grammar on a phone.</b> The card becomes the same bottom sheet the docked panels become, '
+     + 'sitting on top of the time rail, with a grip and 12px top corners. Nothing reflows into a second '
+     + 'row: four destination cells across 366px give 36px touch targets at ~90px each. The relations '
+     + 'list is still the only thing that scrolls.',
+  s: JSON.parse(JSON.stringify(STATES[0].s))
+};
+
+/* ── build ──────────────────────────────────────────────────────────────────── */
+function frame(theme, html, phone) {
+  return '<!doctype html><html lang="en" data-theme="' + theme + '"><head><meta charset="utf-8">'
+    + '<meta name="viewport" content="width=device-width,initial-scale=1">'
+    + CARD_CSS + '<style>' + FRAME_CSS + '</style></head><body>'
+    + '<div class="stage' + (phone ? ' phone' : '') + '">' + html
+    + (phone ? '<div class="rail"><span>1783</span><span class="sc"></span><span>▶</span></div>' : '')
+    + '</div></body></html>';
+}
+
+/* A desktop specimen must have a viewport WIDER than 759px, or the card's own
+   narrow media query turns it into a bottom sheet — and a viewport with a real
+   height, or min(58vh, 480px) resolves against a frame that is itself being
+   sized from the card. So the frame is a genuine 820 x 900 app viewport and the
+   review page just clips a 360px window onto it. */
+function pane(theme, html, phone) {
+  var f = document.createElement('iframe');
+  f.setAttribute('title', theme + ' theme specimen');
+  f.setAttribute('scrolling', 'no');
+  f.style.width  = (phone ? 390 : 820) + 'px';
+  f.style.height = (phone ? 844 : 900) + 'px';
+  f.srcdoc = frame(theme, html, phone);
+  var win = document.createElement('div');
+  win.className = 'pane__win' + (phone ? ' pane__win--sheet' : '');
+  win.appendChild(f);
+  if (!phone) {
+    win.style.height = '480px';
+    f.addEventListener('load', function () {
+      try {
+        var c = f.contentDocument.querySelector('.tl-selcard');
+        win.style.height = (Math.ceil(c.getBoundingClientRect().height) + 28) + 'px';
+      } catch (e) {}
+    });
+  }
+  var box = document.createElement('div');
+  box.className = 'pane';
+  box.innerHTML = '<div class="pane__t">' + theme + '</div>';
+  box.appendChild(win);
+  return box;
+}
+
+function specimen(st, phone) {
+  var row = document.createElement('div');
+  row.className = 'row' + (phone ? ' row--sheet' : '');
+  row.id = 'state-' + st.id;
+  var col = document.createElement('div');
+  col.className = 'spec';
+  col.innerHTML = '<div class="spec__id">' + st.tag + '</div><h2>' + st.h + '</h2>'
+    + '<div class="spec__ctx"><span>' + st.ctx.join('</span><span>') + '</span></div>'
+    + '<p>' + st.why + '</p>';
+  row.appendChild(col);
+  var html = card(st.s);
+  row.appendChild(pane('light', html, phone));
+  row.appendChild(pane('dark',  html, phone));
+  return row;
+}
+
+(function () {
+  var q = new URLSearchParams(location.search);
+  var root = document.documentElement;
+  var t = q.get('theme');
+  if (t === 'dark' || t === 'light') root.setAttribute('data-theme', t);
+
+  var wrap = document.getElementById('wrap');
+
+  /* ?only=sheet-light | sheet-dark — a single specimen, no page chrome, so the
+     sheet can be screenshotted at an honest 390 x 844. */
+  var only = q.get('only');
+  if (only === 'sheet-light' || only === 'sheet-dark') {
+    document.body.className = 'sheetonly';
+    wrap.style.padding = '0';
+    var f = document.createElement('iframe');
+    f.style.cssText = 'width:390px;height:844px;border:0;border-radius:0';
+    f.srcdoc = frame(only === 'sheet-dark' ? 'dark' : 'light', card(SHEET.s), true);
+    wrap.appendChild(f);
+    return;
+  }
+
+  var hd = document.createElement('div');
+  hd.className = 'hd';
+  hd.innerHTML =
+    '<div><div class="hd__mark">Timeline</div><h1>The selection card</h1>'
+    + '<p>Eight states, both themes, real corpus content. Each specimen is a separate document stamped '
+    + '<code>data-theme</code>, so light and dark are both genuinely live through <code>tokens.css</code> '
+    + '— no palette is duplicated anywhere on this page. The ground behind each card is the canvas '
+    + 'colour plus the shell graticule, because the card is translucent and can only be judged over one.</p></div>'
+    + '<button class="hd__btn" id="themeBtn" type="button">Flip page chrome</button>';
+  wrap.appendChild(hd);
+
+  var lg = document.createElement('div');
+  lg.className = 'legend';
+  lg.innerHTML = '<span><b>Accent budget</b> — the span index and the focus ring. Nothing else.</span>'
+    + '<span><b>Data hue</b> — one, quoted by the domain dot.</span>'
+    + '<span><b>Order</b> — Timeline, Map, Cube, Core. Never reordered.</span>'
+    + '<span><b>Hide</b> = never applies. <b>Grey</b> = not at this year.</span>';
+  wrap.appendChild(lg);
+
+  STATES.forEach(function (st) { wrap.appendChild(specimen(st, false)); });
+  wrap.appendChild(specimen(SHEET, true));
+
+  document.getElementById('themeBtn').addEventListener('click', function () {
+    var cur = root.getAttribute('data-theme');
+    if (!cur) cur = matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light';
+    root.setAttribute('data-theme', cur === 'dark' ? 'light' : 'dark');
+  });
+})();
+</script>
+</body>
+</html>
