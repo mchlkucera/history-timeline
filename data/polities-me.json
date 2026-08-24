@@ -5,7 +5,7 @@
    "note":"the world's first cities, writing and law, in the marshes of southern Mesopotamia"},
 
   {"id":"ancient-egypt","name":"Ancient Egypt","start":-3100,"end":-30,"region":"ME",
-   "weight":[[-3100,3],[-2500,7],[-1400,8],[-1077,3],[-525,2],[-30,4]],
+   "weight":[[-3100,3],[-2500,7],[-1400,8],[-1077,3],[-525,2],[-30,2]],
    "from":[],"to":["kingdom-of-kush","roman-empire"],
    "note":"three thousand years of pharaonic rule on the Nile, from the pyramids to Cleopatra"},
 
@@ -120,7 +120,7 @@
    "note":"slave-soldier regime in Cairo that stopped the Mongols and ended the Crusader states"},
 
   {"id":"ottoman-empire","name":"Ottoman Empire","start":1299,"end":1922,"region":"ME",
-   "weight":[[1299,1],[1453,5],[1566,8],[1683,7],[1800,4],[1922,2]],
+   "weight":[[1299,1],[1453,5],[1566,9],[1683,7],[1800,4],[1922,2]],
    "from":["seljuk-empire","byzantine-empire","mamluk-sultanate"],"to":["turkey","saudi-arabia","israel"],
    "note":"took Constantinople in 1453 and ruled the Balkans, Anatolia and the Arab world for six centuries"},
 

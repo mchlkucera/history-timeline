@@ -5,7 +5,7 @@
    "note":"first continent-wide culture of the Americas; every later American society descends from this founding population"},
 
   {"id":"olmec-civilization","name":"Olmec Civilization","start":-1200,"end":-400,"region":"AM",
-   "weight":[[-1200,1],[-900,2],[-500,2],[-400,1]],
+   "weight":[[-1200,1],[-900,3],[-500,3],[-400,1]],
    "from":["clovis-culture"],"to":["zapotec-civilization","maya-city-states","teotihuacan"],
    "note":"Mesoamerica's mother culture: colossal heads, the ballgame, and the calendar and glyph traditions everyone after inherited"},
 
@@ -20,7 +20,7 @@
    "note":"largest city in the pre-Columbian Americas at roughly 125,000 people, its politics and art reaching into the Maya lowlands"},
 
   {"id":"maya-city-states","name":"Maya City-States","start":-250,"end":1697,"region":"AM",
-   "weight":[[-250,1],[250,2],[750,3],[900,2],[1300,2],[1697,1]],
+   "weight":[[-250,1],[250,2],[750,5],[900,2],[1300,2],[1697,1]],
    "from":["olmec-civilization"],"to":["new-spain"],
    "note":"never one empire but a competing constellation of kingdoms holding the only full writing system in the Americas"},
 
@@ -65,7 +65,7 @@
    "note":"Chaco Canyon's great houses and the Mesa Verde cliff dwellings, abandoned in the thirteenth-century megadrought"},
 
   {"id":"mississippian-culture","name":"Mississippian Culture","start":800,"end":1600,"region":"AM",
-   "weight":[[800,1],[1100,2],[1350,2],[1600,1]],
+   "weight":[[800,1],[1100,3],[1350,2],[1600,1]],
    "from":["clovis-culture"],"to":["british-america"],
    "note":"maize-fed mound-building chiefdoms; Cahokia was the largest city north of Mexico until Philadelphia passed it in the 1780s"},
 

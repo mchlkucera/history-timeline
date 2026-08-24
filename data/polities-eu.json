@@ -150,7 +150,7 @@
    "note":"a militarised Hohenzollern state that outfought Austria and unified Germany under Bismarck"},
 
   {"id":"german-empire","name":"German Empire","start":1871,"end":1918,"region":"EU",
-   "weight":[[1871,7],[1913,9],[1918,5]],
+   "weight":[[1871,7],[1913,8],[1918,5]],
    "from":["prussia"],"to":["nazi-germany"],
    "note":"Bismarck's unified Germany, Europe's leading industrial and military power before 1914"},
 

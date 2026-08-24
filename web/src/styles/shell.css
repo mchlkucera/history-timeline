@@ -1323,7 +1323,13 @@ html:has(body.tl-body) { height: 100%; overflow: hidden; }
 @media (max-width: 1023px) {
   :root { --tl-panel-w: 232px; --tl-switch-row: 34px; }
   .tl-switch__item { padding: 0 var(--tl-space-4); }
-  .tl-transport .tl-seg { display: none; }
+  /* A seg in the transport TIGHTENS here; it does not go. This rule used to
+     read `display: none`, which was safe only while nothing was ever put
+     there. The projection switch now is, and it is the one control of the
+     timeline views — hiding it below 1024 would leave the second projection
+     with nothing on screen to say it exists, which is exactly the failure the
+     switcher row above was built to fix. */
+  .tl-transport .tl-seg__item { padding: 0 var(--tl-space-3); }
 
   .tl-rail {
     grid-template-columns: auto minmax(0, 1fr) auto;

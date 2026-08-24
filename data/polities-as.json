@@ -115,7 +115,7 @@
    "note":"largest contiguous land empire in history, briefly making Eurasia a single connected space"},
 
   {"id":"yuan-dynasty","name":"Yuan Dynasty","start":1271,"end":1368,"region":"AS",
-   "weight":[[1271,8],[1300,9],[1350,5],[1368,3]],
+   "weight":[[1271,8],[1300,8],[1350,5],[1368,3]],
    "from":["mongol-empire","song-dynasty"],"to":["ming-dynasty"],
    "note":"first foreign dynasty to rule all China; Marco Polo's Cathay"},
 

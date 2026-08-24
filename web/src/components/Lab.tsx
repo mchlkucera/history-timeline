@@ -79,6 +79,10 @@ const GROUP_DEFAULT: Record<string, ViewId> = {
 };
 const DEFAULT_VIEW: ViewId = 'map';
 
+// The Timeline group's two members, read straight off GROUPS so the projection
+// switch in the time rail can never drift from the group it projects.
+const TIME_MEMBERS: ViewId[] = GROUPS.find(g => g.id === 'g-time')!.members;
+
 // Concepts is deliberately NOT in the switcher: it is documentation about the
 // tool, not a view of history. It stays reachable from ⌘K and from the
 // "Concepts, rated →" link in the field-notes footer.
@@ -201,7 +205,7 @@ const NOTES: Record<ViewId, Notes> = {
       <p>Rotating it buys one enormous thing: <strong>a label no longer has to fit inside the time it describes.</strong> Every mark gets its own full line of text beside it, at whatever length the title actually is, instead of being cut to the gap before the next event. On the <strong>Mozart&rsquo;s world</strong> preset that is <strong>nine of his thirteen life events named on screen at 1280&times;800 and ten at 1440&times;900, against six either way in the horizontal view</strong> &mdash; half again as many, and the ones that are there are not abbreviated.</p>
       <p><strong>Neither projection fits all thirteen in a laptop window, and this one does not claim to.</strong> Eight of them fall between 1778 and 1791 &mdash; thirteen years, about a seventh of the plot at that zoom. A label may step aside by up to 64px to find a clear line, drawing a hairline back to its true year; past that it is dropped rather than parked against the wrong decade, and the mark stays on the axis, hoverable and clickable. Twelve fit at 1920&times;1080, all thirteen at 2560&times;1440.</p>
       <p>The bands are now <strong>columns, each as wide as its own longest label needs</strong>, so the surface is usually wider than the window. <strong>Drag it like a map</strong> &mdash; up and down through time, left and right across the world, in one gesture. The strip under the plot is the whole surface in miniature; the bright frame is what you can see, and you can drag that too. A chip at an edge names the next column off-screen; click it to bring it in &mdash; and <strong>turning a lens on brings its own column in for you</strong>, so the thing you just asked to see is never the thing off the right edge.</p>
-      <p><strong>It shares this group&rsquo;s controls on purpose:</strong> vertical and horizontal are two projections of one timeline state &mdash; the same span, the same lanes, the same domains, the same search. Switching the seg changes the projection, never the subject.</p>
+      <p><strong>It shares this group&rsquo;s controls on purpose:</strong> vertical and horizontal are two projections of one timeline state &mdash; the same span, the same lanes, the same domains, the same search. The <strong>Projection</strong> switch sits in the time rail, bottom right; flipping it changes the projection, never the subject.</p>
       <p>This projection still draws the older shape grammar and only the hand-curated corpus; the new spread lanes, sharpness fades, and the polity rows land here next round.</p>
     </>,
     src: <>Faint hairlines mean a label had to step aside to stay legible &mdash; the mark is always at the true year, and a mark whose label was dropped is still drawn, still hoverable and still clickable. Column widths are measured over a window padded by a screenful of time above and below, so travelling does not make the columns breathe under your hand. A lens column sits next to the time axis rather than at the far end, because a lens is something you asked for.</>,
@@ -411,6 +415,14 @@ const I = {
   prev: <svg viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.5" aria-hidden="true"><path d="M10 3.5L5.5 8l4.5 4.5" /></svg>,
   next: <svg viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.5" aria-hidden="true"><path d="M6 3.5L10.5 8 6 12.5" /></svg>,
   close: <svg viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.5" aria-hidden="true"><path d="M4 4l8 8M12 4l-8 8" /></svg>,
+  // The two projections, drawn as what they are: lanes running down the page,
+  // and lanes running across it. Shown only where the words will not fit.
+  projV: <svg className="tl-projseg__glyph" viewBox="0 0 14 14" fill="currentColor" aria-hidden="true">
+    <rect x="2" y="2" width="2.4" height="10" rx="1" /><rect x="5.8" y="2" width="2.4" height="7" rx="1" /><rect x="9.6" y="2" width="2.4" height="10" rx="1" />
+  </svg>,
+  projH: <svg className="tl-projseg__glyph" viewBox="0 0 14 14" fill="currentColor" aria-hidden="true">
+    <rect x="2" y="2" width="10" height="2.4" rx="1" /><rect x="2" y="5.8" width="7" height="2.4" rx="1" /><rect x="2" y="9.6" width="10" height="2.4" rx="1" />
+  </svg>,
 };
 
 export default function Lab() {
@@ -915,7 +927,12 @@ export default function Lab() {
     // control the user can see
     const field = box.closest('.tl-field') as HTMLElement | null;
     const fr = field ? field.getBoundingClientRect() : r;
-    setSBox({ left: fr.left, top: fr.bottom + 4, width: Math.max(fr.width, 320) });
+    // The list has a 320px floor, so on a phone — where the field is narrower
+    // than that — hanging it off the field's left edge would push it off the
+    // right of the screen. Clamp it into the window, the way the tooltip and
+    // the layer popovers already do.
+    const w = Math.max(fr.width, 320);
+    setSBox({ left: Math.max(8, Math.min(fr.left, innerWidth - w - 8)), top: fr.bottom + 4, width: w });
   }, []);
 
   const closeSearch = useCallback(() => { setSRows([]); setSTotal(0); setSSel(0); }, []);
@@ -1154,24 +1171,36 @@ export default function Lab() {
     ? (view === 'map' ? 'yearSlider' : view === 'pop' ? 'popSlider' : 'railRange')
     : meta.rail === 'span' ? 'railRange' : 'none';
   const yearCell = view === 'map' ? 'map' : view === 'pop' ? 'pop' : 'rail';
-  const tpCell = view === 'map' ? 'map' : view === 'pop' ? 'pop' : 'none';
+  const tpCell = view === 'map' ? 'map'
+    : view === 'pop' ? 'pop'
+      : view === 'vertical' || view === 'zoom' ? 'time'
+        : 'none';
   // THE HEADER CARRIES NAVIGATION AND GLOBAL CHROME, NOTHING ELSE.
   //
   // Two of the three multi-member groups are genuinely navigation: Map's seg
   // moves between three different questions (borders, people, what could be
-  // known), Flow's between two different subjects. The Timeline group's seg was
+  // known), Flow's between two different subjects. The Timeline group's seg is
   // the odd one out — the same timeline, drawn down the page or across it,
-  // sharing one span, one set of lenses, one search and ONE CONTROL PANEL. A
-  // control of the view does not belong in the application header, so it now
-  // sits at the top of that shared panel and the group shows no seg up here.
-  // …AND THE PROJECTION TOGGLE CAME BACK UP HERE. It was moved into the shared
-  // "Controls" panel because a control of the view does not belong in the
-  // application header. That panel no longer exists for these two views — the
-  // layer panel replaced it, and the layer panel is a list of the reader's
-  // layers, not a place to keep a two-button switch that has nothing to do with
-  // them. The header is where it can live without renting a row from the lanes.
+  // sharing one span, one selection, one search and one set of layers. That is
+  // a CONTROL of the view, not a way to another one, and a control of the view
+  // does not belong in the application header. So the Timeline group shows no
+  // seg up here and the projection switch lives in the time rail (see the
+  // tp-time cell in the transport, below).
+  //
+  // WHY THE RAIL AND NOT THE TOP OF THE LAYER PANEL — the other candidate:
+  //   · the layer panel exists in the HORIZONTAL projection only (#layerPanel
+  //     is a child of the zoom section; the vertical projection has no panel at
+  //     all and takes the full stage width). A switch parked there would be a
+  //     one-way door: you could leave horizontal and never come back;
+  //   · below 760px the panel stands down entirely (app.css) — same trap;
+  //   · and every row in that panel is positioned from the canvas's own lane
+  //     geometry, every frame. A control row would be the one element in it
+  //     with a height of its own, against the geometry lock it is built on.
+  // The rail already IS the per-view control cluster: it carries the transport
+  // for the live views and the span readout for these two, and it is where the
+  // founder asked for the controls to be — beside play.
   const seg = members.length > 1;
-  const segInHeader = seg;
+  const segInHeader = seg && group !== 'g-time';
   // The engraving on the scale: the 18 world snapshots for Map and Cube, the
   // population slices for People, nothing for the span views (they get a bracket).
   const stopYears: number[] =
@@ -1232,14 +1261,18 @@ export default function Lab() {
             </nav>
 
             {/* The seg is NAVIGATION between sibling views — Borders / People /
-                Horizon, Empires / Beliefs. The Timeline group's seg was not:
+                Horizon, Empires / Beliefs. The Timeline group's is not:
                 vertical and horizontal are two PROJECTIONS of one state, which
                 is a control of the view rather than a way to another one. It
-                has moved down to the view's own panel, where the founder went
-                looking for it. See segInHeader. */}
+                lives in the time rail's control cluster instead, beside where
+                Play sits on the views that have one. See segInHeader. */}
             <div className="tl-seg" id="viewSeg" role="group" aria-label="View"
               style={segInHeader ? undefined : { display: 'none' }}>
-              {members.map(m => (
+              {/* Rendered only when this seg is navigation. Keeping the Timeline
+                  members here under display:none would leave a second, silent
+                  copy of the projection switch in the header — the very control
+                  this is getting out of it. */}
+              {segInHeader && members.map(m => (
                 <button key={m} className="tl-seg__item" aria-pressed={m === view} onClick={() => setView(m)}>
                   {VIEWS[m].seg}
                 </button>
@@ -1254,8 +1287,14 @@ export default function Lab() {
                 type into on sight is the whole point of putting it there.
                 .tl-field already styles an input, an icon and a kbd hint as one
                 control (shell.css §Field), so this is the design system's own
-                shape rather than a new one. */}
-            <div className="tl-field" style={{ width: 232 }}>
+                shape rather than a new one.
+
+                ITS WIDTH IS IN app.css NOW, not an inline 232px, because it has
+                to be able to shrink: .tl-app's one grid column is max-content,
+                so a rigid field made the whole shell 428px wide inside a 390px
+                phone — and .tl-app clips. Everything at the right-hand end of
+                the time rail lived in that clipped 38px. */}
+            <div className="tl-field tl-field--cmdk">
               {I.search}
               <input id="cmdk" type="text" autoComplete="off" spellCheck={false}
                 aria-label="Search history and views" aria-autocomplete="list"
@@ -1423,7 +1462,8 @@ export default function Lab() {
               </div>
             </aside>
             {/* THE TIMELINE GROUP'S "CONTROLS" PANEL IS GONE.
-                It held four things. PROJECTION went back to the header seg.
+                It held four things. PROJECTION moved DOWN, to the time rail's
+                control cluster — never back into the header.
                 LANES and DOMAIN were replaced outright by the layer model —
                 a layer is a subject × a kind, which is the thing both of those
                 chips were failing to say. GRAMMAR and the importance readout
@@ -1879,6 +1919,38 @@ export default function Lab() {
               <button className="btn" id="popPlay" aria-label="Play through time" aria-pressed="false">Play</button>
               <button className="tl-iconbtn" id="railNextP" aria-label="Next slice" title="Next  →"
                 onClick={() => step(1)}>{I.next}</button>
+            </div>
+            {/* THE PROJECTION SWITCH — the per-view control that used to sit in
+                the application header. It is a third kind of transport: the map
+                views step through moments, and the two timeline projections
+                switch which way the same moment-span is drawn. Same cluster,
+                same stack mechanism, so it appears and leaves with the views it
+                belongs to and costs the other nine nothing.
+
+                It carries its own caps label because this cluster's other
+                occupants are playback: an unlabelled two-button seg sitting
+                where Play sits would read as a playback mode.
+
+                EACH ITEM CARRIES BOTH A GLYPH AND ITS WORD. On a phone the rail
+                is ~390px of year readout + scale + this, and the words alone are
+                150px of it — measured, the scale collapsed to a 20px sliver and
+                "Horizontal" ran off the screen. Below 760px the label and the
+                words stand down and the glyphs — bars down the page, bars across
+                it — carry the meaning in ~50px, which is what the Play button
+                next door costs. The words are still the accessible name. */}
+            <div data-railcell="tp-time" data-on={String(tpCell === 'time')}>
+              <span className="tl-tplabel">Projection</span>
+              <div className="tl-seg" id="projSeg" role="group" aria-label="Projection">
+                {TIME_MEMBERS.map(m => (
+                  <button key={m} className="tl-seg__item" aria-pressed={m === view}
+                    aria-label={`${VIEWS[m].seg} projection`}
+                    title={`Draw the same timeline ${m === 'vertical' ? 'down the page' : 'across the page'}`}
+                    onClick={() => setView(m)}>
+                    {m === 'vertical' ? I.projV : I.projH}
+                    <span className="tl-projseg__w">{VIEWS[m].seg}</span>
+                  </button>
+                ))}
+              </div>
             </div>
           </div>
         </footer>

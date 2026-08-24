@@ -1,0 +1,50 @@
+{
+"_note": "Asia (AS) audit, 2026-08-25. Bar applied: Essentials at NORMAL = the biggest changes and the major empires; LESS = the turning points a one-page history names. Mechanics verified against layers.ts/timeline.ts: NORMAL shows imp<=4; AS war facet (1 mark) and sci facet (2 spread marks) fold into Essentials via FACET_MIN; polities render only in the Dynasties layer; the 'The Silk Road' era event is name-deduped against the same-named spread inside as-ess.",
+
+"recat": [
+  {"t": "East India Company chartered", "to": "reach",
+   "why": "the taxonomy review of 19.8 moved the trade/colonisation-movement cluster to 'reach' (Berlin Conference, Suez, Perry, Zheng He, Cape Colony); the EIC charter is exactly that cluster — trade-empire movement into Asia, not domestic 'society'. Facet unchanged (still Essentials)."}
+],
+
+"reimp": [
+  {"t": "Plassey: British rule in India begins", "to": 2,
+   "why": "colonisation is one of Asia's five turning-point beats (unification, Mongol moment, colonisation, independence, opening) and LESS currently has no colonisation beat at all; a one-page history of Asia names the British conquest of India."},
+  {"t": "Opium War humiliates China", "to": 2,
+   "why": "the start of China's century of humiliation — the China half of the colonisation beat; every one-page history names it, and at imp 3 (3-year span) it never reaches LESS."},
+  {"t": "Meiji Restoration — Japan sprints", "to": 2,
+   "why": "the most consequential Asian turning point of the 19th century — the one non-Western country that industrialised; one-page material, currently invisible at LESS."},
+  {"t": "Deng opens China", "to": 2,
+   "why": "'the opening' the founder's arc ends on; the largest economic transformation in history. LESS currently ends Asia's story at 1947."},
+  {"t": "Mughal Empire founded", "to": 2,
+   "why": "the major empires of India at LESS are currently Maurya and Gupta only (via the long-span rule); the Mughals — a quarter of world GDP at peak — are named by any one-page history. As a moment it needs imp 2 to reach LESS."},
+  {"t": "Song dynasty — paper money, gunpowder", "to": 3,
+   "why": "Song at 4 while Han/Tang/Gupta sit at 3 undersells the medieval world's richest, most inventive economy; at 3 its 319-year span also reaches LESS via the long-span rule, alongside its peers. NORMAL unchanged."},
+  {"t": "Buddha born", "to": 3,
+   "why": "the imp-2 life bar 'The Buddha' (lives.json) already carries the LESS beat; keeping the birth moment at 2 draws a redundant dot on the same year at the sparsest view. Demoting to 3 mirrors 'Confucius born' (3) next to the Confucius life bar. Still shows at NORMAL."},
+  {"t": "polity:yuan-dynasty", "to": 8,
+   "why": "peak 9 makes Yuan a level-1 bar alongside mongol-empire (peak 10) which already spans 1206-1368 — the same hegemony billed twice at the Dynasties layer's top level for a century. Peak 8 keeps Yuan a major (level 2) without the double billing."}
+],
+
+"flags": [
+  {"t": "Shang dynasty — Chinese writing",
+   "issue": "title fuses a polity with a technology milestone — the founder's exact 'Writing is a technology topic' rule. The dynasty belongs in Essentials; the origin of Chinese writing is a sci topic. Retitle to 'Shang dynasty' (or 'Shang dynasty — first Chinese state') and, if wanted, add an oracle-bone-script mark to a Science stream."},
+  {"t": "Song dynasty — paper money, gunpowder",
+   "issue": "the epithet duplicates the 'paper' and 'gunpowder' spreads that already render in the AS band; retitle to plain 'Song dynasty' (the polity note already carries the inventions)."},
+  {"t": "spread:paper",
+   "issue": "structural: technology spreads (paper, gunpowder) land in AS Essentials because as-sci has only 2 marks, under FACET_MIN=4, so the sci facet folds into the spine — the Writing-in-Essentials pattern recurring by another route. Fix by seeding AS science marks (movable type, compass, civil-service examinations, Indian decimal zero) so as-sci becomes a real facet, or accept techs in the spine knowingly."},
+  {"t": "The Silk Road",
+   "issue": "the overrides.json era 'The Silk Road' (imp 2) and the spread 'silk-road' share a name; the renderer's per-layer name-dedup suppresses the era event in as-ess, so its imp 2 is dead weight and the spread's own level (peak 9 -> lvl 1) is what actually shows. One representation should own the topic."},
+  {"t": "Maurya Empire unites India",
+   "issue": "event starts -321 but polity maurya-empire starts -322; same thing, two dates one year apart across streams."},
+  {"t": "Indus Valley civilization",
+   "issue": "event spelled 'civilization', polity named 'Indus Valley Civilisation' (s/z) — same entity in two streams with divergent spellings; harmless today because they live in different layers, but fragile if names ever become join or dedup keys (the renderer's dedup is exactly name-based)."},
+  {"t": "polity:mongol-empire",
+   "issue": "mongol-empire (1206-1368, peak 10) and yuan-dynasty (1271-1368, peak 9) overlap for a century; after 1271 they are the same court. Either end mongol-empire at 1271 (fragmentation into khanates) with 'to': ['yuan-dynasty'], or keep the long bar and lower Yuan's billing (reimp above proposes the latter)."},
+  {"t": "polity:tokugawa-shogunate",
+   "issue": "gap check on the events stream it anchors: AS has no events between 1912 and 1947 — no Japanese invasion of China (1937), no WWII in the Pacific, no Hiroshima (1945), and nothing after for the Korean War or Vietnam War. A course on Asia covers all of these; WWII lives only as an EU band event. Biggest single content gap in the band."},
+  {"t": "polity:khmer-empire",
+   "issue": "Korea, Vietnam and Southeast Asia exist only as polities in the Dynasties layer — zero AS events for them (no Angkor, no hangul/Sejong, no Vietnamese independence 939). Essentials tells no story outside China-India-Japan-Mongols; at minimum Angkor at its height is one-page material for the region."},
+  {"t": "polity:gokturk-khaganate",
+   "issue": "curated-list gaps in polities-as.json: no Kushan Empire (the Rome-India-China link and Buddhism's conduit into China), no Tibetan Empire (took Chang'an in 763), no Chola (south Indian maritime power). Each outranks several current level-4 entries."}
+]
+}

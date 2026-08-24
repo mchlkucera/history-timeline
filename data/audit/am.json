@@ -1,0 +1,64 @@
+{
+ "_scope": "Americas (band AM) + curated lanes: Arts & movements, Design (lanes.json), Music (MU), Science & ideas (SC), Mozart (MZ). Audited against: LESS = turning points a one-page history names, NORMAL = biggest changes + major empires (what a course covers), DETAILED = everything. Facts checked in code: NORMAL shows imp<=4; movements-kind LESS shows only spans imp<=3; region LESS shows imp<=2 or spans>=200y imp<=3; FACET_MIN=4.",
+
+ "recat": [
+  {"t": "Cortés destroys the Aztecs",
+   "to": "power",
+   "why": "Empire-ending regime change, like 'Western Rome falls' (cat power) — the title itself is about the destruction of a state, not a campaign. As cat war it is siphoned into a marginal 4-item Americas·Wars layer and vanishes from Essentials, which fails the founder bar: the Spanish conquest IS the biggest change in the hemisphere's history."},
+  {"t": "Pizarro seizes the Inca",
+   "to": "power",
+   "why": "Same reasoning: state destruction and succession (Inca → New Spain), the essential-of-place. Together with the Cortés recat this drops AM's war count to 2 (< FACET_MIN 4), so the Wars footnote folds back into Essentials and US Civil War + September 11 return there too — deliberate."}
+ ],
+
+ "reimp": [
+  {"t": "Cortés destroys the Aztecs", "to": 2,
+   "why": "A one-page history of the Americas names the conquest. At imp 3 with a 2-year span it misses LESS entirely; imp 2 puts the hemisphere's hinge at the turning-points level, in parity with 'Declaration of Independence' (2)."},
+  {"t": "Bolívar & Latin American independence", "to": 2,
+   "why": "Independence of an entire continent; every one-page history of the Americas names it alongside US independence, which already sits at 2. At imp 3 with a 16-year span it fails both LESS gates."},
+  {"t": "Last three symphonies in six weeks", "to": 4,
+   "why": "Mozart lane NORMAL is worded 'the works that matter' — symphonies 39–41 are exactly that; imp 5 hides them until DETAILED while job-hunting in Paris (4) shows."},
+  {"t": "lane:Cubism", "to": 4,
+   "why": "Movements LESS is 'the long dominant movements only — the periods you can name'. Cubism (15 yrs) sits inside the Modernism umbrella (imp 2) which is already at LESS; at 4 it still shows at NORMAL ('every movement'). LESS then reads Gothic→Renaissance→Baroque→Neoclassicism→Romanticism→Impressionism→Modernism→Contemporary: a clean spine of nameable periods."},
+  {"t": "lane:Surrealism", "to": 4,
+   "why": "Same recalibration: a movement inside Modernism's LESS-level umbrella, not itself a long dominant period. Stays at NORMAL."},
+  {"t": "lane:Abstract Expressionism", "to": 4,
+   "why": "Same: 22 years inside the Modernism umbrella. NORMAL, not LESS."},
+  {"t": "lane:Pop Art", "to": 4,
+   "why": "Same: 20 years inside the Modernism umbrella. NORMAL, not LESS."},
+  {"t": "lane:Futurism", "to": 4,
+   "why": "Opposite direction: imp 5 marks 'short-lived and the marginal', but Futurism ran 35 years and shaped design, architecture and propaganda aesthetics — a course covers it, so it belongs at NORMAL."},
+  {"t": "polity:olmec-civilization", "to": 3,
+   "why": "New weight peak 3 (currently 2 → level 5, DETAILED only). Its own note calls it 'Mesoamerica's mother culture… everyone after inherited' — a course covers the Olmec, so the polity must show at NORMAL like Toltec and Maya already do."},
+  {"t": "polity:maya-city-states", "to": 5,
+   "why": "New weight peak 5 (currently 3). The pre-Columbian trio anyone can name is Maya–Aztec–Inca; Aztec peaks at 5 and Inca 6 and both make LESS, while the Maya — millions of people, 2000 years, the only full writing system in the Americas — sit at Toltec level and miss it."},
+  {"t": "polity:mississippian-culture", "to": 3,
+   "why": "New weight peak 3 (currently 2 → DETAILED only). Cahokia was the largest city north of Mexico until the 1780s (the entry's own note); North American surveys cover it, so NORMAL."}
+ ],
+
+ "flags": [
+  {"t": "Olmec — first American civilization",
+   "issue": "Title misleads: Caral–Supe/Norte Chico in Peru (~2600 BC) predates the Olmec by a millennium; 'first Mesoamerican civilization' would be true. Also the event span starts −1500 while polity olmec-civilization starts −1200 — same thing, two dates; pick one convention."},
+  {"t": "UN founded · US superpower era",
+   "issue": "Compound title welds a global institution to a US power shift; the UN's founding is not an Americas essential per se. Consider retitling to the superpower-era claim or splitting."},
+  {"t": "US Civil War",
+   "issue": "Facet cliff, structural: AM's war count sits exactly at FACET_MIN=4, so a marginal Americas·Wars layer currently exists and pulls the conquest, the Civil War and September 11 OUT of Essentials. The two recats above deliberately dissolve it (count drops to 2, folds back). If the recats are rejected, this cliff still needs a decision — a 4-item Wars layer that strips Essentials of its biggest changes fails the founder bar."},
+  {"t": "lane:Music",
+   "issue": "Structural: movements-kind LESS requires spans imp<=3, and MU has no movement spans at all (its eras — Baroque, Viennese Classicism — live in the Arts lane). At LESS, Music shows only the Bach/Mozart/Beethoven life bars; every 'moment' including imp-3 ones is hidden."},
+  {"t": "lane:Science & ideas",
+   "issue": "Structural, same mechanism: SC is moment-only apart from two lives, so at LESS the lane shows only Einstein's and Turing's bars — Gutenberg (imp 2), Copernicus (2), Newton (2), Darwin (2) are all invisible because they are moments. The LESS wording cannot be honoured by this corpus + gate."},
+  {"t": "lane:Design",
+   "issue": "Structural: movements-kind LESS admits any span imp<=3, so five designer lives (William Morris, Walter Gropius, Ludwig Mies van der Rohe, Le Corbusier, Dieter Rams) appear at LESS among 'the periods you can name'. Either intended curation or lives need their own gate; demoting the five to 4 would erase the titan-vs-rest distinction, so flagged rather than proposed."},
+  {"t": "Albert Einstein",
+   "issue": "Inconsistent home for scientist lives: Einstein and Turing are banded SC (appear in the Science & ideas lane), while Newton, Darwin, Copernicus, Galileo and Curie are banded EU (eu-sci). The lane shows two modern lives but none of the tradition's founders; pick one convention."},
+  {"t": "polity:aboriginal-australian-nations",
+   "issue": "Oceania filed under region AM — Australia is not the Americas. No Oceania band exists; either add one or make the AM label honest ('Americas & Oceania'). Also the −50000 start makes this one polity 5× longer than all recorded history; deliberate, but it dominates any zoomed-out polity view."},
+  {"t": "polity:lapita-polynesian-expansion",
+   "issue": "Oceania filed under region AM (Bismarck Archipelago to Polynesia); same misfile as aboriginal-australian-nations."},
+  {"t": "polity:hawaiian-kingdom",
+   "issue": "Oceania filed under region AM. Geographically it passes regionOf (lon < −25 wraps the Pacific into AM), culturally it is Polynesia; same decision needed."},
+  {"t": "polity:maori-aotearoa",
+   "issue": "Oceania (New Zealand) filed under region AM; same misfile."},
+  {"t": "polity:australia",
+   "issue": "Oceania filed under region AM; the modern Commonwealth of Australia rendered inside the Americas band is the most visible symptom of the missing Oceania region."}
+ ]
+}

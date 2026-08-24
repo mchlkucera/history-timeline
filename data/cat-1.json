@@ -56,7 +56,7 @@
   },
   {
    "t": "Farming begins",
-   "cat": "society",
+   "cat": "sci",
    "type": "moment",
    "flag": false
   },
@@ -152,7 +152,7 @@
   },
   {
    "t": "Viking age begins (Lindisfarne)",
-   "cat": "war",
+   "cat": "reach",
    "type": "moment",
    "flag": false
   },
@@ -206,7 +206,7 @@
   },
   {
    "t": "Constantinople falls to Ottomans",
-   "cat": "war",
+   "cat": "power",
    "type": "moment",
    "flag": false
   },
@@ -236,7 +236,7 @@
   },
   {
    "t": "Defenestration of Prague",
-   "cat": "power",
+   "cat": "war",
    "type": "moment",
    "flag": false
   },

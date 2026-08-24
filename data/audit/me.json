@@ -1,0 +1,62 @@
+{
+ "recat": [
+  {
+   "t": "Baghdad founded — Islamic golden age",
+   "to": "power",
+   "why": "the 762 event is the founding of the Abbasid imperial capital — a power moment. Its 'sci' tag comes from the golden-age tail welded into the title; as sci it either folds confusingly into Essentials (me-sci has only 2 members, under FACET_MIN) or, once a real Science facet exists, would strip the golden age out of Essentials entirely. Recat to power keeps the moment in Essentials; the science story belongs to a proper golden-age episode in sci (see flags)."
+  }
+ ],
+ "reimp": [
+  {
+   "t": "Arab conquests: Spain to Persia",
+   "to": 2,
+   "why": "the single biggest transformation of the region — one century turns the Mideast and North Africa from Roman/Persian/Christian/Zoroastrian into the Arab-Islamic world. Any one-page history names it; imp 2 puts it at LESS in the Wars facet where it lives."
+  },
+  {
+   "t": "Berlin Conference carves up Africa",
+   "to": 2,
+   "why": "the Scramble for Africa is the turning point of the continent's modern history — a one-page Africa history names the partition. At imp 3, LESS currently shows nothing of Africa after the pyramids except the slave-trade ribbon."
+  },
+  {
+   "t": "Year of Africa — 17 nations born",
+   "to": 2,
+   "why": "decolonization is the counterpart turning point to the partition — a third of the world's states date from this decade. One-page tier, and pairs with Berlin 1884 so LESS tells the whole colonial arc, not half of it."
+  },
+  {
+   "t": "Ottomans take Egypt & the caliphate",
+   "to": 3,
+   "why": "the moment the Arab world becomes Ottoman for four centuries and the caliphate moves to Istanbul — a bigger change than its imp-4 peers (Kadesh, Cape Colony). Solidly 'what a course would cover'; stays NORMAL, ranks above regional detail."
+  },
+  {
+   "t": "polity:ottoman-empire",
+   "to": 9,
+   "why": "peak 8 puts six centuries of tri-continental superpower in the same tier as Assyria and a rung BELOW the 89-year Umayyad caliphate (9). By the file's own 'how big did this ever get' scale the Ottomans at 1550-1680 belong in the >=9 tier with Achaemenid Persia and the Abbasids."
+  }
+ ],
+ "flags": [
+  {
+   "t": "spread:writing",
+   "issue": "THE FOUNDER'S NAMED MISS, and it is structural, not a category error: the spread is already kind=technology -> cat sci (SPREADCAT in relations.ts), but layers.ts build() counts me-sci at only 2 members (this spread + one event), under FACET_MIN=4, so no me-sci layer is created and layerIdFor() folds the 5,000-year level-1 Writing ribbon into me-ess — exactly what the founder is seeing. Fix in layers.ts (exempt lvl-1/2 spreads from the footnote fold, or lower FACET_MIN for sci) and/or grow the ME science corpus: the alphabet (Phoenicia), Egyptian mathematics/medicine, al-Khwarizmi's algebra, the House of Wisdom, African ironworking would give the facet real members. Do NOT lower the spread's weight to hide it — peak 9.8 is honest."
+  },
+  {
+   "t": "Baghdad founded — Islamic golden age",
+   "issue": "double-barrelled title welds a 762 founding moment to a 500-year intellectual era. Recat to power proposed above; the golden age itself deserves its own sci episode/era (~750-1258, House of Wisdom to the Mongol sack), which would also give me-sci a real member."
+  },
+  {
+   "t": "polity:colonial-africa",
+   "issue": "self-described 'composite ribbon for the European partition' — it is not a polity and its from/to lineage semantics are fiction. Deliberate per its note, but the honest shape is an era-kind spread; as a polity it draws as a peak-7 'empire' named Colonial Africa in the States & empires layer."
+  },
+  {
+   "t": "polity:nok-culture",
+   "issue": "an archaeological culture, not a state or polity; no ruler, border or lineage. Peak 1 hides it below DETAILED anyway — either move it to a sci/art context (earliest West African ironworking and sculpture) or accept it as a category stretch."
+  },
+  {
+   "t": "polity:ancient-egypt",
+   "issue": "weight curve ends RISING: [-525,2],[-30,4] has Ptolemaic Egypt climbing to 4 at the moment Rome absorbs it. Late Ptolemaic Egypt was a declining client state; the -30 value looks like a typo or a misplaced Cleopatra-era bump — the curve should fall to ~1-2 at -30."
+  },
+  {
+   "t": "ME events 1884-1948 gap",
+   "issue": "no event marks the Ottoman collapse and WWI partition of the Middle East (1918-1923, mandates/Sykes-Picot) — the origin of the entire modern map — and nothing marks the Iranian Revolution (1979). NORMAL cannot show 'the biggest changes' of the 20th-century Mideast with a blank between Berlin 1884 and Israel 1948; the polity ribbons (ottoman ends 1922, turkey/iran start) carry it only implicitly."
+  }
+ ]
+}

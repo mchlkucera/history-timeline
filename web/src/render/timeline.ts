@@ -44,6 +44,10 @@ interface SpreadItem {
   cat: string; type: string; lvl: number; sharpness: number;
   note: string; tags: string; peak: number; row: number;
   ev: any[] | null;
+  // the item's extent in v-space, computed ONCE with the corpus. Occupancy is
+  // decided in v against the latched window, so this is on the hot path of
+  // every frame and there is no reason to keep paying tv() for it.
+  v0: number; v1: number;
 }
 interface LSpread { it: SpreadItem; row: number; x0: number; x1: number; lodA: number; isMatch: boolean }
 interface LEvent { ev: any[]; id: string; x0: number; row: number; lodA: number; mode: 'right' | 'left' | 'none'; labelW: number; isMatch: boolean }
@@ -118,7 +122,75 @@ interface Layout {
 
    Together they replace the 180ms discrete-moment ease that was on the table:
    ONE mechanism, not two, and it covers cases an enumerated ease would miss. */
-const PAD_FRAC = 0.30;      // soft pan window: 30% of the viewport each side
+/* ── AND WHAT REPLACED IT: THE ZOOM LADDER ───────────────────────────────────
+
+   The note above is the history. The founder reviewed three prototypes of the
+   zoom and picked B: "Add in the zoom stepping that enlarges rectangles.
+   include more then 5 steps."
+
+   So the ZOOM is no longer a continuous layout input. It is a LADDER of 13
+   rungs, geometric in v-space (shared.ts's one piecewise scale, which is
+   literally years for the last ten thousand of them and log-of-years-ago before
+   that), each rung about 2.12× the next. Standing on a rung fixes TWO things at
+   once, and they are the two the old continuous ramp used to smear:
+
+     · WHAT IS VISIBLE — one importance tier, 1..5, a hard gate. The old
+       alphaFor() ramp faded a level in across a 1.6× band of spans, which is
+       what made every wheel notch a layout event.
+     · HOW BIG THE MARKS ARE — a pitch multiplier on the row height, the
+       rectangle heights and the label sizes, 0.62 at the Big Bang to 1.62 at a
+       decade. Zoomed out: many slim rows. Zoomed in: fewer, fatter, readable
+       ones. TIER_H is scaled WHOLE, so the importance ratios inside a step are
+       exactly the ratios outside it.
+
+   BETWEEN RUNGS THE LAYOUT IS BIT-FROZEN. Wheeling inside a rung moves the
+   marks along x and changes nothing else: not a height, not a visibility, not
+   a trim, not a label. That is not an aspiration, it is arithmetic — every
+   layout input is either a constant of the rung or a function of the LATCHED
+   WINDOW (see _lwV0 below), and neither moves while the span does.
+
+   CROSSING a rung is ONE eased settle of SETTLE_MS, riding the same slew
+   limiter as everything else, and each threshold carries ±HYST of hysteresis so
+   wheeling back and forth over a boundary cannot chatter between two layouts.
+
+   THE STEP IS A FUNCTION OF THE V-SPAN, NOT THE YEAR SPAN. Panning is a
+   translation in v and preserves the v-span exactly; it does NOT preserve the
+   year span, because ty() is nonlinear past the seam — a pan in deep time can
+   double the years on screen without changing the zoom at all. Reading the
+   ladder in v is what makes "pan never changes the step" true by construction
+   rather than by luck. */
+interface ZStep {
+  v: number;                // enter this rung when the v-span falls to or below this
+  tier: number;             // importance visible here, 1..5 (before the layer's detail offset)
+  pitch: number;            // multiplier on row pitch, rectangle height and label size
+  ev: number;               // how many rows the event stratum may open
+  name: string;             // what this rung is, in words
+}
+const STEPS: ZStep[] = [
+  { v: Infinity, tier: 1, pitch: 0.62, ev: 1, name: 'deep time' },
+  { v: 70000, tier: 1, pitch: 0.68, ev: 1, name: 'the ice' },
+  { v: 33000, tier: 2, pitch: 0.74, ev: 2, name: 'prehistory' },
+  { v: 15500, tier: 2, pitch: 0.80, ev: 2, name: 'civilisations' },
+  { v: 7200, tier: 2, pitch: 0.87, ev: 2, name: 'the long ages' },
+  { v: 3400, tier: 3, pitch: 0.94, ev: 3, name: 'an age' },
+  { v: 1600, tier: 3, pitch: 1.00, ev: 3, name: 'an era' },
+  { v: 760, tier: 4, pitch: 1.08, ev: 3, name: 'centuries' },
+  { v: 360, tier: 4, pitch: 1.17, ev: 4, name: 'a century' },
+  { v: 170, tier: 5, pitch: 1.27, ev: 4, name: 'a lifetime' },
+  { v: 80, tier: 5, pitch: 1.38, ev: 4, name: 'a generation' },
+  { v: 38, tier: 5, pitch: 1.50, ev: 5, name: 'a career' },
+  { v: 18, tier: 5, pitch: 1.62, ev: 5, name: 'a decade' },
+];
+// The dead band at every threshold: enter the next rung at 0.91× its door,
+// leave it again only at 1.09×. Nine percent each way against a 2.12× rung, so
+// a wheel parked on a boundary cannot oscillate, and a deliberate reversal
+// costs about a fifth of a rung's worth of scrolling.
+const HYST = 0.09;
+// One settle, and the same one whichever way the ladder is climbed. The slew
+// limiter still bounds the per-frame velocity, so a rung that moves a band by
+// four rows takes longer than this and never moves faster than 2.2px a frame.
+const SETTLE_MS = 230;
+const PAD_FRAC = 0.30;      // soft window around the LATCHED window, each side
 const SLEW_ROW = 2.5;       // px/frame a single row's drawn height may move
 const SLEW_LANE = 2.2;      // px/frame a whole band's drawn height may move
 const SETTLE = 0.05;        // closer than this and the follower snaps — idle ⇒ drawn === target
@@ -402,13 +474,18 @@ export const TL = {
     const [nv0, nv1] = clampV(vc - frac * spanV, vc - frac * spanV + spanV);
     this.d0 = ty(nv0); this.d1 = ty(nv1);
   },
+  /** The span→importance ladder in its old continuous form. NOT a layout driver
+   *  any more — the rung is (see STEPS). Kept because the vertical projection
+   *  and the zoom readout still speak it. */
   levelFor(S: number) { if (S <= this.THR[5]) return 5; if (S <= this.THR[4]) return 4; if (S <= this.THR[3]) return 3; if (S <= this.THR[2]) return 2; return 1; },
   /**
-   * The fade ramp, now a SMOOTHSTEP over the same t → 1.6t window rather than a
-   * straight line. Row height is this number times the pitch, so the linear ramp
-   * put a corner in the height curve at each end of every crossing — a visible
-   * tick in an otherwise smooth zoom. Smoothstep is C1 at both ends: the row
-   * eases out of nothing and into full without either kink.
+   * THE OLD FADE RAMP. It used to be the whole level-of-detail system: a
+   * smoothstep over a 1.6× band of spans, multiplied into every row's height,
+   * so every wheel notch was a layout event. The ladder replaced it — see the
+   * note above STEPS — and nothing in this file calls it any more. It stays
+   * because vertical.ts exposes it as TL.alphaFor and because the number it
+   * returns is still the honest answer to "how close is this span to the
+   * threshold for this level".
    */
   alphaFor(lvl: number, S: number, isLens: boolean) {
     const t = this.THR[lvl] * (isLens ? 2.5 : 1); if (!isFinite(t)) return 1;
@@ -417,16 +494,95 @@ export const TL = {
     if (p >= 1) return 0;
     return 1 - p * p * (3 - 2 * p);
   },
+
+  /* ══ THE LADDER ══════════════════════════════════════════════════════════
+     Everything the rung decides, and the only place it is decided. */
+
+  /** The window's width in v — the zoom coordinate. Pan-invariant by construction. */
+  vspan() { return tv(this.d1) - tv(this.d0); },
+  /** Which rung a v-span belongs on, ignoring hysteresis. Boot and reporting. */
+  stepAt(vs: number) { let i = STEPS.length - 1; while (i > 0 && vs > STEPS[i].v) i--; return i; },
+  step: -1,                    // the rung we are standing on; −1 until the first layout
+  _stepFrom: -1,               // the rung the live settle is climbing FROM
+  _sT0: 0,                     // when that settle started (0 = nothing settling)
+  /** Crossings, newest last — {step, from, span, ms}. Capped; read it from the console. */
+  xlog: [] as { step: number; from: number; span: number; vspan: number; pitch: number; tier: number; at: number; ms: number }[],
+  _xPend: null as null | { step: number; from: number; span: number; vspan: number; pitch: number; tier: number; at: number; ms: number },
   /**
-   * THE SOFT PAN WINDOW. How much of the padded window an extent is inside: 1
-   * for anything that touches the viewport AT ALL — a spread crossing the whole
-   * screen must never dim from pan maths, and the viewport edges must never look
-   * permanently faded — then a smoothstep 1→0 across the pad, which lives
-   * entirely off-screen. Panning something away shrinks its row instead of
-   * deleting it, and no row can vanish in a single frame.
+   * Read the ladder. Called once per layout, before anything else looks at the
+   * rung. Returns true on the frame a threshold was crossed.
+   *
+   * HYSTERESIS, both ways: the next rung's door opens at 0.91× its threshold
+   * and the one you are on closes at 1.09× of yours, so the two tests can never
+   * both be true and a wheel parked on a boundary has nothing to chatter
+   * between. A single frame may climb several rungs (a flick, a preset flight);
+   * that is still ONE settle, to wherever it landed.
    */
-  winAlpha(x0: number, x1: number, XL: number, XR: number, pad: number) {
-    const d = x0 > XR ? x0 - XR : (x1 < XL ? XL - x1 : 0);
+  stepTick(now: number): boolean {
+    const vs = this.vspan();
+    if (this.step < 0) {                       // boot: arrive on a rung, do not climb to it
+      this.step = this.stepAt(vs); this._stepFrom = this.step; return false;
+    }
+    let i = this.step;
+    while (i + 1 < STEPS.length && vs <= STEPS[i + 1].v * (1 - HYST)) i++;
+    while (i > 0 && vs > STEPS[i].v * (1 + HYST)) i--;
+    if (i === this.step) return false;
+    const from = this.step;
+    this.step = i; this._stepFrom = from; this._sT0 = now;
+    // every drawn height becomes this settle's starting point, so the ease runs
+    // from where the eye last saw the band rather than from the old target
+    for (const st of this._dh.values()) { st.r0 = st.row.slice(); st.e0 = st.ev.slice(); st.h0 = st.head; }
+    this._relatch = true;                      // the layout window follows the rung
+    const e = {
+      step: i, from, span: this.span(), vspan: vs,
+      pitch: STEPS[i].pitch, tier: STEPS[i].tier, at: now, ms: -1,
+    };
+    this._xPend = e;
+    this.xlog.push(e); if (this.xlog.length > 64) this.xlog.shift();
+    return true;
+  },
+  /** How far through the settle, eased. 1 when nothing is settling. */
+  settleP(now: number) {
+    if (this._sT0 <= 0) return 1;
+    const p = clamp((now - this._sT0) / SETTLE_MS, 0, 1);
+    if (p >= 1) { this._sT0 = 0; this._stepFrom = this.step; return 1; }
+    return p * p * (3 - 2 * p);
+  },
+  /** The visible importance tier for a layer: the rung's, offset by its detail dial.
+   *  `detailed` means "everything we hold", which cannot mean "…once you have zoomed
+   *  far enough in"; a curated lane is worth one tier more, exactly as the old ×2.5
+   *  on its threshold was. */
+  tierOf(detail: Detail, isCur: boolean, i = -1) {
+    if (detail === 2) return 5;
+    // −1 means "the rung we are on", and before the first layout has run there is
+    // not one yet — the vertical projection can ask through TL.lodOf at boot.
+    const k = i >= 0 ? i : this.step >= 0 ? this.step : this.stepAt(this.vspan());
+    return clamp(STEPS[k].tier + (isCur ? 1 : 0), 1, 5);
+  },
+  showsAt(lvl: number, detail: Detail, isCur: boolean, i = -1) {
+    return lvl <= this.tierOf(detail, isCur, i);
+  },
+  /* ── THE LATCHED LAYOUT WINDOW ───────────────────────────────────────────
+     layout() decides occupancy against THIS window; render() draws at the live
+     one. It is re-latched on exactly three things: the first frame, a rung
+     crossing, and a PAN — a frame that moved the window without changing its
+     v-span. A wheel changes the v-span every frame, so a wheel never re-latches,
+     which is the whole of "bit-frozen between rungs": there is no per-frame
+     input left for the span to move. */
+  _lwV0: 0, _lwV1: 0, _lwOn: false,
+  _pV0: 0, _pV1: 0,                            // last frame's live window, in v
+  _relatch: false,
+  /**
+   * THE SOFT WINDOW, in v against the latch. How much of the padded window an
+   * extent is inside: 1 for anything that touches it AT ALL — a spread crossing
+   * the whole screen must never dim from pan maths, and the viewport edges must
+   * never look permanently faded — then a smoothstep 1→0 across a pad 30% of
+   * the window wide, which lives entirely off-screen. Panning something away
+   * shrinks its row instead of deleting it.
+   */
+  winV(a: number, b: number) {
+    const v0 = this._lwV0, v1 = this._lwV1, pad = (v1 - v0) * PAD_FRAC;
+    const d = a > v1 ? a - v1 : (b < v0 ? v0 - b : 0);
     if (d <= 0) return 1;
     if (d >= pad) return 0;
     const p = d / pad;
@@ -472,6 +628,7 @@ export const TL = {
         // hand-authored spread has an importance LEVEL and no weight curve, so
         // peak is 0, and the packer breaks ties inside a level by peak.
         note: '', tags: e[5] || '', peak: 0, row: -1, ev: e,
+        v0: tv(e[0]), v1: tv(e[1]),
       };
       push(layerIdFor(e[3], it.cat, it.type), it);
       for (const id of anchor.get(it.id) || []) push(id, { ...it });
@@ -482,6 +639,7 @@ export const TL = {
         id: 'polity:' + p.id, name: p.name, start: p.start, end: p.end, cat: 'power',
         type: 'polity', lvl: polityLvl(p), sharpness: 0.85,
         note: p.note || '', tags: '', peak: peakOf(p.weight), row: -1, ev: null,
+        v0: tv(p.start), v1: tv(p.end),
       });
     }
     for (const sp of REL.spreads) {
@@ -493,6 +651,7 @@ export const TL = {
         id: 'spread:' + sp.id, name: sp.name, start: sp.start, end: sp.end,
         cat, type: 'spread', lvl: lvlOfWeight(peakOf(sp.weight)), sharpness: sp.sharpness ?? 0.25,
         note: sp.note || '', tags: '', peak: peakOf(sp.weight), row: -1, ev: null,
+        v0: tv(sp.start), v1: tv(sp.end),
       });
     }
     for (const entry of byLayer) {
@@ -536,7 +695,24 @@ export const TL = {
    * is the viewport physically running out of room.
    */
   lodOf(lvl: number, span: number, isCur: boolean, detail: Detail) {
-    return detail === 2 ? 1 : this.alphaFor(lvl, span, isCur);
+    return this.showsAt(lvl, detail, isCur) ? 1 : 0;
+  },
+
+  /* ── THE LABEL FONTS ARE A PROPERTY OF THE RUNG ──────────────────────────
+     Rectangles enlarge with the rung, so their names have to as well, or a
+     decade's fat bars carry deep time's small type. Deriving the two font
+     strings from the rung rather than from the eased drawn pitch is what keeps
+     ellipsize()'s cache useful: the truncation of a name is re-derived once per
+     rung and then re-used for every frame spent on it, instead of being
+     re-measured against a width that moves every frame. */
+  _fStep: -1, _fIn: '', _fUi: '',
+  fonts() {
+    if (this._fStep === this.step) return;
+    const p = STEPS[Math.max(0, this.step)].pitch;
+    const q = (px: number) => Math.round(px * 2) / 2;
+    this._fIn = fontUI(q(10.5 * clamp(p, 0.94, 1.34)), 600);
+    this._fUi = fontUI(q(11.5 * clamp(p, 0.94, 1.24)));
+    this._fStep = this.step;
   },
 
   // ---- pure layout pass: filter, pack, squeeze, budget → per-lane continuous rows ----
@@ -549,7 +725,14 @@ export const TL = {
   // opening above would shift every drawn height down one slot and pop the whole band.
   // Keying it permanently is also what makes the old "rows with nothing visible are
   // compacted out" step disappear: an empty row simply has target height 0.
-  _dh: new Map<string, { row: number[]; ev: number[]; head: number }>(),
+  // r0/e0/h0 are the SETTLE'S ORIGIN: the drawn heights as they stood the frame
+  // a rung was crossed. The follower eases from those to the rung's geometry,
+  // and outside a settle they are ignored entirely.
+  _dh: new Map<string, { row: number[]; ev: number[]; head: number; r0: number[]; e0: number[]; h0: number }>(),
+  // the DRAWN pitch: the rung's pitch outside a settle, eased between two rungs
+  // during one. render() reads it, so a rectangle grows with its row rather than
+  // jumping to the new size and waiting for the slot to catch up.
+  _pDraw: 1,
   _trimS: new Map<string, number>(),        // rows the global budget has taken off a lane
   _trimE: new Map<string, number>(),
   _snap: true,                              // next layout jumps straight to its target
@@ -563,7 +746,6 @@ export const TL = {
   layout(cw: number): Layout {
     const G = this.gutter(), Wp = cw - G - 10;
     const solo = G !== GUT;                          // the canvas is naming its own bands
-    const span = this.span();
     const sel = SelStore.id;
     const rels = sel ? relOf(sel) : null;
     const q = this.q.toLowerCase();
@@ -579,8 +761,34 @@ export const TL = {
       && !this._noSnap;
     this._snap = false; this._noSnap = false; this._lastCw = cw; this._lastLay = now;
 
-    const XL = G, XR = G + Wp, PAD = Math.max(80, Wp * PAD_FRAC);
-    const uiF = fontUI(11.5);
+    // ── THE RUNG, AND THE LATCH ────────────────────────────────────────────
+    // Read the ladder FIRST: everything below is a function of the rung, and a
+    // crossing has to have taken its snapshot before any of it is measured.
+    this.stepTick(now);
+    if (snap) { this._sT0 = 0; this._stepFrom = this.step; }   // a new look arrives whole
+    const sp = this.settleP(now);
+    const ST = STEPS[this.step], STF = STEPS[this._stepFrom < 0 ? this.step : this._stepFrom];
+    const pT = ST.pitch;                                  // the rung's own pitch — the TARGET
+    const pD = this._pDraw = STF.pitch + (pT - STF.pitch) * sp;   // …and the eased DRAWN one
+    const SP = this.SP_PITCH * pT, EP = this.EV_PITCH * pT;
+    const SPd = this.SP_PITCH * pD, EPd = this.EV_PITCH * pD;
+    this.fonts();
+    const uiF = this._fUi;
+    // The latch. A frame that moved the window without changing its v-span is a
+    // PAN and the layout follows it, exactly as it always did; a frame that
+    // changed the v-span is a ZOOM and the layout does not move at all.
+    const lv0 = tv(this.d0), lv1 = tv(this.d1);
+    const moved = lv0 !== this._pV0 || lv1 !== this._pV1;
+    const sameSpan = Math.abs((lv1 - lv0) - (this._pV1 - this._pV0)) < 1e-9;
+    // NOT on `snap`. Snapping is about the FOLLOWER — "do not ramp, arrive whole"
+    // — and it must never change what the follower is arriving AT. It used to be
+    // in this condition, and the effect was a layout that quietly re-fitted itself
+    // whenever the reader wheeled half a rung in and then paused for IDLE_MS: a
+    // jump with no gesture under it, which is precisely what the ladder is for.
+    if (!this._lwOn || this._relatch || (moved && sameSpan)) {
+      this._lwV0 = lv0; this._lwV1 = lv1; this._lwOn = true;
+    }
+    this._pV0 = lv0; this._pV1 = lv1; this._relatch = false;
 
     interface Draft {
       L: LaneLayout; vis: LSpread[]; gRaw: number[]; spare: boolean[];
@@ -597,12 +805,13 @@ export const TL = {
       const dying = !!def.dying;
       const detail = def.detail;
       const isExp = this.expanded.has(laneId);
-      // THE EVENT STRATUM IS NO LONGER RATIONED BY A CONSTANT. It used to pack
-      // into EVENT_CAP=3 rows and drop the rest to "+N more" — a density policy
-      // wearing the clothes of a measurement. The dial says how much is wanted;
-      // the packer packs as much as physically fits, and only the global height
-      // budget below can take a row back.
-      const eventCap = EV_BOUND;
+      // THE EVENT STRATUM IS RATIONED BY THE RUNG. It used to pack into a flat
+      // EVENT_CAP=3 for every band for ever (a density policy wearing the clothes
+      // of a measurement), and then, briefly, into as many rows as physically
+      // fitted — which made the stratum's height a per-frame number. The rung
+      // says how many rows the stratum gets, the same way it says how tall a row
+      // is; opening the lane by hand still overrides it.
+      const eventCap = isExp ? EV_BOUND : ST.ev;
       // A GROUP'S HEADER STRIP is a lane with no content: a rule across the
       // plot, and a panel row whose height mirrors it (or, when the group is
       // collapsed, mirrors it plus every child band it is standing in for).
@@ -620,17 +829,27 @@ export const TL = {
         // before anything looks at the viewport or the zoom.
         if (!passesDetail(detail, def.kind as any, it.lvl, it.type, it.start, it.end)) continue;
         const isMatch = !!q && (it.name.toLowerCase().includes(q) || it.tags.includes(q) || it.note.toLowerCase().includes(q));
-        const x0 = this.x(it.start, G, Wp), x1 = this.x(it.end, G, Wp);
-        // SOFT WINDOW first: the only cull is the pad, 30% of the viewport away,
-        // so nothing can leave the layout in a single pan frame.
-        const wA = this.winAlpha(x0, x1, XL, XR, PAD);
+        // SOFT WINDOW first, against the LATCH: the only cull is the pad, 30% of
+        // the window away, so nothing can leave the layout in a single pan frame
+        // — and nothing can leave it during a zoom at all.
+        const wA = this.winV(it.v0, it.v1);
         if (wA <= 0.02) continue;
-        let lodA = lit(it.id, sel, rels) ? 1 : this.lodOf(it.lvl, span, isCur, detail);
-        if (isMatch && lodA <= 0.02) lodA = 0.6;      // a searched-for thing must be findable
+        const isLit = lit(it.id, sel, rels);
+        const on = this.showsAt(it.lvl, detail, isCur);                 // at the rung we are ON
+        const was = sp < 1 && this.showsAt(it.lvl, detail, isCur, this._stepFrom);
+        // THE ROW'S HEIGHT IS THE RUNG'S DEMAND, never the settle's alpha. Heights
+        // are walked by the limiter and alphas by the settle clock; crossing the two
+        // over is what used to make a fade and a growth fight each other.
+        const want = (on || isLit) ? wA : (isMatch ? 0.6 * wA : 0);
+        if (want > gRaw[it.row]) gRaw[it.row] = want;
+        // …and the alpha IS the settle's, the only thing left of the old ramp: a
+        // mark the rung has just revealed fades in across the settle, one the rung
+        // has just dropped fades out across it, and everything else is simply there.
+        let lodA = isLit ? 1 : on ? (was || sp >= 1 ? 1 : sp) : (was ? 1 - sp : (isMatch ? 0.6 : 0));
         lodA *= wA;
         if (lodA <= 0.02) continue;
+        const x0 = this.x(it.start, G, Wp), x1 = this.x(it.end, G, Wp);   // LIVE — drawing only
         vis.push({ it, row: it.row, x0, x1, lodA, isMatch });
-        if (lodA > gRaw[it.row]) gRaw[it.row] = lodA;   // THE ROW'S HEIGHT IS THIS
         if (isMatch || it.id === sel) spare[it.row] = true;
       }
 
@@ -655,11 +874,15 @@ export const TL = {
         && layerIdFor(e[3], e[6] || 'power', e[7] || 'moment') === laneId
         && passesDetail(detail, def.kind as any, e[4] || 3, e[7] || 'moment', e[0], 0),
       )).sort((a, b) => a[0] - b[0]);
-      const laneEnd = new Array(eventCap).fill(-1e18);
-      const events: LEvent[] = [];
-      const evRaw = new Array<number>(eventCap).fill(0);
-      const evSpare = new Array<boolean>(eventCap).fill(false);
-      let usedRows = 0, more = 0;
+      /* ── WHAT QUALIFIES, BEFORE ANYTHING IS PACKED ─────────────────────────
+         The stratum used to size itself from the packing: however many rows the
+         pixel packer happened to need this frame WAS the stratum's height. That
+         is a per-frame number — it moves with every pan and every wheel notch —
+         and it is exactly the kind of input the ladder exists to remove. So
+         existence is decided first, by the rung and the latch alone, and the
+         packer is handed a fixed number of rows to fill. */
+      const qual: { ev: any[]; id: string; title: string; x0: number; a: number; on: boolean; isMatch: boolean }[] = [];
+      let nOn = 0;
       for (const ev of evs) {
         const id = evId(ev);
         const title = ev[2];
@@ -669,11 +892,34 @@ export const TL = {
           if (isMatch) foldedMatch.add(fold.spread);   // a search for it lands on its parent
           continue;
         }
-        const x0 = this.x(ev[0], G, Wp);
-        const wA = this.winAlpha(x0, x0, XL, XR, PAD);
+        const wA = this.winV(tv(ev[0]), tv(ev[0]));
         if (wA <= 0.02) continue;
-        const lodA = (lit(id, sel, rels) ? 1 : this.lodOf(ev[4], span, isCur, detail)) * wA;
-        if (lodA <= 0.02) continue;
+        const isLit = lit(id, sel, rels);
+        const on = this.showsAt(ev[4], detail, isCur);
+        const was = sp < 1 && this.showsAt(ev[4], detail, isCur, this._stepFrom);
+        const a = (isLit ? 1 : on ? (was || sp >= 1 ? 1 : sp) : (was ? 1 - sp : 0)) * wA;
+        if (a <= 0.02) continue;
+        if (on || isLit) nOn++;
+        qual.push({ ev, id, title, x0: this.x(ev[0], G, Wp), a, on: on || isLit, isMatch });
+      }
+      // THE STRATUM'S HEIGHT IS THE RUNG'S: as many rows as the rung allows, and
+      // never more than the lane has marks to put in them. While a settle runs,
+      // the rung BEFORE is packable too, so a dot on its way out has somewhere to
+      // stand while the limiter closes the row under it. Deliberately NOT read off
+      // the drawn heights: that would make the packing table a function of the
+      // follower's state, which lags a frame behind and would put a change of
+      // layout on the first wheel notch after every close.
+      const evRows = Math.min(eventCap, nOn);
+      const packRows = Math.max(1, Math.min(EV_BOUND,
+        sp < 1 ? Math.max(evRows, Math.min(STF.ev, qual.length)) : evRows));
+      const laneEnd = new Array(packRows).fill(-1e18);
+      const events: LEvent[] = [];
+      const evRaw = new Array<number>(packRows).fill(0);
+      const evSpare = new Array<boolean>(packRows).fill(false);
+      for (let r = 0; r < evRows && r < packRows; r++) evRaw[r] = 1;
+      let more = 0;
+      for (const Q of qual) {
+        const { ev, id, title, x0, a: lodA, isMatch } = Q;
         const labelW = textW(ctx, title, uiF);
         let lane = laneEnd.findIndex(le => le < x0 - 4);
         let mode: 'right' | 'left' | 'none' = 'right';
@@ -686,8 +932,6 @@ export const TL = {
         const prevEnd = laneEnd[lane];
         if (mode === 'right' && x0 + 7 + labelW >= cw - 4) mode = (x0 - 9 - labelW > Math.max(G, prevEnd + 4)) ? 'left' : 'none';
         laneEnd[lane] = Math.max(prevEnd, x0 + 8 + (mode === 'right' ? labelW : 0));
-        usedRows = Math.max(usedRows, lane + 1);
-        if (lodA > evRaw[lane]) evRaw[lane] = lodA;
         if (isMatch || id === sel) evSpare[lane] = true;
         events.push({ ev, id, x0, row: lane, lodA, mode, labelW, isMatch });
       }
@@ -699,7 +943,7 @@ export const TL = {
         ? (byLane.get(laneId) || [])
           .filter(it => it.type === 'episode')
           .map(it => vis.find(v => v.it.id === it.id))
-          .filter((v): v is LSpread => !!v && this.isEraEpisode(v, span))
+          .filter((v): v is LSpread => !!v && this.isEraEpisode(v, Wp))
           .sort(eraRank)
         : [];
       // A LANE SWITCHED OFF HAS TO ACTUALLY CLOSE. `dying` zeroed the header height
@@ -715,7 +959,7 @@ export const TL = {
         key: laneId, label: def.label, si: def.si, isCur,
         layerId: def.layerId, detail, grp: def.grp, isGroupHead: isGrp,
         spreads: [], events,
-        ns: 0, ne: usedRows, more, exp: isExp,
+        ns: 0, ne: evRows, more, exp: isExp,
         isRegion: def.isRegion, era, eraRow: -1, eraOut: [],
         top: 0, h: 0, evTop: 0,
         rowY: [], rowH: [], rowG: gRaw, evY: [], evH: [], evG: evRaw,
@@ -729,7 +973,11 @@ export const TL = {
 
     // ══ PHASE B — the budget. Caps stay INTEGER; the slew limiter is what makes a
     // cap change smooth, so there is one mechanism here and not two. ═══════════
-    const SPREAD_FLOOR = 3;                            // a lane keeps up to 3 spread rows
+    // A lane's floor, in rows the budget may never take. It is a function of the
+    // rung: at a decade a row is 39px and three of them per band would put eight
+    // bands a third of a screen past the budget with nothing left to trim, so the
+    // fattest rungs keep two. Fewer, fatter rows IS the instruction.
+    const SPREAD_FLOOR = pT >= 1.25 ? 2 : 3;
     // THE CUMULATIVE SQUEEZE, which replaces the old integer row cap. Rows spend a
     // shared budget of `cap` row-heights in permanent order. A row only 40% faded in
     // spends 0.4 of it, so a row BELOW the cap opens at exactly the rate a row above
@@ -774,7 +1022,7 @@ export const TL = {
       // "this lane gets its very first item" has no step in it. A dying lane
       // targets zero and the limiter walks it out at 2.2px a frame.
       d.hT = headTarget(L, d.cumS + d.cumE)
-        + d.cumS * this.SP_PITCH + d.cumE * this.EV_PITCH
+        + d.cumS * SP + d.cumE * EP
         + GAP_H * Math.min(1, d.cumS) * Math.min(1, d.cumE)
         + GAP_H * Math.min(1, d.cumS + d.cumE);
       return d.hT;
@@ -881,28 +1129,47 @@ export const TL = {
       d.gRaw[victim] = g; d.cumS = before + d.gS[victim];
     }
 
-    // ══ PHASE D — the slew limiter, then the geometry ════════════════════════
-    // The continuous function above IS the target. Everything here only bounds how
-    // fast the drawn height may converge on it: SLEW_ROW for a single row, SLEW_LANE
-    // for the band as a whole — and the band's bound is on the SIGNED sum, so a row
-    // opening while another closes leaves the band perfectly still. No timer and no
-    // duration; when the target stops moving the drawn value snaps onto it, so an
-    // idle timeline is at its target exactly and nothing breathes.
+    // ══ PHASE D — the settle, the slew limiter, then the geometry ════════════
+    // The rung's geometry above IS the target, and between rungs it does not move,
+    // so nothing here has anything to do: drawn === target, every frame, exactly.
+    //
+    // ON A CROSSING there are two clocks, and they do different jobs.
+    //   · THE SETTLE names a WAYPOINT — where the band should be `sp` of the way
+    //     through SETTLE_MS, eased from wherever it stood when the rung changed.
+    //     That is the ~230ms the founder asked for, and it is one settle per
+    //     crossing however many rungs were climbed in the frame.
+    //   · THE SLEW LIMITER still bounds the per-frame VELOCITY toward that
+    //     waypoint — SLEW_ROW for a row, SLEW_LANE for the band, the band's bound
+    //     on the signed sum so a row opening while another closes leaves the band
+    //     still. A crossing that moves a band four rows therefore takes longer
+    //     than the settle and never moves faster than the limiter allows; a
+    //     crossing that moves it one row takes the settle exactly.
+    // It is also still the whole answer for everything that is NOT a crossing: a
+    // pan, a lane toggle, a preset teleport, a search that re-ranks the corpus.
     let anim = false;
     let top = AXIS_TOP;
     for (const d of drafts) {
       const L = d.L;
-      const tRow = d.gS.map(g => g * this.SP_PITCH);
-      const tEv = d.gE.map(g => g * this.EV_PITCH);
+      const tRow = d.gS.map(g => g * SP);
+      const tEv = d.gE.map(g => g * EP);
       const tHead = headTarget(L, d.cumS + d.cumE);
       let st = this._dh.get(L.key);
       // a lane seen for the first time starts CLOSED and grows in, unless this frame
       // is a snap (boot, resize, reduced motion) in which case it arrives whole
-      if (!st) { st = { row: [], ev: [], head: snap ? tHead : 0 }; this._dh.set(L.key, st); }
+      if (!st) {
+        st = { row: [], ev: [], head: snap ? tHead : 0, r0: [], e0: [], h0: 0 };
+        this._dh.set(L.key, st);
+      }
       const n = tRow.length, m = tEv.length;
       while (st.row.length < n) st.row.push(0);
       while (st.ev.length < m) st.ev.push(0);
       const tOf = (a: number[], r: number, len: number) => (r < len ? a[r] : 0);
+      // the waypoint: identical to the target unless a settle is running, so
+      // outside a crossing this whole mechanism costs one comparison
+      const way = (t: number, from: number) => (sp >= 1 ? t : from + (t - from) * sp);
+      const wRow = (r: number) => way(tOf(tRow, r, n), tOf(st.r0, r, st.r0.length));
+      const wEv = (r: number) => way(tOf(tEv, r, m), tOf(st.e0, r, st.e0.length));
+      const wHead = way(tHead, st.h0);
       if (snap) {
         for (let r = 0; r < st.row.length; r++) st.row[r] = tOf(tRow, r, n);
         for (let r = 0; r < st.ev.length; r++) st.ev[r] = tOf(tEv, r, m);
@@ -911,9 +1178,9 @@ export const TL = {
         const dr = new Array<number>(st.row.length).fill(0);
         const de = new Array<number>(st.ev.length).fill(0);
         let sum = 0;
-        for (let r = 0; r < st.row.length; r++) { dr[r] = clamp(tOf(tRow, r, n) - st.row[r], -SLEW_ROW, SLEW_ROW); sum += dr[r]; }
-        for (let r = 0; r < st.ev.length; r++) { de[r] = clamp(tOf(tEv, r, m) - st.ev[r], -SLEW_ROW, SLEW_ROW); sum += de[r]; }
-        let dh = clamp(tHead - st.head, -SLEW_ROW, SLEW_ROW); sum += dh;
+        for (let r = 0; r < st.row.length; r++) { dr[r] = clamp(wRow(r) - st.row[r], -SLEW_ROW, SLEW_ROW); sum += dr[r]; }
+        for (let r = 0; r < st.ev.length; r++) { de[r] = clamp(wEv(r) - st.ev[r], -SLEW_ROW, SLEW_ROW); sum += de[r]; }
+        let dh = clamp(wHead - st.head, -SLEW_ROW, SLEW_ROW); sum += dh;
         const scale = (k: number) => {
           for (let r = 0; r < dr.length; r++) dr[r] *= k;
           for (let r = 0; r < de.length; r++) de[r] *= k;
@@ -932,7 +1199,7 @@ export const TL = {
           let s = 0, e = 0;
           for (let r = 0; r < st.row.length; r++) s += st.row[r] + dr[r] * k;
           for (let r = 0; r < st.ev.length; r++) e += st.ev[r] + de[r] * k;
-          const nS = s / this.SP_PITCH, nE = e / this.EV_PITCH;
+          const nS = s / SPd, nE = e / EPd;
           return (st.head + dh * k) + s + GAP_H * Math.min(1, nS) * Math.min(1, nE)
             + e + GAP_H * Math.min(1, nS + nE);
         };
@@ -941,17 +1208,20 @@ export const TL = {
           if (move <= SLEW_LANE) break;
           scale(SLEW_LANE / move);
         }
+        // the SNAP test is against the waypoint (that is where this frame is
+        // going); `anim` is against the TARGET, so the loop keeps running until
+        // the settle has finished delivering the band to the rung's geometry
         for (let r = 0; r < st.row.length; r++) {
-          const t = tOf(tRow, r, n);
-          st.row[r] = Math.abs(t - st.row[r]) < SETTLE ? t : st.row[r] + dr[r];
+          const w = wRow(r), t = tOf(tRow, r, n);
+          st.row[r] = Math.abs(w - st.row[r]) < SETTLE ? w : st.row[r] + dr[r];
           if (st.row[r] !== t) anim = true;
         }
         for (let r = 0; r < st.ev.length; r++) {
-          const t = tOf(tEv, r, m);
-          st.ev[r] = Math.abs(t - st.ev[r]) < SETTLE ? t : st.ev[r] + de[r];
+          const w = wEv(r), t = tOf(tEv, r, m);
+          st.ev[r] = Math.abs(w - st.ev[r]) < SETTLE ? w : st.ev[r] + de[r];
           if (st.ev[r] !== t) anim = true;
         }
-        st.head = Math.abs(tHead - st.head) < SETTLE ? tHead : st.head + dh;
+        st.head = Math.abs(wHead - st.head) < SETTLE ? wHead : st.head + dh;
         if (st.head !== tHead) anim = true;
       }
       // ---- drawn geometry, in permanent row order ----
@@ -964,31 +1234,45 @@ export const TL = {
       let ye = 0, sumE = 0;
       L.evY = new Array<number>(L.evH.length);
       for (let r = 0; r < L.evH.length; r++) { L.evY[r] = ye; ye += L.evH[r]; sumE += L.evH[r]; }
-      const nS = sumS / this.SP_PITCH, nE = sumE / this.EV_PITCH;
+      const nS = sumS / SPd, nE = sumE / EPd;
       L.gapH = GAP_H * Math.min(1, nS) * Math.min(1, nE);
       L.h = L.headH + sumS + L.gapH + sumE + GAP_H * Math.min(1, nS + nE);
       L.evTop = L.headH + sumS + L.gapH;
       L.top = top; top += L.h;
     }
+    // A SETTLE IS ITSELF A REASON TO PAINT AGAIN. The heights may already be at
+    // the rung's geometry while the ALPHAS are still ramping — a rung that reveals
+    // a level into rows that were open anyway moves no pixel of layout at all —
+    // and without this the rAF loop would park half way through the reveal.
+    if (sp < 1) anim = true;
     // a dying lane that has finished closing leaves for good
     for (const d of drafts) {
       if (!d.L.dying) continue;
       if (d.L.h < 0.4) { this.dying.delete(d.L.key); this._dh.delete(d.L.key); } else anim = true;
     }
     const lanes = drafts.map(d => d.L).filter(L => !(L.dying && L.h < 0.4));
+    // the crossing is over when the last band has arrived. Measured, not assumed:
+    // xlog carries what the settle actually cost, which is the number to argue with.
+    if (this._xPend && !anim && sp >= 1) { this._xPend.ms = now - this._xPend.at; this._xPend = null; }
     return { lanes, H: top + 34, G, Wp, sel, rels, q, anim };
   },
 
-  /** Does this visible spread read as an EPISODE OF the current window? */
-  isEraEpisode(v: LSpread, span: number): boolean {
-    const it = v.it;
-    const ext = it.end - it.start;
+  /**
+   * Does this visible spread read as an EPISODE OF the LATCHED window? In v,
+   * for the same reason the ladder is in v — and because "is this 3% of the
+   * window" asked in years gives a different answer either side of the seam for
+   * the same picture on screen. Its pixel width is derived from the latch too,
+   * so the era row is decided by the rung and the pan and by nothing else.
+   */
+  isEraEpisode(v: LSpread, Wp: number): boolean {
+    const a = v.it.v0, b = v.it.v1, ext = b - a;
     if (ext <= 0) return false;
-    const ov = Math.min(it.end, this.d1) - Math.max(it.start, this.d0);
+    const w0 = this._lwV0, w1 = this._lwV1;
+    const ov = Math.min(b, w1) - Math.max(a, w0);
     if (ov <= 0 || ov / ext < ERA_INSIDE) return false;   // clipped by an edge
-    const f = ext / span;
+    const f = ext / ((w1 - w0) || 1);
     if (f < ERA_MIN_FRAC || f > ERA_MAX_FRAC) return false;
-    return (v.x1 - v.x0) >= ERA_MIN_PX;                   // legible as a bar
+    return f * Wp >= ERA_MIN_PX;                          // legible as a bar
   },
 
   _lay: null as Layout | null,
@@ -1111,7 +1395,12 @@ export const TL = {
     // Which way the ground goes decides how the per-item colour jitter spends
     // itself (see varyColor in shared.ts) and which way the plateau is mixed.
     const isLight = bgL > 50;
-    const uiF = fontUI(11.5);
+    // THE DRAWN PITCH AND THE RUNG'S FONTS. layout() has just run (size() called
+    // it), so both are this frame's — the pitch eased if a settle is in flight,
+    // the fonts fixed by the rung so a name's truncation is computed once per rung
+    // and re-used for every frame spent on it.
+    const pD = this._pDraw, SPd = this.SP_PITCH * pD, EPd = this.EV_PITCH * pD;
+    const uiF = this._fUi, inF = this._fIn;
 
     for (const L of lanes) {
       // BAND FURNITURE, WITH THE NAME TAKEN OUT OF IT.
@@ -1200,7 +1489,7 @@ export const TL = {
         if (slot <= 0.05) continue;
         const rowItems = (byRow[r] || []).sort((a, b) => a.x0 - b.x0);
         if (!rowItems.length) continue;
-        const g = clamp(slot / this.SP_PITCH, 0, 1);
+        const g = clamp(slot / SPd, 0, 1);
         // how far this row is from the height its content asked for: a row being
         // squeezed out by the budget, or still catching up to the slew limiter,
         // fades by exactly the fraction of its demand it is being given
@@ -1213,7 +1502,10 @@ export const TL = {
           const searchDim = q ? (s.isMatch ? 1 : 0.12) : 1;
           if (q && s.isMatch) hitCount++;
           const dimA = dimAlpha(it.id, sel, rels, DIM_FLOOR) * searchDim;
-          const h = (TIER_H[it.lvl] || 12) * g;
+          // THE RECTANGLE ENLARGES WITH THE RUNG. One multiplier across the whole
+          // of TIER_H, so importance still reads as 20:17:14:12:10 at every rung —
+          // the sizing ladder is scaled, never re-tuned.
+          const h = (TIER_H[it.lvl] || 12) * pD * g;
           const [col, colL] = varyColor(catColor(it.cat, T), it.id, isLight);
           // COMPOSITE-AWARE FILL: the plateau is opaque in a colour pre-mixed a
           // little way toward the ground, so what lands on screen is the category
@@ -1247,7 +1539,6 @@ export const TL = {
           // 8px width bucket), so a continuous zoom re-uses one answer across an
           // 8px band of widths instead of re-measuring every frame.
           const visX0 = Math.max(s.x0, G);
-          const inF = fontUI(10.5, 600);
           ctx.font = inF;
           const inner = (s.x1 - visX0) - 12;
           const inText = ellipsize(ctx, it.name, inner, inF, 3);
@@ -1301,7 +1592,7 @@ export const TL = {
       for (const E of L.events) {
         const slot = L.evH[E.row] || 0;
         if (slot <= 0.05) continue;
-        const g = clamp(slot / this.EV_PITCH, 0, 1);
+        const g = clamp(slot / EPd, 0, 1);
         const fade = clamp(g / Math.max(L.evG[E.row] || g, 1e-3), 0, 1);
         const title = E.ev[2];
         const searchDim = q ? (E.isMatch ? 1 : 0.12) : 1;
@@ -1309,13 +1600,13 @@ export const TL = {
         const a = clamp(E.lodA * dimAlpha(E.id, sel, rels, DIM_FLOOR) * searchDim * fade, 0, 1);
         const yy = evTop + L.evY[E.row] + slot / 2;
         ctx.globalAlpha = a; ctx.fillStyle = catColor(E.ev[6], T);
-        ctx.beginPath(); ctx.arc(E.x0, yy, 3.2 * g, 0, 7); ctx.fill();
+        ctx.beginPath(); ctx.arc(E.x0, yy, 3.2 * pD * g, 0, 7); ctx.fill();
         if (E.id === sel) {
           ctx.globalAlpha = 1; ctx.strokeStyle = T.ink; ctx.lineWidth = 1.6;
-          ctx.beginPath(); ctx.arc(E.x0, yy, 7 * g, 0, 7); ctx.stroke();
+          ctx.beginPath(); ctx.arc(E.x0, yy, 7 * pD * g, 0, 7); ctx.stroke();
         } else if (E.isMatch) {
           ctx.globalAlpha = 1; ctx.strokeStyle = T.accent2; ctx.lineWidth = 1.6;
-          ctx.beginPath(); ctx.arc(E.x0, yy, 7 * g, 0, 7); ctx.stroke();
+          ctx.beginPath(); ctx.arc(E.x0, yy, 7 * pD * g, 0, 7); ctx.stroke();
         }
         ctx.fillStyle = T.ink;
         const textA = clamp((a - 0.10) / 0.15, 0, 1) * clamp((g - LAB_G0) / (LAB_G1 - LAB_G0), 0, 1);
@@ -1347,48 +1638,50 @@ export const TL = {
       ctx.restore();                                   // …end of the plot clip
     }
 
-    // ---- the global time index: A STUB, NOT A MERIDIAN ----------------------
-    // This ran the full height in minium. So does the hover crosshair. And the
-    // shell's own .tl-index-line continued up from the rail in a THIRD place —
-    // the rail's scale is not this canvas's, so the two "set year" lines sat at
-    // different x while claiming the same year. His words: "let's not make the
-    // red line from the bottom go all the way to top — there's two lines
-    // battling now."
-    //
-    // So the set year is a short stub rising off the axis, and the hover crosshair
-    // is the ONLY full-height vertical on the canvas. Stub = the year you set.
-    // Crosshair = where your cursor is.
-    //
-    // AND THE STUB NO LONGER CARRIES A LABEL. It used to fly a pill of its own, which
-    // slid across the plot on every pan — an accent-coloured year loose in the middle
-    // of the lanes, a third place the same number was being told. His words: "Lets
-    // remove the in-canvas orange date shower (which is sliding) altogether. Just the
-    // bottom slider shows what you see in view (grey) and whats in center is the
-    // current date." So the rail below the canvas is the set year's only readout, and
-    // the one pill left on this canvas is the cursor's, which does not slide on its
-    // own — it goes where the hand goes.
-    const xg = this.x(TimeStore.year, G, Wp);
-    if (xg >= G && xg <= cw - 4) {
-      const base = H - 30, tip = base - 34;
-      const gr = ctx.createLinearGradient(0, base, 0, tip);
-      gr.addColorStop(0, T.accent); gr.addColorStop(1, withA(T.accent, 0));
-      ctx.strokeStyle = gr; ctx.lineWidth = 1.5;
-      ctx.beginPath(); ctx.moveTo(xg, base); ctx.lineTo(xg, tip); ctx.stroke();
-    }
+    const baseL = this.tierOf(1, false);
+    // both readouts are optional chrome now — the panel search box that carried
+    // #searchCnt has been removed, and render() must not care. The rung is named
+    // as well as measured: "step 7/13 · centuries" is the thing that changed when
+    // the layout last moved, and the reader should be able to see which rung a
+    // given picture belongs to.
+    const rd = $('#zoomReadout');
+    if (rd) rd.textContent = `importance ≤ ${baseL} of 5 · span ${fmtSpan(this.span())}`
+      + ` · step ${this.step + 1}/${STEPS.length} · ${STEPS[this.step].name}`;
+    const sc = $('#searchCnt'); if (sc) sc.textContent = q ? `${hitCount} hits` : '';
+    /* ── THE SET YEAR HAS NO LINE ON THIS CANVAS ─────────────────────────────
+       There used to be a minium stub rising off the axis at x(TimeStore.year).
+       It was honest when the set year was something you set — a click on the
+       axis, a drag of the rail. It is not any more: the global moment IS the
+       centre of this viewport now (Lab's centre-year observer publishes it on a
+       throttle), so the stub was an accent vertical inside the plot chasing the
+       middle of the plot a tenth of a second behind the hand. Panning it looked
+       like a line on a rubber band. His verdict was the short one: delete it.
 
-    // hover crosshair + year readout (the hover pill keeps the bottom edge)
+       So the set year's home is the rail underneath the canvas — its readout,
+       its flag and its own 22px stub at the very bottom edge of the stage, all
+       of which are instant because they are positioned from the number itself.
+       NOTHING EASED AND VERTICAL LIVES IN THE PLOT. The only vertical left in
+       here is the cursor's, and a cursor does not lag: it goes where the hand
+       goes, this frame.
+
+       ── AND THE CURSOR PAINTS LAST ────────────────────────────────────────
+       Last in the frame, after every band, every rectangle, every label and
+       every piece of lane furniture, and outside the plot clip. Where you are
+       pointing is not a layer of the chart — it is the one thing that must be
+       legible over the densest lane in it, which is exactly where a reader
+       needs to read a year off. The line is drawn twice: a hairline of the
+       page's own ground first, so the accent never has to fight a rectangle's
+       fill for contrast, then the accent itself. */
     if (this.hoverX !== null && this.hoverX > G && this.hoverX < cw) {
+      const hx = Math.round(this.hoverX) + .5;
       const yr = this.ix(this.hoverX, G, Wp);
-      ctx.strokeStyle = T.accent; ctx.globalAlpha = .55; ctx.lineWidth = 1;
-      ctx.beginPath(); ctx.moveTo(this.hoverX, AXIS_TOP); ctx.lineTo(this.hoverX, H - 30); ctx.stroke();
+      ctx.globalAlpha = .55; ctx.strokeStyle = T.panel; ctx.lineWidth = 3;
+      ctx.beginPath(); ctx.moveTo(hx, AXIS_TOP); ctx.lineTo(hx, H - 30); ctx.stroke();
+      ctx.globalAlpha = .9; ctx.strokeStyle = T.accent; ctx.lineWidth = 1;
+      ctx.beginPath(); ctx.moveTo(hx, AXIS_TOP); ctx.lineTo(hx, H - 30); ctx.stroke();
       ctx.globalAlpha = 1;
       yearPill(ctx, T, this.hoverX, H - 26, fmtBig(yr));
     }
-    const baseL = this.levelFor(this.span());
-    // both readouts are optional chrome now — the panel search box that carried
-    // #searchCnt has been removed, and render() must not care
-    const rd = $('#zoomReadout'); if (rd) rd.textContent = `showing importance ≤ ${baseL} of 5 · span ${fmtSpan(this.span())}`;
-    const sc = $('#searchCnt'); if (sc) sc.textContent = q ? `${hitCount} hits` : '';
     // THE GEOMETRY LOCK. The canvas layout is the ONLY source of lane geometry,
     // and the panel is positioned from the very same numbers, in the same frame,
     // after the slew limiter has had its say — so a row and its lane agree at
@@ -1405,12 +1698,18 @@ export const TL = {
 
   // eased in V-SPACE: year-space easing would spend 99.9% of the Big Bang preset's run
   // outside human history.
+  // A FLIGHT IS NOT A WHEEL. Every frame of one changes the v-span, which is the
+  // test layout() uses to know that a zoom is in progress and the layout window
+  // must not move — right for a wheel, wrong for a teleport, which is going
+  // somewhere else entirely and has to take the layout with it. So the flight
+  // says so, one frame at a time.
   animTo(a: number, b: number, done?: () => void) {
-    if (reduceMotion()) { this.d0 = a; this.d1 = b; this.paint(); done?.(); return; }
+    if (reduceMotion()) { this.d0 = a; this.d1 = b; this._relatch = true; this.paint(); done?.(); return; }
     const va0 = tv(this.d0), vb0 = tv(this.d1), va1 = tv(a), vb1 = tv(b), t0 = performance.now();
     const step = (t: number) => {
       const p = clamp((t - t0) / 650, 0, 1), e = p < .5 ? 4 * p * p * p : 1 - Math.pow(-2 * p + 2, 3) / 2;
-      this.d0 = ty(va0 + (va1 - va0) * e); this.d1 = ty(vb0 + (vb1 - vb0) * e); this.paint();
+      this.d0 = ty(va0 + (va1 - va0) * e); this.d1 = ty(vb0 + (vb1 - vb0) * e);
+      this._relatch = true; this.paint();
       if (p < 1) requestAnimationFrame(step); else done?.();
     };
     requestAnimationFrame(step);

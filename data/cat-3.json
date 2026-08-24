@@ -38,13 +38,13 @@
   },
   {
    "t": "Cortés destroys the Aztecs",
-   "cat": "war",
+   "cat": "power",
    "type": "episode",
    "flag": false
   },
   {
    "t": "Pizarro seizes the Inca",
-   "cat": "war",
+   "cat": "power",
    "type": "moment",
    "flag": false
   },

@@ -52,6 +52,7 @@ interface Row {
 export const LayerPanel = {
   host: null as HTMLElement | null,
   bar: null as HTMLElement | null,
+  addBtn: null as HTMLButtonElement | null,
   rows: [] as Row[],
   _lay: null as any,
   _drag: null as null | { id: string; isG: boolean; x: number; y: number; live: boolean },
@@ -75,12 +76,29 @@ export const LayerPanel = {
       if (!t.closest('.tl-lpop') && !t.closest('[data-a="detail"]') && !t.closest('[data-lbar]')) closePops();
     }, true);
 
+    /* THE TWO VERBS ARE BUTTONS THAT LOOK LIKE BUTTONS.
+       The founder: "make add lane or add group more prominent — it's almost not
+       seeable." They were borderless text in --tl-ink-2 on the panel's own
+       surface, i.e. two words that read as a caption. The only way into the
+       library was a label you had to already know was clickable.
+
+       So each one is now a real bordered control with its own fill and a lead
+       "+", built as ELEMENTS rather than a text label, because the glyph and
+       the word carry different weight: the + is the affordance and stays quiet
+       ink, the word is the language. app.css §THE BAR does the rest. */
     if (bar) {
-      const add = el('button', 'tl-lbtn') as HTMLButtonElement;
-      add.type = 'button'; add.dataset.lbar = 'add'; add.textContent = '+ Add layer';
+      const mk = (verb: string, word: string) => {
+        const b = el('button', 'tl-lbtn') as HTMLButtonElement;
+        b.type = 'button';
+        b.append(el('span', 'tl-lbtn__plus', verb), el('span', 'tl-lbtn__w', word));
+        return b;
+      };
+      const add = this.addBtn = mk('+', 'Add layer');
+      add.dataset.lbar = 'add';
       add.addEventListener('click', () => openLibrary(add));
-      const grp = el('button', 'tl-lbtn') as HTMLButtonElement;
-      grp.type = 'button'; grp.dataset.lbar = 'group'; grp.textContent = 'Group';
+      const grp = mk('+', 'Group');
+      grp.dataset.lbar = 'group';
+      grp.title = 'Make an empty group, then drag layers into it';
       grp.addEventListener('click', () => { Layers.newGroup(); TL.ease(); });
       const cnt = el('span', 'tl-lcount'); cnt.id = 'layerCount';
       bar.append(add, grp, cnt);
@@ -120,7 +138,28 @@ export const LayerPanel = {
     }
     const ids = Layers.ids();
     const cnt = document.getElementById('layerCount');
-    if (cnt) cnt.textContent = ids.filter(i => Layers.visible(i)).length + '/' + ids.length + ' shown';
+    if (cnt) {
+      cnt.textContent = '';
+      cnt.append(
+        document.createTextNode(ids.filter(i => Layers.visible(i)).length + '/' + ids.length),
+        el('span', 'tl-lcount__w', ' shown'),                 // dropped when the panel narrows
+      );
+    }
+    /* AN EMPTY LIBRARY IS A STATE, NOT AN ABSENCE. When everything is already
+       on the board there is nothing to add — but a button that disappears at
+       that moment takes the reader's only route to the library with it, and
+       they have no way to learn it will come back the moment they remove a
+       layer. So it stays, in the dashed + tertiary-ink treatment the cube's
+       chain already uses for "this slot is empty", still clickable, and the
+       popover it opens says so in words. */
+    const add = this.addBtn;
+    if (add) {
+      const left = Layers.library().length;
+      add.dataset.empty = String(left === 0);
+      add.title = left
+        ? `Add one of ${left} more layers from the library`
+        : 'Every layer in the library is already on the board — remove one and it comes back here';
+    }
     if (this._lay) this.place(this._lay);
   },
 

@@ -1,0 +1,54 @@
+{
+  "_scope": "Europe (band EU) + Deep time (band CO): events.ts rows, cat-1.json assignments, EU-footprint spreads, polities-eu.json, EU/CO lives and eras from overrides.json. Audit of 25.8.2026 against the founder bar: Essentials at NORMAL = the biggest changes and the major empires; nothing miscategorised.",
+
+  "recat": [
+    {"t": "Constantinople falls to Ottomans", "to": "power",
+     "why": "the fall of an empire is regime change, the same class as 'Western Rome falls' (power); as cat war it sits only in the Wars facet and Essentials loses the 1453 epoch boundary"},
+    {"t": "Viking age begins (Lindisfarne)", "to": "reach",
+     "why": "Viking expansion is raiding/migration/settlement across the map — the taxonomy review's reach cluster already took 'Vikings land in Newfoundland'; this puts the start of the Viking age into Essentials where a course covers it"},
+    {"t": "Defenestration of Prague", "to": "war",
+     "why": "it is the opening act of the Thirty Years' War; in Essentials it reads as a national anecdote, in Wars it sits beside the war it started"},
+    {"t": "Farming begins", "to": "sci",
+     "why": "the founder's own principle — 'writing is more of a technology topic' — applies verbatim to agriculture; the agriculture spread is already kind technology (sci), the CO event should match"}
+  ],
+
+  "reimp": [
+    {"t": "Vesuvius buries Pompeii", "to": 5,
+     "why": "famous but historically inert — it changed nothing; a course on Europe does not need it, DETAILED only"},
+    {"t": "Athenian democracy", "to": 2,
+     "why": "the birth of democracy is a turning point any one-page history of Europe names; belongs at LESS"},
+    {"t": "Luther's 95 theses — Reformation", "to": 2,
+     "why": "the Reformation split Western Christendom and redrew the continent — a one-page turning point, not merely course material"},
+    {"t": "Constantinople falls to Ottomans", "to": 2,
+     "why": "symmetric with 'Western Rome falls' (imp 2): the other Rome falls, the conventional end of the Middle Ages"},
+    {"t": "Berlin Wall falls · Velvet Revolution", "to": 2,
+     "why": "the end of Europe's Cold War division is a one-page turning point on par with 1789 and 1492"},
+    {"t": "Plato", "to": 3,
+     "why": "a philosopher's lifespan is course material, not a turning point; imp 2 puts the bar into LESS which is reserved for what a one-page history names"},
+    {"t": "Aristotle", "to": 3,
+     "why": "same as Plato — keep at NORMAL, out of LESS"},
+    {"t": "Karl Marx", "to": 3,
+     "why": "his life is course-level; the world-changing artifact (Das Kapital) is its own SC event — the lifespan bar need not sit at LESS"},
+    {"t": "Jan Amos Komenský (Comenius)", "to": 5,
+     "why": "a general European course does not cover Comenius; national-interest figure like Charles University (already imp 5) — DETAILED only keeps Essentials really essential"},
+    {"t": "polity:german-empire", "to": 8,
+     "why": "peak 9 puts Wilhelmine Germany in the essential-at-any-zoom tier with Rome, Britain and Napoleonic France; peak 8 (lvl 2) still ranks it above Austria-Hungary and matches Russian Empire"}
+  ],
+
+  "flags": [
+    {"t": "World War I",
+     "issue": "STRUCTURAL: facetOf() sends every cat=war mark to the Wars facet, so the default spine's EU Essentials at NORMAL omits both World Wars and Alexander's conquests — the region's biggest changes fail the founder's NORMAL bar. Recat would be a lie (they are wars). Needs an escape hatch, e.g. imp<=2 wars also pass in ess, or the spine ships eu-war"},
+    {"t": "World War II",
+     "issue": "same structural gap as World War I — absent from EU Essentials at any detail because cat war owns it exclusively"},
+    {"t": "spread:agriculture",
+     "issue": "regionOf(34.5, 38.0) classifies the Fertile Crescent origin as EU (the EU box starts at lat 34), so the Farming spread lands in Europe · Science; it is the MidEast's signature contribution and belongs to ME. regionOf's box is too coarse — spreads need an explicit region field"},
+    {"t": "spread:bronze-age",
+     "issue": "same regionOf box error: first footprint (39.0, 33.0) is Anatolia, classified EU; the spread's story is Near Eastern"},
+    {"t": "spread:ironworking",
+     "issue": "same regionOf box error: first footprint (39.6, 34.6) is Hattusa, Anatolia, classified EU"},
+    {"t": "Mycenaean Greece",
+     "issue": "duplicate representation: the event zone (-1600..-1100) and polity:mycenaean-greece cover the identical span and subject; cat-1 already carries flag:true — drop the event zone or bind them same-as"},
+    {"t": "EU founded · Czechoslovakia splits",
+     "issue": "the title welds a continental turning point to a national event of a different scale; if ever split, the Velvet Divorce half is imp 5"}
+  ]
+}
