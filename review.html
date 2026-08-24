@@ -1,0 +1,55 @@
+<!doctype html>
+<meta charset="utf-8">
+<title>Review</title>
+<style>
+:root{color-scheme:light dark;
+  --bg:#F5F7F6;--ink:#12181A;--mut:#6D7B7F;--line:#C7D0CD;--acc:#B4382A;--card:#fff}
+@media (prefers-color-scheme:dark){:root{--bg:#0E1416;--ink:#DEE6E4;--mut:#8A9AA0;--line:#2A3438;--acc:#E4644B;--card:#161E21}}
+*{box-sizing:border-box;margin:0}
+body{height:100vh;display:flex;flex-direction:column;background:var(--bg);color:var(--ink);
+  font:14px/1.4 "Instrument Sans",-apple-system,system-ui,sans-serif}
+nav{display:flex;gap:2px;padding:8px 10px 0;border-bottom:1px solid var(--line);background:var(--bg)}
+nav button{appearance:none;border:1px solid transparent;border-bottom:none;background:transparent;color:var(--mut);
+  padding:7px 14px;font:600 12px/1 inherit;letter-spacing:.04em;text-transform:uppercase;cursor:pointer;border-radius:6px 6px 0 0}
+nav button:hover{color:var(--ink)}
+nav button.on{color:var(--ink);background:var(--card);border-color:var(--line);position:relative;top:1px}
+nav .kbd{margin-left:auto;align-self:center;color:var(--mut);font:11px ui-monospace,Menlo,monospace;padding-right:6px}
+.desc{padding:9px 16px;border-bottom:1px solid var(--line);background:var(--card);font-size:13px}
+.desc b{font-weight:650}
+.desc .q{color:var(--acc);font-weight:600;margin-left:8px}
+iframe{flex:1;border:0;width:100%;background:var(--bg)}
+</style>
+<nav id="tabs"></nav>
+<div class="desc" id="desc"></div>
+<iframe id="frame"></iframe>
+<script>
+const T=[
+ {n:"App",u:"http://localhost:3200",
+  d:"<b>The shipped product</b> — one search (try: cubism ↵), fixed light-mode colours, dates on top, rail drag, map cover, URL state.",
+  q:"Anything that shipped wrong?"},
+ {n:"Zoom A",u:"/experiments/zoomconcepts/a.html",
+  d:"<b>True 2D camera</b> — rigid world, both axes scale under the cursor, detail fades in with zoom. Press <b>Y</b> to toggle damped vertical. The recommended model.",
+  q:"Does this feel like the map? Damped or pure?"},
+ {n:"Zoom B",u:"/experiments/zoomconcepts/b.html",
+  d:"<b>Zoom-stepped</b> — layout changes only at discrete thresholds with a short settle, frozen in between. The ranking called it “jelly on a timer.”",
+  q:"Better or worse than A?"},
+ {n:"Zoom C",u:"/experiments/zoomconcepts/c.html",
+  d:"<b>Fixed slots</b> — page geometry never moves; zooming densifies detail inside each lane. A dashboard you sharpen, not a map you travel.",
+  q:"Is rock-solid worth losing “zoom into a region”?"},
+ {n:"Layers",u:"/experiments/layers/v2.html",
+  d:"<b>Layers v2</b> — flat draggable list driving the canvas: drag · hide · group · add · remove, rows locked to lanes, worded detail levels (try Mozart: less / normal / detailed).",
+  q:"Does this replace the Lanes+Domain sidebar?"},
+ {n:"Card",u:"/design/selcard/preview.html",
+  d:"<b>The designed selection card</b> — “Show this in → Timeline · Map · Cube · Core”, hatched not-this-year states, span strip on top. Six states × both themes; scroll.",
+  q:"Integrate as designed?"},
+];
+const tabs=document.getElementById('tabs'),desc=document.getElementById('desc'),frame=document.getElementById('frame');
+T.forEach((t,i)=>{const b=document.createElement('button');b.textContent=(i+1)+' · '+t.n;
+  b.onclick=()=>go(i);tabs.appendChild(b);});
+const kbd=document.createElement('span');kbd.className='kbd';kbd.textContent='keys 1–6';tabs.appendChild(kbd);
+function go(i){[...tabs.children].forEach((b,j)=>b.classList&&b.classList.toggle('on',j===i));
+  const t=T[i];desc.innerHTML=t.d+'<span class="q">'+t.q+'</span>';frame.src=t.u;
+  history.replaceState(null,'','#'+(i+1));}
+addEventListener('keydown',e=>{const n=+e.key;if(n>=1&&n<=T.length&&!e.metaKey&&!e.ctrlKey)go(n-1);});
+go(Math.min(Math.max((+location.hash.slice(1)||1)-1,0),T.length-1));
+</script>

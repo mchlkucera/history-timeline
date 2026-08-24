@@ -159,7 +159,10 @@ export const VT = {
   // never disagree about what is on screen. `pad` widens the window for the measuring
   // pass only (see layout).
   alphaOf(ev: any[], isLens: boolean, key: string, GY: number, Hp: number, PB: number, pad?: number) {
-    const a = this.alphaFor(ev[4], this.span(), isLens);
+    // A layer set to `detailed` means "everything we hold", which cannot mean
+    // "...once you have zoomed far enough in" here either. TL.lodOf is the one
+    // place that decides, so both projections drop the gate at the same word.
+    const a = TL.lodOf(ev[4], this.span(), isLens, TL.detailOfEvent(ev));
     if (a <= 0.02) return 0;
     const p = pad || 0;
     const ya = this.y(ev[0], GY, Hp), yb = ev[1] ? this.y(ev[1], GY, Hp) : ya;
@@ -268,7 +271,14 @@ export const VT = {
     let hitCount = 0; this._dropped = 0; this.boxes = [];
 
     const bandEvs: Record<string, any[]> = {};
-    for (const b of bands) bandEvs[b[0]] = EVENTS.filter(e => e[3] === b[0] && !this.off.has(e[6])).sort((a, b2) => a[0] - b2[0]);
+    // THE LAYER MODEL, SEEN FROM THE PROJECTION THAT HAS NO PANEL.
+    // This view still draws BANDS as columns, because down-the-page is its time
+    // axis and a column per layer would be a different instrument. But WHAT is in
+    // a column is no longer "the band, minus the hidden domains" — it is whatever
+    // the layer panel is currently asking for, layer by layer, at each layer's own
+    // detail. TL.evVisible() is the single question both projections ask, so the
+    // seg cannot switch you to a different set of facts.
+    for (const b of bands) bandEvs[b[0]] = EVENTS.filter(e => e[3] === b[0] && TL.evVisible(e)).sort((a, b2) => a[0] - b2[0]);
     const { cols, SW } = this.layout(ctx, bands, bandEvs, GY, Hp, PB, CW);
     // Re-validate the pan against the new composition before anything is drawn with
     // it. The signature is every column key and width, so this fires for a lens, a

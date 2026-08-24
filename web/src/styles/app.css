@@ -1,3 +1,9 @@
+/* THE SELECTION CARD — ported from /design/selcard/selcard.css. It loads with
+   app.css, i.e. after shell.css, which is what lets it win the cascade over the
+   old card still declared in shell.css §05b. An @import may only appear at the
+   TOP of a stylesheet, so this one line cannot live at the foot of the file. */
+@import './selcard.css';
+
 /* =============================================================================
    app.css — the classes SHELL adds on top of the Survey system.
    tokens.css owns every colour. shell.css owns the chrome. This file owns only
@@ -7,6 +13,279 @@
 
    Nothing here declares a raw colour. If you need one, it belongs in tokens.css.
    ============================================================================= */
+
+/* ═════════════════════════════════════════════════════════════════════════════
+   THE LAYER PANEL — and THE SEAM.
+
+   The founder: "make the layers blend seamlessly to the workspace. Make it look
+   nice. Linear style."
+
+   So this is deliberately NOT a panel. It has:
+     · no border, no radius, no shadow, no glass;
+     · the SAME background the canvas paints itself (--tl-surface, which
+       tokens() hands the renderer as `panel`), so the two are one sheet;
+     · NO separator between it and the plot. Both were tried side by side. A
+       hairline at the seam reads as a boundary between two documents, and the
+       lanes visibly stop at it — which is the opposite of a row that LABELS a
+       lane. Without it the row and its band are the same object seen twice,
+       once in words and once in marks, and the eye crosses freely. The panel is
+       edged only where it meets the app ground, at the far left of the stage,
+       which is a real edge.
+     · rows that read as labels OF the lanes: 12px UI type for a name (language),
+       mono for anything counted (a level word, a group's child count), 22px
+       lines, and hover expressed as BACKGROUND ONLY.
+
+   AND NOTHING HERE HAS A HEIGHT. Every row's top, height and top-padding are
+   written by layerpanel.ts from the canvas's own lane geometry, every frame.
+   Any height in this file would be a second opinion about where a band is.
+
+   THE JELLY RULE. Hover reveals the detail word and the × by OPACITY. No
+   padding change, no size change, no reflow — pointing at a row must never move
+   anything, here or on the canvas beside it.                                  */
+
+.tl-app { --tl-layers-w: 280px; }
+@media (max-width: 1180px) { .tl-app { --tl-layers-w: 232px; } }
+
+/* One surface: the panel is a flex ITEM of the view, so .tl-view's scroller is
+   the only scroller either side has. Neither can move without the other. */
+.tl-view[data-view="zoom"][data-active="true"] {
+  flex-direction: row;
+  align-items: flex-start;
+}
+.tl-view[data-view="zoom"] > .tl-canvasbox { margin-block: 0; flex: 1 1 auto; min-width: 0; }
+.tl-layers {
+  position: relative;
+  flex: 0 0 var(--tl-layers-w);
+  width: var(--tl-layers-w);
+  background: var(--tl-surface);
+  overflow: hidden;                 /* clips a row mid-transition; never scrolls */
+  user-select: none;
+}
+/* the top strip is the canvas's axis masthead — the panel keeps it clear */
+.tl-layers::before {
+  content: "";
+  position: absolute;
+  left: 0; right: 0; top: 0;
+  height: 22px;
+  background: var(--tl-surface);
+  border-bottom: var(--tl-border) solid var(--tl-rule);
+}
+
+.tl-lrow {
+  position: absolute;
+  left: 0; right: 0;
+  display: flex;
+  align-items: flex-start;
+  gap: var(--tl-space-3);
+  padding-right: var(--tl-space-3);
+  padding-left: var(--tl-space-2);
+  overflow: hidden;
+  line-height: 20px;
+}
+/* THE BAND RULE RUNS THROUGH. This is what finally kills the seam: the canvas
+   draws each band's separator on the band's last pixel row, and the panel row —
+   which is exactly as tall as that band — draws the same hairline on its own
+   last pixel row. One rule, unbroken, from the panel's left edge to the right
+   edge of the plot, so a row and its lane are visibly one band rather than two
+   things that happen to line up. (--tl-rule-soft, because the canvas strokes
+   --tl-rule at 0.8 alpha and this is what that composites to.) */
+.tl-lrow:hover { background: var(--tl-hover); }
+.tl-lrow--layer { box-shadow: inset 0 -1px 0 var(--tl-rule-soft); }
+.tl-lrow--layer.tl-lrow--in { box-shadow: inset 0 -1px 0 var(--tl-rule-soft), inset 10px 0 0 -9px var(--tl-rule); }
+.tl-lrow--in { padding-left: 18px; box-shadow: inset 10px 0 0 -9px var(--tl-rule); }
+.tl-lrow.is-off .tl-lname, .tl-lrow.is-off .tl-ldot { opacity: .38; }
+.tl-lrow.is-dragging { background: var(--tl-accent-soft); box-shadow: inset 0 0 0 1px var(--tl-accent-line) !important; }
+.tl-lrow.is-thin { line-height: 18px; }
+
+.tl-leye {
+  appearance: none; border: 0; background: none; padding: 0;
+  flex: none; width: 16px; height: 20px;
+  display: grid; place-items: center;
+  color: var(--tl-ink-3); cursor: pointer; border-radius: var(--tl-radius-xs);
+}
+.tl-leye:hover { color: var(--tl-ink); background: var(--tl-press); }
+.tl-leye svg { width: 12px; height: 12px; display: block; }
+.tl-ldot { flex: none; width: 7px; height: 7px; margin-top: 6px; border-radius: 50%; }
+.tl-lname {
+  flex: 1 1 auto; min-width: 0;
+  font-family: var(--tl-font-ui);            /* a layer's name is language */
+  font-size: var(--tl-text-sm);
+  color: var(--tl-ink);
+  white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+  cursor: grab;
+}
+.tl-lname--group {
+  font-size: var(--tl-text-2xs);
+  font-weight: var(--tl-w-semi);
+  letter-spacing: var(--tl-track-caps);
+  text-transform: uppercase;
+  color: var(--tl-ink-2);
+}
+.tl-lcnt {
+  flex: none;
+  font-family: var(--tl-font-mono);          /* a count is a measurement */
+  font-size: var(--tl-text-2xs);
+  font-variant-numeric: tabular-nums;
+  color: var(--tl-ink-3);
+}
+.tl-lchev {
+  appearance: none; border: 0; background: none; padding: 0;
+  flex: none; width: 13px; height: 20px;
+  color: var(--tl-ink-3); cursor: pointer; font-size: 10px; line-height: 20px;
+}
+.tl-lchev:hover { color: var(--tl-ink); }
+
+/* The detail dial, worded. Quiet until pointed at — by opacity, never layout. */
+.tl-ldetail {
+  appearance: none;
+  flex: none;
+  font-family: var(--tl-font-mono);
+  font-size: var(--tl-text-2xs);
+  letter-spacing: var(--tl-track-xs);
+  color: var(--tl-ink-3);
+  background: none;
+  border: var(--tl-border) solid transparent;
+  border-radius: var(--tl-radius-xs);
+  padding: 0 var(--tl-space-2);
+  height: 17px;
+  cursor: pointer;
+  opacity: 0;
+}
+.tl-lrow:hover .tl-ldetail, .tl-ldetail:focus-visible { opacity: 1; }
+.tl-ldetail:hover, .tl-ldetail.is-open {
+  opacity: 1;
+  border-color: var(--tl-rule-strong);
+  background: var(--tl-surface-2);
+  color: var(--tl-ink-2);
+}
+.tl-lx {
+  appearance: none; border: 0; background: none; padding: 0;
+  flex: none; width: 15px; height: 20px;
+  color: var(--tl-ink-3); cursor: pointer;
+  font-size: 14px; line-height: 18px; text-align: center;
+  opacity: 0;
+}
+.tl-lrow:hover .tl-lx, .tl-lx:focus-visible { opacity: 1; }
+.tl-lx:hover { color: var(--tl-accent); }
+
+/* The bar. Two verbs and a count — the whole chrome budget of this instrument. */
+.tl-layers__bar {
+  position: absolute;
+  left: 0; bottom: 0;
+  width: var(--tl-layers-w);
+  display: flex;
+  align-items: center;
+  gap: var(--tl-space-3);
+  height: 29px;
+  padding: 0 var(--tl-space-3);
+  background: var(--tl-surface);
+  border-top: var(--tl-border) solid var(--tl-rule-soft);
+  z-index: var(--tl-z-panel);
+}
+.tl-layers__bar[hidden] { display: none; }
+.tl-lbtn {
+  appearance: none;
+  font-family: var(--tl-font-ui);
+  font-size: var(--tl-text-xs);
+  color: var(--tl-ink-2);
+  background: none;
+  border: var(--tl-border) solid transparent;
+  border-radius: var(--tl-radius-xs);
+  padding: 2px var(--tl-space-3);
+  cursor: pointer;
+}
+.tl-lbtn:hover { background: var(--tl-hover); color: var(--tl-ink); border-color: var(--tl-rule); }
+.tl-lcount {
+  margin-left: auto;
+  font-family: var(--tl-font-mono);
+  font-size: var(--tl-text-2xs);
+  font-variant-numeric: tabular-nums;
+  color: var(--tl-ink-3);
+  white-space: nowrap;
+}
+
+/* Popovers and the drag ghost live on <body>: inside the scrolling surface they
+   would travel with it while the reader is reading them. */
+.tl-lpop {
+  position: fixed;
+  z-index: var(--tl-z-pop, 950);
+  display: none;
+  min-width: 252px;
+  max-height: 62vh;
+  overflow-y: auto;
+  padding: var(--tl-space-2);
+  background: var(--tl-surface);
+  border: var(--tl-border) solid var(--tl-rule);
+  border-radius: var(--tl-radius-lg);
+  box-shadow: var(--tl-shadow-pop, 0 8px 24px rgba(18, 24, 26, .16));
+}
+.tl-lpop h4 {
+  font-family: var(--tl-font-mono);
+  font-size: var(--tl-text-2xs);
+  font-weight: var(--tl-w-regular);
+  text-transform: uppercase;
+  letter-spacing: var(--tl-track-caps);
+  color: var(--tl-ink-3);
+  padding: var(--tl-space-2) var(--tl-space-3) var(--tl-space-3);
+}
+.tl-lopt {
+  appearance: none;
+  display: flex; flex-direction: column; gap: 1px;
+  width: 100%; text-align: left;
+  padding: var(--tl-space-3) var(--tl-space-4);
+  border: 0; border-radius: var(--tl-radius-sm);
+  background: none; cursor: pointer;
+}
+.tl-lopt:hover { background: var(--tl-hover); }
+.tl-lopt.is-on { background: var(--tl-selected); box-shadow: inset 2px 0 0 var(--tl-accent); }
+.tl-lopt b { font-family: var(--tl-font-ui); font-size: var(--tl-text-sm); font-weight: var(--tl-w-semi); color: var(--tl-ink); }
+.tl-lopt span { font-size: var(--tl-text-xs); color: var(--tl-ink-3); line-height: var(--tl-lh-ui); }
+.tl-litem {
+  appearance: none;
+  display: flex; align-items: center; gap: var(--tl-space-4);
+  width: 100%; text-align: left;
+  padding: var(--tl-space-2) var(--tl-space-3);
+  border: 0; border-radius: var(--tl-radius-sm);
+  background: none; cursor: pointer;
+  font-family: var(--tl-font-ui); font-size: var(--tl-text-sm); color: var(--tl-ink);
+}
+.tl-litem:hover { background: var(--tl-hover); }
+.tl-litem .tl-ldot { margin-top: 0; }
+.tl-lt { flex: 1 1 auto; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.tl-ln {
+  font-family: var(--tl-font-mono); font-size: var(--tl-text-2xs);
+  font-variant-numeric: tabular-nums; color: var(--tl-ink-3);
+}
+.tl-lempty { padding: var(--tl-space-3) var(--tl-space-4); font-size: var(--tl-text-xs); color: var(--tl-ink-3); }
+.tl-lghost {
+  position: fixed;
+  z-index: var(--tl-z-pop, 950);
+  display: none;
+  padding: var(--tl-space-2) var(--tl-space-5);
+  font-family: var(--tl-font-ui); font-size: var(--tl-text-sm);
+  background: var(--tl-surface);
+  border: var(--tl-border) solid var(--tl-rule-strong);
+  border-radius: var(--tl-radius-sm);
+  box-shadow: var(--tl-shadow-pop, 0 8px 24px rgba(18, 24, 26, .16));
+  pointer-events: none;
+}
+body.tl-dragging { cursor: grabbing; }
+
+/* BELOW THE SHEET BREAKPOINT THE PANEL STANDS DOWN.
+
+   Every other panel in this app becomes a bottom sheet over the canvas there.
+   This one cannot: being a column locked to the lane geometry IS what it is.
+   Squeezed into a phone it was 132px of "D..", "E..." and "M." — measured — so
+   the bands lost their names, which is precisely the failure the left dock was
+   built to prevent. It hides instead, and timeline.ts sees that it has no width
+   and paints the band names back onto the canvas in a 118px gutter of its own
+   (see panelOn / GUT_SOLO). Nothing is lost but the reordering. */
+@media (max-width: 759px) {
+  .tl-layers, .tl-layers__bar { display: none; }
+  .tl-view[data-view="zoom"][data-active="true"] { flex-direction: column; }
+  .tl-view[data-view="zoom"] > .tl-canvasbox { flex: 1 1 auto; }
+}
+
 
 /* ── Fonts ────────────────────────────────────────────────────────────────────
    next/font exposes each face as a CSS variable on <html>. tokens.css names the

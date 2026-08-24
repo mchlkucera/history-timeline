@@ -8,7 +8,7 @@
 // old spreadsheets, live. One piecewise C1 scale (shared.ts tv/ty) runs the wheel from
 // a decade to the Big Bang with no mode switch; the old log toggle is dead.
 import {
-  $, EVENTS, POLITIES, CATS, CATBY, catColor, clamp, fitCanvas, fmtBig, fmtSpan, fmtY, fontMono, fontUI,
+  $, EVENTS, POLITIES, CATBY, catColor, clamp, fitCanvas, fmtBig, fmtSpan, fmtY, fontMono, fontUI,
   hideTip, reduceMotion, repaintOnFonts, showTip, tokens, yearPill,
   tv, ty, VFULL, timeTicks, withA, hexHsl, varyColor, mix, clampV, clampDomain,
   TimeStore, SelStore, evId, LANES, sharpnessOf,
@@ -19,6 +19,10 @@ import {
 } from './relations';
 import { FOLD, roleWord } from './fold';
 import { SelCard } from './selcard';
+import {
+  Layers, layerDef, layerDefs, layerIdFor, layerIdOfEvent, passesDetail, polityLvl,
+  type Detail, type GNode,
+} from './layers';
 
 // ── projections of this state ───────────────────────────────────────────────
 // The Timeline group is ONE instrument shown two ways. vertical.ts reads d0/d1, log,
@@ -28,6 +32,9 @@ import { SelCard } from './selcard';
 // for, and every state-changing handler below calls it instead of render().
 const PROJECTIONS: Array<() => void> = [];
 const REVEALS: Array<(bandKey: string) => void> = [];
+// The layer panel subscribes here. It is handed the finished layout — drawn
+// geometry, not target geometry — once per painted frame.
+const LAYOUTS: Array<(lay: Layout) => void> = [];
 
 // A spread in the lane corpus. `row` is its PERMANENT lane index within its band,
 // assigned once per corpus from the canonical importance-first order, so zoom can
@@ -42,6 +49,12 @@ interface LSpread { it: SpreadItem; row: number; x0: number; x1: number; lodA: n
 interface LEvent { ev: any[]; id: string; x0: number; row: number; lodA: number; mode: 'right' | 'left' | 'none'; labelW: number; isMatch: boolean }
 interface LaneLayout {
   key: string; label: string; si: number | null; isCur: boolean;
+  // ── the layer this band draws ──────────────────────────────────────────────
+  // `key` is the LAYER ID ('eu-sci'), or 'g:<groupId>' for a group's header
+  // strip. Everything keyed by lane key elsewhere in this file — _dh, _trimS,
+  // expanded, dying — is therefore keyed by layer, which is what makes a
+  // reorder move a band's followed height along with it.
+  layerId: string | null; detail: Detail; grp: GNode | null; isGroupHead: boolean;
   spreads: LSpread[]; events: LEvent[];
   ns: number; ne: number; more: number; exp: boolean;
   isRegion: boolean; era: LSpread[]; eraRow: number; eraOut: string[];
@@ -113,7 +126,31 @@ const IDLE_MS = 400;        // a gap this long is a new look, not a gesture: sna
 const LAB_G0 = 0.60, LAB_G1 = 0.85;    // a row's text fades in between 60% and 85% grown
 const HIT_FLOOR = 0.34;     // below this a row is drawn but NOT hoverable (see hitAt)
 const TRIM_ON = 24, TRIM_OFF = 24;     // the height-budget hysteresis band
-const HEAD_H = 22;          // band header strip — the one fixed piece of furniture
+/* ── NO BAND HEADER ON THE CANVAS ANY MORE ───────────────────────────────────
+
+   The band name used to be painted at x=20 inside a 118px left gutter, and the
+   gutter existed to hold it. The LAYER PANEL is that label now: its row sits at
+   the band's own y, at the band's own height, so the name is beside the lane
+   rather than inside it. Painting it twice would be two labels for one band.
+
+   What is left of it is therefore a PAD — the breathing space between a
+   band's separator rule and its first row of marks. But it still has to be a
+   HEIGHT, not a constant, for two reasons the old comment already gave: a lane
+   being switched off walks its header to zero along with its rows, and a band
+   with nothing in it at this zoom must not collapse to a hairline, because its
+   panel row has to stay big enough to hold a name and an eye. So the target is
+   MIN_LANE_H when the band is empty and HEAD_PAD when it has content, and it
+   crosses between them CONTINUOUSLY with the first row's growth. */
+const HEAD_PAD = 8;         // pad above the first row of a band that has content
+const MIN_LANE_H = 22;      // …and the floor for a band that is empty or hidden
+const GRP_H = 16;           // a group's rule strip in the plot
+// How many event rows the per-frame pixel packer may open. Not a cap on what is
+// SHOWN — the global height budget below is the only thing that takes a row
+// away — just the width of the packing table. Ten is more rows than a band ever
+// gets to keep at a laptop height.
+const EV_BOUND = 10;
+const GUT = 12;             // the plot's left gutter WHEN THE PANEL IS SHOWING
+const GUT_SOLO = 118;       // …and when it is not (see panelOn / the phone note)
 const GAP_H = 6;            // spreads ↔ events separation, faded in with both
 // The tick-label strip. It used to run along the BOTTOM of the canvas, under the plot,
 // with the set-year pill sliding about inside the lanes above it. His words: "Lets
@@ -211,14 +248,22 @@ export const TL = {
   // Frozen `false`, kept because Lab and the vertical projection still read it. The
   // deep-time MODE died: the one piecewise scale reaches the Big Bang by wheel alone.
   log: false,
-  lens: { MU: false, SC: false, MZ: false } as Record<string, boolean>,
-  q: '', hoverX: null as number | null, off: new Set<string>(),
+  q: '', hoverX: null as number | null,
+  /* The domain filter, kept as an EMPTY set. The chips that wrote it are gone —
+     a layer is a subject x a kind, which says "Europe's science but not its
+     wars", the thing "hide this category everywhere" never could. render() and
+     the vertical projection still consult it, so a future global mute has a
+     place to write and nothing downstream had to change. */
+  off: new Set<string>(),
   THR: { 1: Infinity, 2: 40000, 3: 2400, 4: 650, 5: 170 } as Record<number, number>,
   LMAX: 10.2,                              // dead, but part of the compatibility surface
   // stage height budget — sizeRenderers() writes this; the canvas grows to its content
   // but never (except at the trim floor) past this.
   HMAX: 760,
-  SP_PITCH: 24, EV_PITCH: 17, SPREAD_CAP: 6, EVENT_CAP: 3,
+  // SPREAD_CAP / EVENT_CAP are gone with the density policy they were: a lane's
+  // ceiling is what its detail dial asked for, and only the global height budget
+  // can lower it. See `asks` in layout().
+  SP_PITCH: 24, EV_PITCH: 17,
   // Lanes the reader has opened past their row cap by pressing "+N more".
   // Pressing it used to zoom one level of detail in, which could RAISE the
   // number it had just named: more items pass the LOD threshold while the rows
@@ -226,37 +271,113 @@ export const TL = {
   // does what it says — the lane keeps every row it has and the band grows.
   expanded: new Set<string>(),
 
-  // ---- the lane registry: bands and lenses unified -------------------------
-  // Fixed order: CO deep time, then ON curated lanes in registry order, then the four
-  // standing regions. Regions and CO are always on; curated lanes toggle via chips.
-  // A lane switched OFF is not removed from the layout on the spot — that is a
-  // whole band vanishing in one frame, the exact jump this work exists to kill.
-  // It stays here as `dying`, its header height targets 0, and the slew limiter
-  // walks it out at 2.2px/frame; layout() drops it once it has actually closed.
-  dying: new Set<string>(),
-  laneDefs(): { key: string; label: string; si: number | null; kind: 'deep' | 'curated' | 'region'; dying?: boolean }[] {
-    const out: { key: string; label: string; si: number | null; kind: 'deep' | 'curated' | 'region'; dying?: boolean }[] =
-      [{ key: 'CO', label: 'Deep time', si: null, kind: 'deep' }];
-    for (const L of LANES) {
-      if (this.lens[L.key]) out.push({ key: L.key, label: L.label, si: L.si, kind: 'curated' });
-      else if (this.dying.has(L.key)) out.push({ key: L.key, label: L.label, si: L.si, kind: 'curated', dying: true });
+  // ---- THE LANE REGISTRY IS NOW THE LAYER PANEL ---------------------------
+  // It used to be: deep time, then whichever curated lanes the LANES chips had
+  // switched on, then the four standing regions, in a fixed order nobody could
+  // change. The reader's only two verbs were "turn this whole band on" and
+  // "hide this category everywhere". Both are gone; layers.ts holds the order,
+  // the grouping, the visibility and the per-layer detail, and this method is
+  // just its projection into lanes.
+  //
+  // A layer that has just been REMOVED is not dropped from the layout on the
+  // spot -- that is a whole band vanishing in one frame, the exact jump this
+  // file exists to kill. It is remembered here with the index it was removed
+  // from, put back in that slot as `dying`, and the slew limiter walks it out
+  // at 2.2px/frame; layout() forgets it once it has actually closed.
+  dying: new Map<string, number>(),
+  laneDefs(): {
+    key: string; label: string; si: number | null; kind: 'group' | 'region' | 'movements' | 'person';
+    isCur: boolean; isRegion: boolean; dying?: boolean; layerId: string | null;
+    detail: Detail; hidden: boolean; grp: GNode | null;
+  }[] {
+    const out: any[] = [];
+    for (const row of Layers.lanes()) {
+      if (row.t === 'G') {
+        out.push({
+          key: 'g:' + row.g.id, label: row.g.name, si: null, kind: 'group', isCur: false,
+          isRegion: false, layerId: null, detail: 1 as Detail, hidden: false, grp: row.g,
+        });
+        continue;
+      }
+      const d = layerDef(row.id); if (!d) continue;
+      out.push({
+        key: row.id, label: d.name, si: d.si, kind: d.kind,
+        isCur: d.facet === 'all' && d.subject !== 'CO',
+        isRegion: d.kind === 'region', layerId: row.id,
+        detail: Layers.detail(row.id), hidden: !Layers.visible(row.id), grp: row.group,
+      });
     }
-    out.push(
-      { key: 'EU', label: 'Europe', si: 0, kind: 'region' },
-      { key: 'ME', label: 'MidEast & Africa', si: 1, kind: 'region' },
-      { key: 'AS', label: 'Asia', si: 2, kind: 'region' },
-      { key: 'AM', label: 'Americas', si: 3, kind: 'region' });
+    // ...and the ones on their way out, back where they were
+    if (this.dying.size) {
+      const pairs = [...this.dying.entries()].sort((a, b) => a[1] - b[1]);
+      for (const [id, at] of pairs) {
+        const d = layerDef(id); if (!d) { this.dying.delete(id); continue; }
+        out.splice(Math.min(at, out.length), 0, {
+          key: id, label: d.name, si: d.si, kind: d.kind,
+          isCur: d.facet === 'all' && d.subject !== 'CO', isRegion: d.kind === 'region',
+          dying: true, layerId: id, detail: Layers.detail(id), hidden: true, grp: null,
+        });
+      }
+    }
     return out;
   },
-  /** Is this band key a curated lane? Replaces every hardcoded ['MU','SC','MZ'] list. */
-  isCurated(key: string) { return LANES.some(l => l.key === key); },
-  // COMPAT SHIM for the vertical projection: same tuple shape as ever; the bh numbers
+  /* ── WHEN THERE IS NO PANEL, THE CANVAS NAMES ITS OWN BANDS ────────────────
+     Below 760px every panel in this app becomes a bottom sheet over the canvas,
+     and the layer panel cannot: its whole nature is to be a column locked to the
+     lane geometry. Squeezed to a phone it becomes 132px of "D..", "E...", "M." —
+     a chart with no band names, which is the exact failure the left dock was
+     invented to prevent.
+
+     So app.css hides it under that breakpoint, and the moment it is not showing
+     the canvas takes its own names back: the 118px gutter returns, each band
+     draws its swatch and its label, and the header pad grows to a full strip to
+     hold them. ONE test decides it — does the panel element have any width —
+     so the two can never disagree about who is labelling the bands. */
+  panelOn() {
+    const el = $<HTMLElement>('#layerPanel');
+    return !!(el && el.clientWidth > 0);
+  },
+  gutter() { return this.panelOn() ? GUT : GUT_SOLO; },
+  /** A layer left the board -- close its band rather than deleting it. */
+  closeLayer(id: string, at: number) { this.dying.set(id, at); this._noSnap = true; },
+  /** Is this band key a curated lane? Kept for vertical.ts and the legend. */
+  isCurated(key: string) { return LANES.some(L => L.key === key); },
+  /**
+   * Is this EVENTS tuple in a layer that is on the board, visible, and asked
+   * for at its layer's detail? The vertical projection filters its columns
+   * through this, so the two projections cannot disagree about what is showing
+   * even though only one of them has the panel.
+   */
+  /** The detail its layer is set to, or `normal` when it has no layer at all. */
+  detailOfEvent(ev: any[]): Detail {
+    const id = layerIdOfEvent(ev);
+    return id ? Layers.detail(id) : 1;
+  },
+  evVisible(ev: any[]): boolean {
+    if (this.off.has(ev[6])) return false;
+    const id = layerIdOfEvent(ev);
+    if (!id || !Layers.has(id) || !Layers.visible(id)) return false;
+    const d = layerDef(id); if (!d) return false;
+    return passesDetail(Layers.detail(id), d.kind, ev[4] || 3,
+      ev[7] || (ev[1] ? 'episode' : 'moment'), ev[0], ev[1] || 0);
+  },
+  // COMPAT SHIM for the vertical projection: same tuple shape as ever, but the
+  // set of bands is now "every band with at least one visible layer" rather
+  // than "the regions plus whichever lens chips are pressed". The bh numbers
   // are frozen constants consumed only by VT's railWidth.
   bands(): [string, string, number, number | null][] {
-    const lens: [string, string, number, number | null][] = [];
-    for (const L of LANES) if (this.lens[L.key]) lens.push([L.key, L.label, 88, L.si]);
-    return [['CO', 'Deep time', 34, null], ...lens,
-      ['EU', 'Europe', 86, 0], ['ME', 'MidEast & Africa', 86, 1], ['AS', 'Asia', 86, 2], ['AM', 'Americas', 86, 3]];
+    const live = new Set<string>();
+    for (const id of Layers.ids()) {
+      if (!Layers.visible(id)) continue;
+      const d = layerDef(id); if (d) live.add(d.subject);
+    }
+    const out: [string, string, number, number | null][] = [];
+    if (live.has('CO')) out.push(['CO', 'Deep time', 34, null]);
+    for (const L of LANES) if (live.has(L.key)) out.push([L.key, L.label, 88, L.si]);
+    const REG: [string, string, number][] = [
+      ['EU', 'Europe', 0], ['ME', 'MidEast & Africa', 1], ['AS', 'Asia', 2], ['AM', 'Americas', 3]];
+    for (const r of REG) if (live.has(r[0])) out.push([r[0], r[1], 86, r[2]]);
+    return out.length ? out : [['CO', 'Deep time', 34, null]];
   },
   span() { return this.d1 - this.d0; },
 
@@ -313,63 +434,76 @@ export const TL = {
   },
 
   // ---- the spread corpus: membership + PERMANENT lane packing --------------
-  // Region lanes: EVENTS durations of that band ∪ POLIS polities by region (AF folds
-  // into ME) ∪ REL.spreads by first-footprint region — deduped by exact name so an
-  // EVENTS row does not shadow the polity it duplicates. Curated lanes: their EVENTS
-  // durations (lane members live in EVENTS). Packed ONCE per corpus in year space,
-  // zero-gap (abutting spreads share a row — the Gantt look), canonical order
-  // (level asc, duration desc, peak desc, start asc, id asc).
-  _corpus: null as null | { sig: string; byLane: Map<string, SpreadItem[]> },
+  // ONE CORPUS PER LAYER, not per band. A layer is a subject x a kind, so its
+  // membership is a predicate over the same three sources as before -- EVENTS
+  // durations, POLIS polities, REL.spreads -- routed through layers.ts's single
+  // facetOf() decision, deduped by exact name so an EVENTS row does not shadow
+  // the polity it duplicates. Packed ONCE per corpus in year space, zero-gap
+  // (abutting spreads share a row -- the Gantt look), canonical order
+  // (level asc, peak desc, type, duration desc, start asc, id asc).
+  //
+  // Packing per LAYER rather than per band is the whole reason a detail dial
+  // can work: Europe's wars are packed against each other now instead of being
+  // buried under fourteen level-1 empires, so "Europe . Wars" at `normal` is a
+  // readable two rows rather than row seven of a region band.
+  _corpus: null as null | { sig: string; byLayer: Map<string, SpreadItem[]> },
   ensureCorpus() {
-    const sig = EVENTS.length + '|' + POLITIES.length + '|' + REL.spreads.length + '|' + LANES.map(l => l.key).join(',');
-    if (this._corpus && this._corpus.sig === sig) return this._corpus.byLane;
-    const byLane = new Map<string, SpreadItem[]>();
-    for (const key of ['CO', ...LANES.map(l => l.key), 'EU', 'ME', 'AS', 'AM']) byLane.set(key, []);
+    const defs = layerDefs();
+    const sig = EVENTS.length + '|' + POLITIES.length + '|' + REL.spreads.length + '|' + defs.length;
+    if (this._corpus && this._corpus.sig === sig) return this._corpus.byLayer;
+    const byLayer = new Map<string, SpreadItem[]>();
+    for (const d of defs) byLayer.set(d.id, []);
+    // anchors: a mark banded elsewhere that a layer adopts (Mozart's lifespan
+    // is banded MU, because a composer's life belongs in Music -- and the
+    // Mozart layer is a study OF him, so it needs the bar too).
+    const anchor = new Map<string, string[]>();
+    for (const d of defs) for (const a of d.anchors || []) {
+      const arr = anchor.get(a) || []; arr.push(d.id); anchor.set(a, arr);
+    }
+    const push = (id: string | null, it: SpreadItem) => {
+      if (!id) return; const arr = byLayer.get(id); if (arr) arr.push(it);
+    };
     for (const e of EVENTS) {
       if (!e[1]) continue;                             // moments belong to the event stratum
-      const arr = byLane.get(e[3]); if (!arr) continue;
-      arr.push({
+      const it: SpreadItem = {
         id: evId(e), name: e[2], start: e[0], end: e[1], cat: e[6] || 'power',
         type: e[7] || 'episode', lvl: e[4] || 3, sharpness: sharpnessOf(e[7], e[9]),
-        // NOTE (not changed here, deliberately — it is the founder's call): a
+        // NOTE (not changed here, deliberately -- it is the founder's call): a
         // hand-authored spread has an importance LEVEL and no weight curve, so
-        // peak is 0, and the packer breaks ties inside a level by peak. Every
-        // curated polity therefore outranks every era, war and lifespan at the
-        // same level. Giving these a level-derived proxy (11 − 2·lvl, the exact
-        // inverse of lvlOfWeight's thresholds) was tried and does interleave
-        // them sensibly — but it does NOT lift World War I into Europe's first
-        // rows, because WWI is level 2 and fourteen level-1 spreads fill them
-        // first. See the report; the row cap is the real constraint.
+        // peak is 0, and the packer breaks ties inside a level by peak.
         note: '', tags: e[5] || '', peak: 0, row: -1, ev: e,
-      });
+      };
+      push(layerIdFor(e[3], it.cat, it.type), it);
+      for (const id of anchor.get(it.id) || []) push(id, { ...it });
     }
     for (const p of POLITIES) {
-      const arr = byLane.get(p.region === 'AF' ? 'ME' : p.region); if (!arr) continue;
-      arr.push({
+      const band = p.region === 'AF' ? 'ME' : p.region;
+      push(layerIdFor(band, 'power', 'polity'), {
         id: 'polity:' + p.id, name: p.name, start: p.start, end: p.end, cat: 'power',
-        type: 'polity', lvl: lvlOfWeight(peakOf(p.weight)), sharpness: 0.85,
+        type: 'polity', lvl: polityLvl(p), sharpness: 0.85,
         note: p.note || '', tags: '', peak: peakOf(p.weight), row: -1, ev: null,
       });
     }
-    for (const s of REL.spreads) {
-      const fp = s.footprint && s.footprint.length ? s.footprint[0] : null;
-      const arr = fp ? byLane.get(regionOf(fp.lat, fp.lon) || '') : null; if (!arr) continue;
-      arr.push({
-        id: 'spread:' + s.id, name: s.name, start: s.start, end: s.end,
-        cat: SPREADCAT[s.kind] || 'society', type: 'spread',
-        lvl: lvlOfWeight(peakOf(s.weight)), sharpness: s.sharpness ?? 0.25,
-        note: s.note || '', tags: '', peak: peakOf(s.weight), row: -1, ev: null,
+    for (const sp of REL.spreads) {
+      const fp = sp.footprint && sp.footprint.length ? sp.footprint[0] : null;
+      const band = fp ? regionOf(fp.lat, fp.lon) : null;
+      if (!band) continue;
+      const cat = SPREADCAT[sp.kind] || 'society';
+      push(layerIdFor(band, cat, 'spread'), {
+        id: 'spread:' + sp.id, name: sp.name, start: sp.start, end: sp.end,
+        cat, type: 'spread', lvl: lvlOfWeight(peakOf(sp.weight)), sharpness: sp.sharpness ?? 0.25,
+        note: sp.note || '', tags: '', peak: peakOf(sp.weight), row: -1, ev: null,
       });
     }
-    for (const [key, items] of byLane) {
+    for (const entry of byLayer) {
+      const items = entry[1];
       const names = new Set(items.filter(i => !i.ev).map(i => i.name.toLowerCase()));
       const kept = items.filter(i => !(i.ev && names.has(i.name.toLowerCase())));
       // DEVIATION from the architect's exact key (level, duration, peak): peak weight
       // outranks duration inside a level, so the top rows hold what actually loomed
-      // largest (Rome, the big empires) rather than whatever merely lasted longest —
-      // the founder's "importance-first (level, then duration/peak weight)". And at
-      // equal level/peak, collective phenomena (empires, eras, movements) outrank
-      // individual lives, or a 90-year lifespan buries the 14-year Bauhaus.
+      // largest (Rome, the big empires) rather than whatever merely lasted longest.
+      // And at equal level/peak, collective phenomena outrank individual lives, or a
+      // 90-year lifespan buries the 14-year Bauhaus.
       const typeRank = (t: SpreadItem) => (t.type === 'life' ? 1 : 0);
       kept.sort((a, b) => a.lvl - b.lvl
         || b.peak - a.peak
@@ -384,10 +518,25 @@ export const TL = {
         if (r === rows.length) rows.push([]);
         rows[r].push(it); it.row = r;
       }
-      byLane.set(key, kept);
+      byLayer.set(entry[0], kept);
     }
-    this._corpus = { sig, byLane };
-    return byLane;
+    this._corpus = { sig, byLayer };
+    return byLayer;
+  },
+
+  /**
+   * THE DETAIL DIAL, WHERE THE RENDERER HONOURS IT.
+   *
+   * `normal` is deliberately a no-op against the old behaviour: the zoom LOD
+   * decides, exactly as it always did. `less` never reaches here at all -- the
+   * layer's membership was already cut by passesDetail(). `detailed` is the one
+   * that changes the gate, and it removes it: "everything we hold" cannot mean
+   * "...once you have zoomed far enough in", so a detailed layer draws every
+   * mark it owns at every span, and the only thing that can still take one away
+   * is the viewport physically running out of room.
+   */
+  lodOf(lvl: number, span: number, isCur: boolean, detail: Detail) {
+    return detail === 2 ? 1 : this.alphaFor(lvl, span, isCur);
   },
 
   // ---- pure layout pass: filter, pack, squeeze, budget → per-lane continuous rows ----
@@ -412,7 +561,8 @@ export const TL = {
 
 
   layout(cw: number): Layout {
-    const G = 118, Wp = cw - G - 10;
+    const G = this.gutter(), Wp = cw - G - 10;
+    const solo = G !== GUT;                          // the canvas is naming its own bands
     const span = this.span();
     const sel = SelStore.id;
     const rels = sel ? relOf(sel) : null;
@@ -443,11 +593,21 @@ export const TL = {
     // ══ PHASE A — what is visible, and how much height each row ASKS for ═════
     for (const def of this.laneDefs()) {
       const laneId = def.key;
-      const isCur = def.kind === 'curated';
+      const isCur = def.isCur;
       const dying = !!def.dying;
+      const detail = def.detail;
       const isExp = this.expanded.has(laneId);
-      const eventCap = isExp ? 10 : this.EVENT_CAP;
-      const corpus = byLane.get(laneId) || [];
+      // THE EVENT STRATUM IS NO LONGER RATIONED BY A CONSTANT. It used to pack
+      // into EVENT_CAP=3 rows and drop the rest to "+N more" — a density policy
+      // wearing the clothes of a measurement. The dial says how much is wanted;
+      // the packer packs as much as physically fits, and only the global height
+      // budget below can take a row back.
+      const eventCap = EV_BOUND;
+      // A GROUP'S HEADER STRIP is a lane with no content: a rule across the
+      // plot, and a panel row whose height mirrors it (or, when the group is
+      // collapsed, mirrors it plus every child band it is standing in for).
+      const isGrp = def.kind === 'group';
+      const corpus = isGrp || def.hidden ? [] : (byLane.get(laneId) || []);
       let nRows = 1;
       for (const it of corpus) if (it.row + 1 > nRows) nRows = it.row + 1;
       const gRaw = new Array<number>(nRows).fill(0);
@@ -455,13 +615,17 @@ export const TL = {
       const vis: LSpread[] = [];
       for (const it of corpus) {
         if (this.off.has(it.cat)) continue;
+        // THE DIAL IS ABSOLUTE AND COMES FIRST. It is a statement about content
+        // ("only the turning points", "everything we hold"), so it is decided
+        // before anything looks at the viewport or the zoom.
+        if (!passesDetail(detail, def.kind as any, it.lvl, it.type, it.start, it.end)) continue;
         const isMatch = !!q && (it.name.toLowerCase().includes(q) || it.tags.includes(q) || it.note.toLowerCase().includes(q));
         const x0 = this.x(it.start, G, Wp), x1 = this.x(it.end, G, Wp);
         // SOFT WINDOW first: the only cull is the pad, 30% of the viewport away,
         // so nothing can leave the layout in a single pan frame.
         const wA = this.winAlpha(x0, x1, XL, XR, PAD);
         if (wA <= 0.02) continue;
-        let lodA = lit(it.id, sel, rels) ? 1 : this.alphaFor(it.lvl, span, isCur);
+        let lodA = lit(it.id, sel, rels) ? 1 : this.lodOf(it.lvl, span, isCur, detail);
         if (isMatch && lodA <= 0.02) lodA = 0.6;      // a searched-for thing must be findable
         lodA *= wA;
         if (lodA <= 0.02) continue;
@@ -486,7 +650,11 @@ export const TL = {
       // events: per-frame pixel packing, today's laneEnd algorithm, end==0 only;
       // when no row is free the event is DROPPED to the overflow count.
       ctx.font = uiF;
-      const evs = EVENTS.filter(e => e[3] === laneId && !e[1] && !this.off.has(e[6])).sort((a, b) => a[0] - b[0]);
+      const evs = (isGrp || def.hidden ? [] : EVENTS.filter(e =>
+        !e[1] && !this.off.has(e[6])
+        && layerIdFor(e[3], e[6] || 'power', e[7] || 'moment') === laneId
+        && passesDetail(detail, def.kind as any, e[4] || 3, e[7] || 'moment', e[0], 0),
+      )).sort((a, b) => a[0] - b[0]);
       const laneEnd = new Array(eventCap).fill(-1e18);
       const events: LEvent[] = [];
       const evRaw = new Array<number>(eventCap).fill(0);
@@ -504,7 +672,7 @@ export const TL = {
         const x0 = this.x(ev[0], G, Wp);
         const wA = this.winAlpha(x0, x0, XL, XR, PAD);
         if (wA <= 0.02) continue;
-        const lodA = (lit(id, sel, rels) ? 1 : this.alphaFor(ev[4], span, isCur)) * wA;
+        const lodA = (lit(id, sel, rels) ? 1 : this.lodOf(ev[4], span, isCur, detail)) * wA;
         if (lodA <= 0.02) continue;
         const labelW = textW(ctx, title, uiF);
         let lane = laneEnd.findIndex(le => le < x0 - 4);
@@ -527,7 +695,7 @@ export const TL = {
       // era-row candidates, gathered from everything VISIBLE (not just what
       // survived the budget) — whether they are already drawn is decided after
       // the global trim, which is the only point at which that is finally known.
-      const era = def.kind === 'region'
+      const era = def.isRegion && !def.hidden
         ? (byLane.get(laneId) || [])
           .filter(it => it.type === 'episode')
           .map(it => vis.find(v => v.it.id === it.id))
@@ -544,9 +712,11 @@ export const TL = {
       // note above this file always described.
       if (dying) { gRaw.fill(0); evRaw.fill(0); }
       const L: LaneLayout = {
-        key: laneId, label: def.label, si: def.si, isCur, spreads: [], events,
+        key: laneId, label: def.label, si: def.si, isCur,
+        layerId: def.layerId, detail, grp: def.grp, isGroupHead: isGrp,
+        spreads: [], events,
         ns: 0, ne: usedRows, more, exp: isExp,
-        isRegion: def.kind === 'region', era, eraRow: -1, eraOut: [],
+        isRegion: def.isRegion, era, eraRow: -1, eraOut: [],
         top: 0, h: 0, evTop: 0,
         rowY: [], rowH: [], rowG: gRaw, evY: [], evH: [], evG: evRaw,
         headH: 0, gapH: 0, dying,
@@ -566,6 +736,13 @@ export const TL = {
     // it closes and the band's height does not move at all. Rows holding a search hit
     // or the selection are spared and spend their full demand, exactly as the integer
     // cap spared them.
+    // A band's header height, as a continuous function of how much content it
+    // holds. See the note on HEAD_PAD / MIN_LANE_H above the constants.
+    const headTarget = (L: LaneLayout, cum: number) =>
+      L.dying ? 0
+        : L.isGroupHead ? GRP_H
+          : solo ? MIN_LANE_H                        // room for the name the canvas draws
+            : MIN_LANE_H - (MIN_LANE_H - HEAD_PAD) * Math.min(1, cum);
     const squeeze = (raw: number[], spare: boolean[], cap: number) => {
       const g = new Array<number>(raw.length).fill(0);
       let cum = 0;
@@ -577,17 +754,26 @@ export const TL = {
       }
       return { g, cum };
     };
+    // WHAT A LANE ASKS FOR. The old caps were flat constants — six spread rows
+    // and three event rows for every band, for ever — so "+7 more" meant "the
+    // policy stopped at six", not "the screen ran out". The founder's rule is
+    // the other way round: the DETAIL DIAL states the intent and the renderer
+    // honours it, so a lane's ceiling is exactly what its content asked for and
+    // the ONLY thing that can lower it is the global height budget, whose trims
+    // are counted in _trimS/_trimE below.
+    const asks = (raw: number[]) => { let n = 0; for (const g of raw) if (g > 0.02) n++; return n; };
     const measure = (d: Draft) => {
       const L = d.L;
-      d.capS = L.exp ? 999 : Math.max(SPREAD_FLOOR, this.SPREAD_CAP - (this._trimS.get(L.key) || 0));
-      d.capE = L.exp ? 10 : Math.max(1, this.EVENT_CAP - (this._trimE.get(L.key) || 0));
+      d.capS = L.exp ? 999 : Math.max(SPREAD_FLOOR, asks(d.gRaw) - (this._trimS.get(L.key) || 0));
+      d.capE = L.exp ? EV_BOUND : Math.max(1, asks(d.evRaw) - (this._trimE.get(L.key) || 0));
       const s = squeeze(d.gRaw, d.spare, d.capS); d.gS = s.g; d.cumS = s.cum;
       const e = squeeze(d.evRaw, d.evSpare, d.capE); d.gE = e.g; d.cumE = e.cum;
-      // an empty lane is a bare HEAD_H strip, and the closing padding fades in with
-      // the first row instead of appearing whole — so even "this lane gets its very
-      // first item" is continuous. A dying lane targets zero and the limiter walks
-      // it out at 2.2px a frame.
-      d.hT = (L.dying ? 0 : HEAD_H)
+      // an empty lane is a bare MIN_LANE_H strip — big enough that its panel row
+      // can still hold a name and an eye, which is what makes "hide" reversible —
+      // and it narrows CONTINUOUSLY to HEAD_PAD as its first row grows in, so even
+      // "this lane gets its very first item" has no step in it. A dying lane
+      // targets zero and the limiter walks it out at 2.2px a frame.
+      d.hT = headTarget(L, d.cumS + d.cumE)
         + d.cumS * this.SP_PITCH + d.cumE * this.EV_PITCH
         + GAP_H * Math.min(1, d.cumS) * Math.min(1, d.cumE)
         + GAP_H * Math.min(1, d.cumS + d.cumE);
@@ -708,7 +894,7 @@ export const TL = {
       const L = d.L;
       const tRow = d.gS.map(g => g * this.SP_PITCH);
       const tEv = d.gE.map(g => g * this.EV_PITCH);
-      const tHead = L.dying ? 0 : HEAD_H;
+      const tHead = headTarget(L, d.cumS + d.cumE);
       let st = this._dh.get(L.key);
       // a lane seen for the first time starts CLOSED and grows in, unless this frame
       // is a snap (boot, resize, reduced motion) in which case it arrives whole
@@ -811,6 +997,16 @@ export const TL = {
     const cw = this.cv.clientWidth || this.cv.parentElement?.clientWidth || 0;
     if (!cw) return null;
     const lay = this._lay = this.layout(cw);
+    // THE SHEET ALWAYS COVERS THE STAGE. The canvas used to be exactly as tall as
+    // its bands and app.css centred it, so a short arrangement floated as a slab
+    // of film in the middle of the ground. That was survivable while the plot was
+    // the only thing on the stage; it is not survivable next to a panel that has
+    // to start at the plot's first pixel, because the panel would end where the
+    // bands end and the seam would turn into a step. So the plot is laid out at
+    // the top and the canvas is grown to the stage — the empty film below the
+    // last band is the same film the panel is painted on, which is what makes
+    // "no visible join" true at every arrangement rather than only at tall ones.
+    lay.H = Math.max(lay.H, this.HMAX);
     const d = fitCanvas(this.cv, lay.H);
     return d ? { cw: d.cw, H: lay.H, ctx: d.ctx, lay } : null;
   },
@@ -837,6 +1033,8 @@ export const TL = {
   onProjection(fn: () => void) { PROJECTIONS.push(fn); },
   /** Register a projection that has to bring a named band into view (vertical.ts). */
   onReveal(fn: (bandKey: string) => void) { REVEALS.push(fn); },
+  /** Register something that mirrors the lane geometry (the layer panel). */
+  onLayout(fn: (lay: Layout) => void) { LAYOUTS.push(fn); },
   reveal(bandKey: string) { for (const f of REVEALS) f(bandKey); },
   /** The state changed — repaint every projection of it, not just this one. */
   paint() { this.render(); for (const f of PROJECTIONS) f(); },
@@ -890,12 +1088,24 @@ export const TL = {
       const x = this.x(t.y, G, Wp);
       if (x < G - 1 || x > cw - 4) continue;
       ctx.moveTo(x, AXIS_TOP); ctx.lineTo(x, H - 30);
-      ctx.fillText(t.label, x, AXIS_TOP - 7);
+      // The gutter is 12px now, not 118 — the panel took the band names with it.
+      // A centred year label at the very left edge would be sliced in half, so the
+      // RULE always draws and the LABEL only draws where it fits whole.
+      const tw = ctx.measureText(t.label).width;
+      if (x - tw / 2 >= 2 && x + tw / 2 <= cw - 4) ctx.fillText(t.label, x, AXIS_TOP - 7);
     }
     ctx.globalAlpha = .35; ctx.stroke(); ctx.globalAlpha = 1;
     ctx.globalAlpha = .8; ctx.beginPath(); ctx.moveTo(0, AXIS_TOP); ctx.lineTo(cw, AXIS_TOP); ctx.stroke(); ctx.globalAlpha = 1;
     const xn = this.x(2026, G, Wp);
     if (xn >= G && xn <= cw) { ctx.strokeStyle = T.accent2; ctx.setLineDash([4, 4]); ctx.beginPath(); ctx.moveTo(xn, AXIS_TOP); ctx.lineTo(xn, H - 30); ctx.stroke(); ctx.setLineDash([]); }
+
+    // TEXT ALIGNMENT IS CANVAS STATE, AND THE TICK LOOP ABOVE LEAVES IT 'center'.
+    // It used to be put back by the band-header block ("a band name is language"),
+    // which is gone now that the layer panel names the bands — so every label in
+    // every lane was silently drawn CENTRED ON its x instead of starting there,
+    // half a word to the left of where it belonged. Reset it here, where the tick
+    // loop ends, rather than in whichever block happens to draw text next.
+    ctx.textAlign = 'left';
 
     const bgHsl = hexHsl(T.panel); const bgL = bgHsl ? bgHsl[2] : 92;
     // Which way the ground goes decides how the per-item colour jitter spends
@@ -904,19 +1114,76 @@ export const TL = {
     const uiF = fontUI(11.5);
 
     for (const L of lanes) {
-      // band separator + header. The header is a HEIGHT now, not a constant: a lane
-      // switched off shrinks its header to nothing over eight frames instead of
-      // deleting a whole band between two paints. hs is 1 for every live lane, so
-      // this is exactly today's furniture everywhere except during that close.
-      const hs = clamp(L.headH / HEAD_H, 0, 1);
-      ctx.strokeStyle = T.line; ctx.globalAlpha = .8; ctx.beginPath(); ctx.moveTo(0, L.top + L.h); ctx.lineTo(cw, L.top + L.h); ctx.stroke(); ctx.globalAlpha = 1;
-      if (hs > 0.02) {
+      // BAND FURNITURE, WITH THE NAME TAKEN OUT OF IT.
+      //
+      // The band used to paint its own name and swatch at x=10/20 inside a 118px
+      // gutter. The layer panel sits at the band's exact y and its exact height
+      // now, so painting the name here as well would be the same label twice,
+      // eight pixels apart. What is left is the separator rule, and — for a
+      // layer whose eye is shut — a dashed rule in the empty slot it is keeping,
+      // which is the difference between "hidden" and "removed".
+      // HOW MUCH OF THIS BAND IS REALLY THERE. It used to be headH/HEAD_H, which
+      // read 1 for every live lane back when the header was a fixed 22px strip
+      // holding the band name. The header is a PAD now — 8px when the band has
+      // content — so that ratio silently fell to 0.36 and took the "+N more"
+      // affordance and the hidden-layer rule down with it (both gate on > 0.5).
+      // The honest measure is the band's own height against the minimum a band
+      // can have: 1 for anything standing, a ramp while one grows in, 0 for a
+      // lane on its way out, whose furniture should go first.
+      const hs = L.dying ? 0 : clamp(L.h / MIN_LANE_H, 0, 1);
+      const solo = G !== GUT;
+      if (L.isGroupHead) {
+        if (solo && hs > 0.02) {
+          ctx.globalAlpha = hs; ctx.fillStyle = T.ink3;
+          ctx.font = fontUI(9.5, 600); ctx.textAlign = 'left';
+          ctx.fillText(L.label.toUpperCase(), 20, L.top + 11); ctx.globalAlpha = 1;
+        }
+        // a group is named by its panel row; here it is a rule with a little air
+        ctx.strokeStyle = T.line; ctx.globalAlpha = .55; ctx.lineWidth = 1;
+        ctx.beginPath(); ctx.moveTo(0, Math.round(L.top + L.h - 5) + .5); ctx.lineTo(cw, Math.round(L.top + L.h - 5) + .5); ctx.stroke();
+        ctx.globalAlpha = 1;
+        continue;
+      }
+      // THE BAND SEPARATOR, ON A WHOLE PIXEL. It used to be stroked at the exact
+      // fractional boundary, which antialiases a 1px line across two rows — fine
+      // on its own, and not fine now that the SAME rule is continued through the
+      // layer panel by CSS (app.css, .tl-lrow). Both have to land on the band's
+      // last pixel row or the seam grows a two-pixel smudge.
+      ctx.strokeStyle = T.line; ctx.globalAlpha = .8; ctx.beginPath();
+      ctx.moveTo(0, Math.round(L.top + L.h) - .5); ctx.lineTo(cw, Math.round(L.top + L.h) - .5);
+      ctx.stroke(); ctx.globalAlpha = 1;
+      if (solo && hs > 0.02) {
+        const g2 = clamp(L.headH / MIN_LANE_H, 0, 1);
         ctx.globalAlpha = hs;
-        ctx.fillStyle = L.si === null ? T.ink2 : T.s[L.si]; ctx.beginPath(); ctx.arc(10, L.top + 13 * hs, 4 * hs, 0, 7); ctx.fill();
-        ctx.fillStyle = T.ink2; ctx.font = fontUI(10.5, 600); ctx.textAlign = 'left';   // a band name is language
-        ctx.fillText(L.label.toUpperCase(), 20, L.top + 17 * hs);
+        ctx.fillStyle = L.si === null ? T.ink2 : T.s[L.si];
+        ctx.beginPath(); ctx.arc(10, L.top + 13 * g2, 4 * g2, 0, 7); ctx.fill();
+        ctx.fillStyle = T.ink2; ctx.font = fontUI(10.5, 600); ctx.textAlign = 'left';
+        ctx.fillText(L.label.toUpperCase(), 20, L.top + 17 * g2);
         ctx.globalAlpha = 1;
       }
+      if (L.layerId && !L.dying && !Layers.visible(L.layerId) && hs > 0.5) {
+        ctx.strokeStyle = T.line; ctx.globalAlpha = .5; ctx.setLineDash([2, 5]);
+        ctx.beginPath(); ctx.moveTo(0, Math.round(L.top + L.h / 2) + .5); ctx.lineTo(cw, Math.round(L.top + L.h / 2) + .5); ctx.stroke();
+        ctx.setLineDash([]); ctx.globalAlpha = 1;
+      }
+
+      /* ── THE PLOT IS CLIPPED TO THE PLOT ─────────────────────────────────
+         The 118px gutter used to hide a whole class of overspill: the soft pan
+         window keeps drawing anything within 30% of the viewport, so a spread
+         or an event whose year is just off the left edge lands at a negative x,
+         and its label was drawn into the gutter where the band name lived. It
+         looked like a slightly crowded gutter. With the gutter down to 12px
+         those same labels run off the canvas and arrive as half-words at the
+         seam — "onze Age", "Sumer)" — which reads as a broken panel rather than
+         as a mark that is off-window.
+
+         So the marks are clipped to the plot rectangle, which is what should
+         always have been true: content lives between the gutter and the right
+         edge. The furniture ABOVE this line — the band separator, the hidden
+         layer's dashed rule — is drawn from x=0 on purpose, because those are
+         the rules the layer panel continues. */
+      ctx.save();
+      ctx.beginPath(); ctx.rect(G, AXIS_TOP, cw - G, H - AXIS_TOP - 26); ctx.clip();
 
       // ---- SPREAD STRATUM: rows at CONTINUOUS pitch, rectangles with envelopes ----
       // Row r owns the slot [rowY[r], rowY[r] + rowH[r]] and nothing else, at every
@@ -1077,6 +1344,7 @@ export const TL = {
         });
         ctx.textAlign = 'left';
       }
+      ctx.restore();                                   // …end of the plot clip
     }
 
     // ---- the global time index: A STUB, NOT A MERIDIAN ----------------------
@@ -1121,6 +1389,11 @@ export const TL = {
     // #searchCnt has been removed, and render() must not care
     const rd = $('#zoomReadout'); if (rd) rd.textContent = `showing importance ≤ ${baseL} of 5 · span ${fmtSpan(this.span())}`;
     const sc = $('#searchCnt'); if (sc) sc.textContent = q ? `${hitCount} hits` : '';
+    // THE GEOMETRY LOCK. The canvas layout is the ONLY source of lane geometry,
+    // and the panel is positioned from the very same numbers, in the same frame,
+    // after the slew limiter has had its say — so a row and its lane agree at
+    // every fractional state of every transition, not just at the ends.
+    for (const f of LAYOUTS) f(lay);
     // THE FOLLOWER'S ONLY CLOCK. layout() reports `anim` while any drawn height is
     // still short of its target; one rAF per frame walks it the rest of the way and
     // then stops. this.render(), never this.paint(): the vertical projection has its
@@ -1201,8 +1474,10 @@ export const TL = {
   _storesBound: false,
   init() {
     const cv = this.cv = $<HTMLCanvasElement>('#zoomCanvas')!;
-    // curated-lane defaults arrive with the registry (Arts on at boot)
-    for (const L of LANES) if (!(L.key in this.lens)) this.lens[L.key] = !!L.default;
+    // WHICH LAYERS ARE ON IS NOT DECIDED HERE ANY MORE. It used to be the
+    // registry's `default` flag, re-read on every boot. It is the reader's own
+    // arrangement now, restored from localStorage by LayerPanel.init(), and the
+    // spine (region essentials + deep time) is what a fresh profile gets.
     // THE PRESET BUTTONS AND THE PANEL SEARCH BOX ARE GONE — "Remove the random
     // controls!" and "Keep only one search - one at the top." Mozart's world, 1776 in
     // context, Deep time and Reset were four canned framings occupying the top of the
@@ -1216,8 +1491,6 @@ export const TL = {
     // whether a given piece of chrome is still in the markup.
     const box = $<HTMLInputElement>('#searchBox');
     if (box) box.addEventListener('input', (e: any) => { this.q = e.target.value.trim(); this.paint(); });
-    this.buildLaneRow();
-    this.buildCatRow();
     buildGrammarLegend();
     repaintOnFonts(() => this.render());
     if (!this._storesBound) {
@@ -1231,7 +1504,7 @@ export const TL = {
     }
     cv.addEventListener('wheel', e => {
       e.preventDefault();
-      const r = cv.getBoundingClientRect(); const G = 118, Wp = cv.clientWidth - G - 10;
+      const r = cv.getBoundingClientRect(); const G = this.gutter(), Wp = cv.clientWidth - G - 10;
       const yc = this.ix(e.clientX - r.left, G, Wp);
       this.zoomBy(yc, Math.pow(1.0018, e.deltaY));
       this.paint();
@@ -1246,7 +1519,7 @@ export const TL = {
       this.hoverX = mx;
       if (drag) {
         // pan in v-space, or deep-time panning is wildly nonuniform
-        const G = 118, Wp = cv.clientWidth - G - 10;
+        const G = this.gutter(), Wp = cv.clientWidth - G - 10;
         const dv = (e.clientX - drag.x) / Wp * (drag.v1 - drag.v0);
         if (Math.abs(e.clientX - drag.x) > 3) drag.moved = true;
         const [nv0, nv1] = clampV(drag.v0 - dv, drag.v1 - dv);
@@ -1279,7 +1552,7 @@ export const TL = {
     cv.addEventListener('pointerup', e => {
       const wasDrag = drag && drag.moved; drag = null; if (wasDrag) return;
       const r = cv.getBoundingClientRect(), mx = e.clientX - r.left, my = e.clientY - r.top;
-      const G = 118, Wp = cv.clientWidth - G - 10;
+      const G = this.gutter(), Wp = cv.clientWidth - G - 10;
       const H = cv.clientHeight;
       // EITHER axis strip sets the global moment — the grey scale reads along the
       // top now, and the strip you can read the year off is the strip you expect to
@@ -1302,141 +1575,19 @@ export const TL = {
       SelCard.select(b ? b.id : null, b ? this.rectOf(b) : null);
     });
     cv.addEventListener('pointerleave', () => { hideTip(); this.hoverX = null; this.render(); });
-    this.syncChips();
   },
-  // Builds the curated-lane chips into the EXISTING #lensRow (which ships EMPTY).
-  // Guarded against the strict-mode double build exactly like buildCatRow.
-  buildLaneRow() {
-    const row = $('#lensRow'); if (!row) return;
-    if (row.querySelector('[data-lens]')) { this.syncChips(); return; }
-    for (const L of LANES) {
-      const b = document.createElement('button');
-      b.type = 'button';
-      b.className = 'chip' + (this.lens[L.key] ? ' on' : '');
-      b.dataset.lens = L.key;
-      b.innerHTML = `<span class="dot" style="background:${L.si === null ? 'var(--tl-ink-2)' : `var(--s${L.si + 1})`}"></span>${L.label}`;
-      b.addEventListener('click', () => {
-        this.lens[L.key] = !this.lens[L.key];
-        b.classList.toggle('on', this.lens[L.key]);
-        // A lane going OFF is not deleted from the layout on the spot — it is marked
-        // dying and the slew limiter closes it. Going ON, it grows from nothing.
-        if (this.lens[L.key]) this.dying.delete(L.key); else this.dying.add(L.key);
-        this.ease(); this.paint();
-        // Switching a lane ON is a request to look at it.
-        if (this.lens[L.key]) this.reveal(L.key);
-      });
-      row.appendChild(b);
-    }
-  },
-  syncChips() { document.querySelectorAll<HTMLElement>('#lensRow .chip').forEach(ch => ch.classList.toggle('on', this.lens[ch.dataset.lens!])); },
+  /* ── THE LANE CHIPS AND THE DOMAIN CHIPS ARE GONE ───────────────────────────
 
-  // ================= domain (category) filter =================
-  // `off` is the set of hidden category ids; render() filters on it. Everything below is a
-  // different way of WRITING that one set, so there is exactly one source of truth.
-  catPrevOff: null as Set<string> | null,
-  catIsSolo(id?: string) { return this.off.size === CATS.length - 1 && (id === undefined || !this.off.has(id)); },
-  catAll() { this.off.clear(); this.catPrevOff = null; this.syncCatChips(); this.ease(); this.paint(); },
-  catNone() {
-    if (this.off.size !== CATS.length) this.catPrevOff = new Set(this.off);
-    this.off = new Set(CATS.map(c => c.id));
-    this.syncCatChips(); this.ease(); this.paint();
-  },
-  catToggle(id: string) {
-    if (this.off.has(id)) this.off.delete(id); else this.off.add(id);
-    this.syncCatChips(); this.ease(); this.paint();
-  },
-  // "only" — isolate one domain. Pressing it again on the isolated domain restores the set
-  // that was showing before the first press, so isolating is a look, not a destination.
-  catSolo(id: string) {
-    if (this.catIsSolo(id)) {
-      this.off = this.catPrevOff ? new Set(this.catPrevOff) : new Set<string>();
-      this.catPrevOff = null;
-    } else {
-      if (!this.catIsSolo()) this.catPrevOff = new Set(this.off);   // don't clobber it while hopping solo→solo
-      this.off = new Set(CATS.filter(c => c.id !== id).map(c => c.id));
-    }
-    this.syncCatChips(); this.ease(); this.paint();
-  },
-  // Builds into the EXISTING #catRow (Lab.tsx owns that element) — append only, never restructure.
-  buildCatRow() {
-    const row = $('#catRow'); if (!row) return;
-    if (row.querySelector('[data-cat]')) { this.syncCatChips(); return; }   // already built (HMR / re-init)
-    const OFF = '.45';                                             // resting opacity of the "only" affordance
+     Both were replaced by ONE thing rather than moved. "Lanes" turned a whole
+     curated band on and off; "Domain" hid a category across every band at once.
+     Neither could say "Europe's science but not its wars", which is the ordinary
+     request — the first is a whole-band switch, the second a global one. A LAYER
+     is a subject x a kind, so it says exactly that, and the panel says it eight
+     times over, in an order the reader chose.
 
-    // All / None are VERBS, not filters — globals.css styles .chip.catall and deliberately
-    // gives them no swatch and no pressed state, so nothing is set inline here. The live
-    // state they act on is carried by the "n of 8" readout instead.
-    const master = (kind: 'all' | 'none', label: string, hint: string) => {
-      const b = document.createElement('button');
-      b.type = 'button'; b.className = 'chip catall'; b.dataset.catall = kind;
-      b.textContent = label; b.title = hint;
-      b.addEventListener('click', () => (kind === 'all' ? this.catAll() : this.catNone()));
-      row.appendChild(b);
-    };
-    master('all', 'All', 'Show every domain');
-    master('none', 'None', 'Hide every domain — then click the one or two you want');
-
-    const cnt = document.createElement('span');
-    cnt.className = 'note'; cnt.id = 'catCount';
-    cnt.style.cssText = 'font-variant-numeric:tabular-nums';
-    row.appendChild(cnt);
-
-    const sep = document.createElement('span');
-    sep.setAttribute('aria-hidden', 'true');
-    sep.style.cssText = 'flex:none;align-self:center;width:1px;height:15px;background:var(--line)';
-    row.appendChild(sep);
-
-    for (const c of CATS) {
-      const b = document.createElement('button');
-      b.type = 'button'; b.className = 'chip on'; b.dataset.cat = c.id;
-      b.setAttribute('aria-pressed', 'true');
-      // the "only" tag is a mouse target inside the button, so it cannot be focusable itself
-      // (interactive content may not nest). aria-keyshortcuts is the keyboard equivalent and,
-      // unlike a title tooltip, screen readers announce it — so it is advertised, not hidden.
-      b.setAttribute('aria-keyshortcuts', 'Alt+Enter');
-      // the "only" tag borrows .chip.catall's typography so the two verbs read as one family
-      b.innerHTML = `<span class="dot" style="background:var(--s${c.si + 1})"></span>${c.name}` +
-        `<span class="only" aria-hidden="true" style="padding-left:7px;` +
-        `border-left:1px solid var(--line);font-size:var(--tl-text-2xs,10px);` +
-        `letter-spacing:var(--tl-track-caps,.06em);text-transform:uppercase;` +
-        `opacity:${OFF}">only</span>`;
-      b.addEventListener('click', e => {
-        const t = e.target as HTMLElement | null;
-        if ((t && t.closest && t.closest('.only')) || e.altKey || e.metaKey) this.catSolo(c.id);
-        else this.catToggle(c.id);
-      });
-      // a keyboard-activated click carries no modifier state in Chromium, so Alt+Enter /
-      // Alt+Space must be caught here or the isolate has no keyboard route at all.
-      b.addEventListener('keydown', e => {
-        if (e.altKey && (e.key === 'Enter' || e.key === ' ')) { e.preventDefault(); this.catSolo(c.id); }
-      });
-      // the affordance is always present (so it is seen, not discovered) but quiet until aimed at
-      const only = b.querySelector<HTMLElement>('.only')!;
-      const fade = (v: string) => { only.style.opacity = v; };
-      b.addEventListener('pointerenter', () => fade('1'));
-      b.addEventListener('pointerleave', () => fade(OFF));
-      b.addEventListener('focus', () => fade('1'));
-      b.addEventListener('blur', () => fade(OFF));
-      row.appendChild(b);
-    }
-    this.syncCatChips();
-  },
-  syncCatChips() {
-    document.querySelectorAll<HTMLElement>('#catRow .chip[data-cat]').forEach(ch => {
-      const id = ch.dataset.cat!, name = CATBY[id] ? CATBY[id].name : id;
-      const shown = !this.off.has(id), solo = this.catIsSolo(id);
-      ch.classList.toggle('on', shown);
-      ch.setAttribute('aria-pressed', String(shown));
-      // the affordance names what it will do next, so "press it again to go back" is read, not learnt
-      const only = ch.querySelector<HTMLElement>('.only');
-      if (only) only.textContent = solo ? 'back' : 'only';
-      ch.title = solo
-        ? `${name} is the only domain showing. BACK (or ⌥/Alt-click, or Alt+Enter) restores the set you had before.`
-        : `${name} — click to show or hide. ONLY (or ⌥/Alt-click, or Alt+Enter) isolates this domain.`;
-    });
-    const cnt = $('#catCount');
-    if (cnt) cnt.textContent = `${CATS.length - this.off.size} of ${CATS.length}`;
-  },
+     `off` survives as an empty Set. It is still the one filter render() and the
+     vertical projection consult, so anything that ever wants to hide a category
+     globally again has a place to write, and nothing downstream had to change. */
 };
 
 /** The founding/dissolution events a spread has swallowed, as tooltip lines. */

@@ -1,0 +1,611 @@
+/* PORTED COPY — source of truth is /design/selcard/selcard.css; edit there, then re-port. */
+/* =============================================================================
+   Timeline — selcard.css
+   THE SELECTION CARD, rebuilt. Design system "Survey".
+
+   Requires tokens.css. Defines NO raw colour, no font stack, no duration of its
+   own: every value below resolves to a --tl-* token, so the card follows the
+   three-state theming (bare :root / prefers-color-scheme / [data-theme]) for
+   free and can never drift from the shell.
+
+   ACCENT BUDGET — two marks, both legal under DESIGN.md §7:
+     1. the index on the span strip   (minium = "where you are", on a scale)
+     2. the keyboard focus ring       (minium = "where you are", on a control)
+   Nothing else in this file is coloured. No button is accented. Exactly one
+   --tl-cat-* value may appear, quoted through --tl-dot on the domain marker,
+   so the card can be matched to the mark you clicked on the canvas.
+
+   RUNTIME INPUTS — set inline by the app, never by the palette:
+     --tl-dot   the domain colour of the subject, e.g. var(--tl-cat-power)
+     --sc-a     start of the subject's life, as a % of the span strip
+     --sc-b     end of the subject's life, as a % of the span strip
+     --sc-i     the current global year, as a % of the span strip
+     --sc-w     one relation's weight, as a % (0-100)
+
+   NAMESPACE — every class is .tl-selcard*. Nothing here selects a bare element
+   outside the card, and every base reset is wrapped in :where() so it carries
+   zero specificity and can never beat a component class.
+   ============================================================================= */
+
+
+/* ── 00  Scoped reset — zero specificity ──────────────────────────────────── */
+
+:where(.tl-selcard, .tl-selcard *) { box-sizing: border-box; margin: 0; padding: 0; }
+:where(.tl-selcard ul) { list-style: none; }
+:where(.tl-selcard button) {
+  font: inherit;
+  color: inherit;
+  background: none;
+  border: 0;
+  text-align: left;
+  cursor: pointer;
+}
+
+
+/* ── 01  The card ─────────────────────────────────────────────────────────────
+
+   320px. Wide enough that the four destination cells sit on ONE row and a note
+   runs ~44 characters; narrow enough that at 1280x800 it leaves 960px of canvas
+   (and 688px even with the 264px control column docked). It is a card and not a
+   dialog: no backdrop, no focus trap, no scroll lock. selcard.ts places it and
+   guarantees it never covers its own subject; when neither side fits it sets an
+   inline max-height, which beats the one below exactly as intended.
+*/
+.tl-selcard {
+  position: fixed;
+  z-index: var(--tl-z-pop);
+  width: 320px;
+  max-height: min(58vh, 480px);
+  display: flex;
+  flex-direction: column;
+  gap: var(--tl-space-5);
+  padding: var(--tl-space-5);
+  overflow: hidden;                       /* only the relations list scrolls */
+  overscroll-behavior: contain;
+  background: var(--tl-surface-over);
+  -webkit-backdrop-filter: blur(14px) saturate(1.3);
+  backdrop-filter: blur(14px) saturate(1.3);
+  border: var(--tl-border) solid var(--tl-rule);
+  border-radius: var(--tl-radius-md);
+  box-shadow: var(--tl-shadow-pop);
+  color: var(--tl-ink);
+  font-family: var(--tl-font-ui);
+  font-size: var(--tl-text-base);
+  line-height: var(--tl-lh-ui);
+  animation: tl-selcard-in var(--tl-dur-fast) var(--tl-ease) both;
+}
+.tl-selcard[hidden] { display: none; }
+
+/* For any host that lays the card out itself — the review page, a docked
+   inspector, a story. Positioning only; every other rule is unchanged. */
+.tl-selcard--flow { position: relative; inset: auto; animation: none; }
+
+/* It slides out of the thing it names. The app sets data-side to the edge of
+   the anchor it was placed against. */
+@keyframes tl-selcard-in { from { opacity: 0; transform: translateY(4px); } to { opacity: 1; transform: none; } }
+@keyframes tl-selcard-in-r { from { opacity: 0; transform: translateX(-5px); } to { opacity: 1; transform: none; } }
+@keyframes tl-selcard-in-l { from { opacity: 0; transform: translateX(5px); } to { opacity: 1; transform: none; } }
+@keyframes tl-selcard-in-t { from { opacity: 0; transform: translateY(5px); } to { opacity: 1; transform: none; } }
+.tl-selcard[data-side="r"] { animation-name: tl-selcard-in-r; }
+.tl-selcard[data-side="l"] { animation-name: tl-selcard-in-l; }
+.tl-selcard[data-side="t"] { animation-name: tl-selcard-in-t; }
+
+/* Blocks that must never be scrolled away: the identity, the measurement and
+   the actions. Only the relations list gives up height. */
+.tl-selcard__head,
+.tl-selcard__go { flex: none; }
+
+
+/* ── 02  Top row — the domain marker and the close ────────────────────────────
+
+   The two quietest things on the card share the top line, so the name below
+   gets the full width and a 40-character title never has to wrap around a
+   floating button.
+
+   The marker is the card's legend key: it quotes the canvas hue through
+   --tl-dot so you can match the card to the mark you clicked. That is the one
+   sanctioned crossing from the eight data hues into the chrome (DESIGN.md §3),
+   and it is a 7px disc, never a fill, a border or a state.
+*/
+.tl-selcard__head { display: flex; flex-direction: column; gap: var(--tl-space-3); }
+
+.tl-selcard__top {
+  display: flex;
+  align-items: center;
+  gap: var(--tl-space-4);
+  min-height: 18px;
+}
+.tl-selcard__meta {
+  flex: 1 1 auto;
+  min-width: 0;
+  display: flex;
+  align-items: center;
+  gap: var(--tl-space-3);
+  font-size: var(--tl-text-xs);
+  letter-spacing: var(--tl-track-xs);
+  color: var(--tl-ink-3);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.tl-selcard__dot {
+  flex: none;
+  width: 7px; height: 7px;
+  border-radius: var(--tl-radius-full);
+  background: var(--tl-dot, currentColor);
+}
+.tl-selcard__meta b { font-weight: var(--tl-w-medium); color: var(--tl-ink-2); }
+
+.tl-selcard__x {
+  flex: none;
+  width: 20px; height: 20px;
+  margin-right: -2px;
+  display: grid; place-items: center;
+  border-radius: var(--tl-radius-xs);
+  color: var(--tl-ink-3);
+  transition: background var(--tl-dur-fast) var(--tl-ease), color var(--tl-dur-fast) var(--tl-ease);
+}
+.tl-selcard__x:hover { background: var(--tl-hover); color: var(--tl-ink); }
+.tl-selcard__x svg { width: 12px; height: 12px; display: block; }
+
+
+/* ── 03  The name ─────────────────────────────────────────────────────────────
+   16px, not 18px. You clicked this thing on purpose, so the name is
+   confirmation rather than news; it stays first in reading order and first in
+   size, but the loudest object on the card is the span strip below it, which
+   carries the fact you did NOT already have.
+*/
+.tl-selcard__name {
+  font-size: var(--tl-text-md);
+  font-weight: var(--tl-w-semi);
+  letter-spacing: var(--tl-track-tight);
+  line-height: var(--tl-lh-tight);
+  color: var(--tl-ink);
+  text-wrap: balance;
+  hyphens: auto;
+  display: -webkit-box;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 3;
+  line-clamp: 3;
+  overflow: hidden;
+}
+
+
+/* ── 04  The span strip ───────────────────────────────────────────────────────
+
+   The card's one graphic, and the reason the card has an accent at all: a
+   miniature of the shell's engraved time rail, scoped to this object's life.
+   Minor ticks every 10%, a hairline baseline, the subject's extent as a solid
+   ink bar, and the current global year as the same minium index the rail flies
+   — triangle plus hairline.
+
+   It makes "you are outside its span" a PICTURE before it is a sentence: the
+   index simply sits in the empty margin beside the bar. That is why the
+   presence line underneath can be a flat measurement instead of a warning.
+
+   Domain: the app computes [min(start, year), max(end, year)] padded 8% each
+   side, then writes --sc-a / --sc-b / --sc-i as percentages of it.
+*/
+.tl-selcard__span { display: flex; flex-direction: column; gap: var(--tl-space-2); }
+
+.tl-selcard__track {
+  position: relative;
+  height: 18px;
+  border-bottom: var(--tl-border) solid var(--tl-rule);
+  /* The ruled scale sits at the FOOT of the track and the extent bar floats
+     just above it, so the engraving stays visible under a full-width life —
+     stacked the other way the bar covers every tick it spans. */
+  background-image: repeating-linear-gradient(to right, var(--tl-tick) 0 1px, transparent 1px 10%);
+  background-size: 100% 5px;
+  background-position: 0 100%;
+  background-repeat: no-repeat;
+}
+
+/* The extent. A moment has no extent, so --sc-b === --sc-a and the rule below
+   gives it a 3px pip instead of a hairline nobody can see. */
+.tl-selcard__life {
+  position: absolute;
+  bottom: 7px;
+  left: var(--sc-a, 0%);
+  width: max(3px, calc(var(--sc-b, 100%) - var(--sc-a, 0%)));
+  height: 4px;
+  background: var(--tl-ink-2);
+}
+.tl-selcard__span[data-kind="moment"] .tl-selcard__life { bottom: 5px; height: 8px; width: 3px; }
+
+/* THE INDEX — where you are. Same object as .tl-index-line in the shell. */
+.tl-selcard__idx {
+  position: absolute;
+  top: 5px; bottom: -1px;
+  left: var(--sc-i, 50%);
+  width: 1px;
+  background: var(--tl-accent);
+  transition: left var(--tl-dur-base) var(--tl-ease);
+}
+.tl-selcard__idx::before {
+  content: "";
+  position: absolute;
+  top: -5px; left: -3px;
+  border-left: 3.5px solid transparent;
+  border-right: 3.5px solid transparent;
+  border-top: 5px solid var(--tl-accent);
+}
+
+/* Ends of the scale: the subject's own dates on the left, the year you are
+   standing in on the right. A DATE IS A MEASUREMENT, so both are mono. */
+.tl-selcard__ends {
+  display: flex;
+  justify-content: space-between;
+  gap: var(--tl-space-4);
+  font-family: var(--tl-font-mono);
+  font-size: var(--tl-text-2xs);
+  font-variant-numeric: tabular-nums;
+  letter-spacing: var(--tl-track-xs);
+  color: var(--tl-ink-3);
+}
+.tl-selcard__ends b { font-weight: var(--tl-w-medium); color: var(--tl-ink-2); }
+
+/* THE PRESENCE LINE. Stated, never flagged: an absence is data, not an error,
+   so it gets no box, no tint, no icon and no accent — just the distance, in
+   mono, because it is a measurement. It sits inside the strip because it is
+   the caption of the strip, and directly above the destinations because the
+   destination group is the answer to it. */
+.tl-selcard__present {
+  margin-top: var(--tl-space-1);
+  font-family: var(--tl-font-mono);
+  font-size: var(--tl-text-xs);
+  font-variant-numeric: tabular-nums;
+  letter-spacing: var(--tl-track-xs);
+  line-height: var(--tl-lh-tight);
+  color: var(--tl-ink-2);
+}
+
+
+/* ── 05  The note — the only prose on the card ────────────────────────────── */
+.tl-selcard__note {
+  font-size: var(--tl-text-sm);
+  line-height: var(--tl-lh-ui);
+  color: var(--tl-ink-2);
+  display: -webkit-box;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 3;
+  line-clamp: 3;
+  overflow: hidden;
+}
+
+
+/* ── 05b  Folded caps ─────────────────────────────────────────────────────────
+   A founding or dissolution event that fold.ts has swallowed into this spread.
+   It is one fact drawn once, so it belongs to the subject rather than to its
+   connections — a hairline-ruled aside, mono for the year because the year is
+   a measurement, sans for the role word because it is language.
+*/
+.tl-selcard__folds { display: flex; flex-direction: column; gap: var(--tl-space-2); }
+.tl-selcard__fold {
+  padding-left: var(--tl-space-4);
+  border-left: 2px solid var(--tl-rule-strong);
+  font-size: var(--tl-text-xs);
+  line-height: var(--tl-lh-tight);
+  color: var(--tl-ink-2);
+}
+.tl-selcard__fold b { font-weight: var(--tl-w-semi); color: var(--tl-ink); }
+.tl-selcard__fold time {
+  font-family: var(--tl-font-mono);
+  font-variant-numeric: tabular-nums;
+  color: var(--tl-ink-3);
+}
+
+
+/* ── 06  The destinations ─────────────────────────────────────────────────────
+
+   NOT four commands. ONE command — look at this — through the app's own four
+   instruments, named with the words the top rail already prints, in the top
+   rail's own typography. The subject's name never appears in an action label,
+   which is what "Zoom to Polish-Lithuanian Commonwealth" was a symptom of.
+
+   ORDER IS FIXED: Timeline, Map, Cube, Core. Always. A missing destination
+   leaves a shorter group; it never lets the others slide left. Position is
+   worth more than compactness in a control you use hundreds of times.
+
+   PRIMARY is Timeline, on every view, because framing the era is the core loop
+   and it is the one destination that exists for every object in the corpus. It
+   is expressed with position (always first), an ink block (DESIGN.md §7:
+   "Primary button: solid ink. The accent is not for buttons") and a mono
+   keycap advertising Enter. Not one drop of hue.
+*/
+.tl-selcard__go { display: flex; flex-direction: column; gap: var(--tl-space-3); }
+
+.tl-selcard__lead {
+  font-size: var(--tl-text-xs);
+  letter-spacing: var(--tl-track-xs);
+  color: var(--tl-ink-3);
+}
+
+.tl-selcard__dests { display: flex; width: 100%; }
+
+.tl-selcard__dest {
+  position: relative;
+  flex: 1 1 auto;
+  min-width: 0;
+  height: var(--tl-ctl);
+  margin-left: calc(var(--tl-border) * -1);
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: var(--tl-space-3);
+  padding: 0 var(--tl-space-4);
+  border: var(--tl-border) solid var(--tl-rule);
+  border-radius: 0;
+  background: var(--tl-surface);
+  color: var(--tl-ink-2);
+  font-size: var(--tl-text-xs);
+  font-weight: var(--tl-w-semi);
+  letter-spacing: var(--tl-track-caps);
+  text-transform: uppercase;
+  white-space: nowrap;
+  transition: background var(--tl-dur-fast) var(--tl-ease),
+              border-color var(--tl-dur-fast) var(--tl-ease),
+              color var(--tl-dur-fast) var(--tl-ease);
+}
+.tl-selcard__dest:first-child { margin-left: 0; border-radius: var(--tl-radius-sm) 0 0 var(--tl-radius-sm); }
+.tl-selcard__dest:last-child  { border-radius: 0 var(--tl-radius-sm) var(--tl-radius-sm) 0; }
+.tl-selcard__dest:only-child  { border-radius: var(--tl-radius-sm); }
+.tl-selcard__dest:hover { background: var(--tl-surface-3); border-color: var(--tl-rule-strong); color: var(--tl-ink); z-index: 1; }
+.tl-selcard__dest:active { background: var(--tl-press); }
+
+.tl-selcard__dest--primary {
+  background: var(--tl-ink);
+  border-color: var(--tl-ink);
+  color: var(--tl-ink-invert);
+  z-index: 1;
+}
+/* Neutral overlay: darkens a light block, lightens a dark one. Theme-agnostic,
+   and it cannot introduce a second hue. */
+.tl-selcard__dest--primary:hover  { background: var(--tl-ink); border-color: var(--tl-ink); color: var(--tl-ink-invert); box-shadow: inset 0 0 0 999px rgba(128, 128, 128, .16); }
+.tl-selcard__dest--primary:active { box-shadow: inset 0 0 0 999px rgba(128, 128, 128, .26); }
+
+/* YOU ARE ALREADY HERE. Same 2px ink underline the top-rail switcher uses for
+   the active view, so it can never be misread as "primary" — the shell has
+   already spent a different signal on that meaning. currentColor makes it an
+   ink bar on a surface cell and an inverted bar on the ink block, from one
+   declaration. The cell stays live: clicking it re-frames the current view. */
+.tl-selcard__dest[aria-current="true"] {
+  color: var(--tl-ink);
+  box-shadow: inset 0 -2px 0 0 currentColor;
+}
+.tl-selcard__dest--primary[aria-current="true"] { color: var(--tl-ink-invert); }
+
+/* NOT NOW, as opposed to NEVER. A destination that is real for this KIND of
+   thing but empty at the current year greys and stays put, with the reason on
+   the button; a destination that can never apply to this kind of thing is not
+   rendered at all. It keeps aria-disabled rather than [disabled] so it stays
+   focusable and the reason is reachable by keyboard and by pointer. */
+.tl-selcard__dest[aria-disabled="true"] {
+  background-color: var(--tl-surface-2);
+  /* Hachure, not a shade. A greyed cell inside a translucent card is a two-step
+     difference on the neutral ramp and reads as "slightly quieter", not as
+     "shut"; the chart idiom for ground with no data is a hairline hatch, it is
+     hue-free, and it survives a dimmed screen. */
+  background-image: repeating-linear-gradient(45deg,
+    var(--tl-rule) 0 1px, transparent 1px 5px);
+  border-color: var(--tl-rule);
+  color: var(--tl-ink-3);
+  cursor: not-allowed;
+}
+.tl-selcard__dest[aria-disabled="true"]:hover {
+  background-color: var(--tl-surface-2);
+  border-color: var(--tl-rule);
+  color: var(--tl-ink-3);
+}
+
+/* The default-action keycap. Enter acts on the selection while the card is
+   open and no field has focus. */
+.tl-selcard__cap {
+  flex: none;
+  display: inline-grid;
+  place-items: center;
+  min-width: 15px; height: 15px;
+  padding: 0 3px;
+  border: var(--tl-border) solid currentColor;
+  border-radius: var(--tl-radius-xs);
+  font-family: var(--tl-font-mono);
+  font-size: var(--tl-text-2xs);
+  font-weight: var(--tl-w-regular);
+  line-height: 1;
+  letter-spacing: 0;
+  opacity: .55;
+}
+
+
+/* ── 07  Connections — a ranked micro-chart, not a list of links ──────────────
+
+   The founder calls these garnish, so the preview has to buy its ~120px with
+   something a count cannot give: the SHAPE of the object's neighbourhood. Each
+   row carries the counterpart, the relation kind, and the weight as a bar, so
+   four rows read as a little ranked histogram down the right edge — you see in
+   one fixation whether this thing has one dominant tie or four even ones.
+
+   The bar is INK at one value, never a kind hue: a --tl-cat-* may only ever
+   appear as a legend key (DESIGN.md §3), and at 3x34px a hue is unreadable
+   anyway. Length is the whole signal.
+
+   "All N" lives in the section header, where a "more" affordance belongs —
+   above the fold, and with nothing left orphaned under the last row.
+*/
+.tl-selcard__rels {
+  flex: 0 1 auto;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+  gap: var(--tl-space-3);
+  padding-top: var(--tl-space-4);
+  border-top: var(--tl-border) solid var(--tl-rule-soft);
+}
+.tl-selcard__relshd {
+  flex: none;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--tl-space-4);
+}
+.tl-selcard__section {
+  font-size: var(--tl-text-2xs);
+  font-weight: var(--tl-w-semi);
+  letter-spacing: var(--tl-track-caps);
+  text-transform: uppercase;
+  color: var(--tl-ink-3);
+}
+.tl-selcard__all {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--tl-space-2);
+  padding: 2px var(--tl-space-2);
+  margin-right: calc(var(--tl-space-2) * -1);
+  border-radius: var(--tl-radius-xs);
+  font-family: var(--tl-font-mono);
+  font-size: var(--tl-text-2xs);
+  font-variant-numeric: tabular-nums;
+  letter-spacing: var(--tl-track-caps);
+  text-transform: uppercase;
+  color: var(--tl-ink-2);
+  transition: background var(--tl-dur-fast) var(--tl-ease), color var(--tl-dur-fast) var(--tl-ease);
+}
+.tl-selcard__all:hover { background: var(--tl-hover); color: var(--tl-ink); }
+
+.tl-selcard__rellist {
+  flex: 0 1 auto;
+  min-height: 0;
+  overflow-y: auto;
+  overscroll-behavior: contain;
+  margin: 0 calc(var(--tl-space-3) * -1);
+}
+.tl-selcard__rel {
+  display: flex;
+  align-items: center;
+  gap: var(--tl-space-4);
+  width: 100%;
+  min-height: 24px;
+  padding: var(--tl-space-2) var(--tl-space-3);
+  border-radius: var(--tl-radius-xs);
+  transition: background var(--tl-dur-fast) var(--tl-ease);
+}
+.tl-selcard__rel:hover { background: var(--tl-hover); }
+.tl-selcard__rel-n {
+  flex: 1 1 auto;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-size: var(--tl-text-sm);
+  color: var(--tl-ink-2);
+}
+.tl-selcard__rel:hover .tl-selcard__rel-n { color: var(--tl-ink); }
+.tl-selcard__rel-k {
+  flex: none;
+  font-family: var(--tl-font-mono);
+  font-size: var(--tl-text-2xs);
+  color: var(--tl-ink-3);
+}
+.tl-selcard__bar {
+  flex: none;
+  width: 44px; height: 3px;
+  background: var(--tl-rule);
+  border-radius: 1px;
+  overflow: hidden;
+}
+.tl-selcard__bar i { display: block; height: 100%; width: var(--sc-w, 0%); background: var(--tl-ink-2); }
+
+/* Nothing curated. One line, and the word "yet" — the corpus is growing, and a
+   thing with no links is not thereby unimportant. */
+.tl-selcard__none {
+  font-size: var(--tl-text-xs);
+  color: var(--tl-ink-3);
+}
+.tl-selcard__rels[data-empty="true"] { flex: none; }
+.tl-selcard__rels[data-empty="true"] .tl-selcard__relshd { align-items: baseline; }
+
+
+/* ── 08  Focus ────────────────────────────────────────────────────────────────
+   Self-sufficient: the shell's ring is scoped to .tl-app, and this card has to
+   survive being mounted anywhere. Focus is minium because focus IS "where you
+   are" — the one other sanctioned accent use.
+*/
+/* :where() and not :is() — :is() takes the specificity of its most specific
+   argument, which scored this base rule 0-2-1 and silently beat both
+   overrides below; the ring then sat OUTSIDE the control and the scrolling
+   list clipped three of its four edges. :where() scores zero, and the
+   overrides are scoped to .tl-selcard so they win on their own merits too. */
+.tl-selcard :where(button, [role="button"], a[href], [tabindex]):focus-visible {
+  outline: 2px solid var(--tl-focus-ring);
+  outline-offset: 2px;
+}
+/* Inside the joined group the ring must not be clipped by the neighbour, and
+   inside the scrolling connections list it must not be clipped by the scroll
+   container — both take the ring INSIDE the control instead of around it. */
+.tl-selcard .tl-selcard__dest:focus-visible { outline-offset: -2px; z-index: 2; }
+.tl-selcard .tl-selcard__rel:focus-visible  { outline-offset: -2px; }
+.tl-selcard :focus:not(:focus-visible) { outline: none; }
+
+
+/* ── 09  Scrollbars and screen-reader text ────────────────────────────────── */
+.tl-selcard ::-webkit-scrollbar { width: 8px; height: 8px; }
+.tl-selcard ::-webkit-scrollbar-track { background: transparent; }
+.tl-selcard ::-webkit-scrollbar-thumb {
+  background: var(--tl-rule-strong);
+  border-radius: var(--tl-radius-full);
+  border: 2px solid transparent;
+  background-clip: padding-box;
+}
+.tl-selcard ::-webkit-scrollbar-thumb:hover { background: var(--tl-ink-3); background-clip: padding-box; }
+.tl-selcard * { scrollbar-width: thin; scrollbar-color: var(--tl-rule-strong) transparent; }
+
+.tl-selcard__sr {
+  position: absolute;
+  width: 1px; height: 1px;
+  margin: -1px; padding: 0;
+  overflow: hidden;
+  clip-path: inset(50%);
+  white-space: nowrap;
+  border: 0;
+}
+
+/* The sheet grip — desktop has no use for it. */
+.tl-selcard__grip { display: none; }
+
+
+/* ── 10  Narrow — one sheet grammar on a phone ────────────────────────────────
+   The card becomes the same bottom sheet the docked panels become, so a phone
+   has one sheet idiom rather than two. Positional overrides are scoped away
+   from --flow so a host that lays the card out itself still gets the sheet
+   TREATMENT without the sheet POSITIONING.
+*/
+@media (max-width: 759px) {
+  .tl-selcard {
+    width: auto;
+    max-height: 56dvh;
+    gap: var(--tl-space-5);
+    padding: var(--tl-space-3) var(--tl-space-5) var(--tl-space-7);
+    border-radius: var(--tl-radius-sheet) var(--tl-radius-sheet) 0 0;
+    border-left: 0; border-right: 0; border-bottom: 0;
+    box-shadow: var(--tl-shadow-sheet);
+    animation-name: tl-selcard-in-t;
+    animation-duration: var(--tl-dur-base);
+  }
+  .tl-selcard:not(.tl-selcard--flow) {
+    left: 0 !important;
+    right: 0;
+    top: auto !important;
+    bottom: var(--tl-rail-time);
+    z-index: var(--tl-z-sheet);
+  }
+  .tl-selcard__grip {
+    display: block;
+    flex: none;
+    width: 32px; height: 4px;
+    margin: 0 auto var(--tl-space-1);
+    border-radius: var(--tl-radius-full);
+    background: var(--tl-rule-strong);
+  }
+  .tl-selcard__dest { height: var(--tl-tap); }
+  .tl-selcard__rel { min-height: var(--tl-tap); }
+}

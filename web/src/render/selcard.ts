@@ -7,26 +7,38 @@
    zoom and hover while it is open, because the card's whole job is to be read
    AGAINST the timeline, not instead of it.
 
-   WHAT IT IS FOR, in the founder's words: "I want to see Cubism in perspective —
-   what did the world look like, what wars, what technology, what was going on in
-   other spheres of my interests?" So the card is thin and the ACTIONS are the
-   point. Its relations are garnish: four of them, quiet, with the full ranked
-   list one click away in the dock.
+   THE ACTION MODEL (design/selcard/SELCARD.md §2). These are NOT four commands.
+   They are ONE command — *look at this* — through four of the app's own views:
 
-   NOTHING IN HERE WRITES TimeStore. "Zoom to X" moves the timeline's WINDOW,
-   and the year follows the window's centre by the global centre-year rule that
-   lives in Lab.tsx — so the moment moves as a CONSEQUENCE of the framing, in
-   one place, rather than being written from four. "See on map", "See on cube"
-   and "Drill down" move the VIEW and nothing else. ("Go to its peak" is gone:
-   it was the one control that wrote the year, and the centre-year rule made it
-   a second, contradictory way to say the same thing.)
+       Show this in
+       [ TIMELINE ][ MAP ][ CUBE ][ CORE ]
 
-   THE SAME CARD ON THE MAP. Clicking a territory selects that polity and shows
-   this card beside the click, with the verbs pointed the other way: "See on
-   timeline" instead of "Zoom to", and "Drill down HERE" — at the point the
-   user actually put the cursor on, not at the polity's centroid, because they
-   pointed somewhere specific. A feature the alias table cannot resolve to a
-   curated polity still gets a card: name, sovereign, years, and the drill.
+   so the subject's name can never appear in an action label ("Zoom to
+   Polish-Lithuanian Commonwealth" is not shortened, it is structurally
+   impossible), scanning drops from four phrases to four nouns, and the verb no
+   longer flips per view. The card looks IDENTICAL on every view; only which
+   cell carries aria-current changes.
+
+   HIERARCHY. Timeline is primary on every view, expressed with three
+   NON-CHROMATIC signals — position (always first, never reordered), weight (a
+   solid ink block) and full width when it is the only survivor. The accent is
+   never spent on a button: minium means "where you are", and the only two marks
+   of it on this card are the span index and the focus ring.
+
+   DEGRADATION is the difference between NEVER and NOT NOW. A life can never
+   have a territory, so Map and Cube are NOT RENDERED for it — a permanently
+   dead cell on all thirty-nine lives teaches the user the app is broken. Rome
+   HAS territory, just not in 1783, so Map is rendered HATCHED with its reason
+   on the button: hiding it there would imply Rome never had a map presence,
+   which is a lie about the corpus. Order is never touched either way.
+
+   NOTHING IN HERE WRITES TimeStore. "Timeline" moves the timeline's WINDOW, and
+   the year follows the window's centre by the global centre-year rule that lives
+   in Lab.tsx — so the moment moves as a CONSEQUENCE of the framing, in one
+   place, rather than being written from four. Map, Cube and Core move the VIEW
+   and nothing else. ("Go to its peak" is gone: it was the one control that wrote
+   the year, and the centre-year rule made it a second, contradictory way to say
+   the same thing.)
 
    PLACEMENT: it may never cover the thing it describes. The anchor rect comes
    from whichever renderer handled the click, in viewport coordinates, and the
@@ -39,7 +51,7 @@
    views — so there is no cycle back through timeline.ts, map.ts or cube.ts.
    ============================================================================= */
 
-import { $, SelStore, TimeStore, catColor, fmtBig, fmtY, tokens } from './shared';
+import { $, CATBY, SelStore, TimeStore, YEARS, fmtBig, fmtY } from './shared';
 import { esc, relDir } from './relations';
 import {
   aliveAt, bandLabel, catLabel, describe, perspectiveSpan, placeOf, relCount, territoryAt,
@@ -57,9 +69,12 @@ const NARROW = 760;
 // stands down.
 const SUPPRESS = new Set(['conn']);
 
+/** Which view each destination lands you on — the aria-current join. */
+const LANDS_ON: Record<string, string> = { persp: 'zoom', map: 'map', cube: 'cube', drill: 'core' };
+
 /** Everything the card can do, injected by Lab.tsx at boot. */
 export interface CardWiring {
-  /** show the horizontal timeline framed on [a, b] — "Zoom to" / "See on timeline" */
+  /** show the horizontal timeline framed on [a, b] — the TIMELINE destination */
   perspective(a: number, b: number): void;
   /** show the map, at the current global year */
   seeOnMap(): void;
@@ -74,6 +89,21 @@ export interface CardWiring {
   /** where this id is drawn on the CURRENT view, if it is drawn at all */
   anchorOf(id: string): DOMRect | null;
 }
+
+/** One cell of the destination group. Built in a fixed order and only filtered. */
+interface Dest {
+  act: string;
+  label: string;
+  title: string;
+  off?: boolean;          // rendered, hatched, reason on the button — "not now"
+  primary?: boolean;
+  current?: boolean;      // you are standing here
+}
+
+/** relations.ts's esc() is a TEXT escaper — it leaves quotes alone, which is
+ *  fine between tags and wrong inside title="…". Every attribute value on this
+ *  card is composed from corpus strings, so they go through this instead. */
+const attr = (s: string) => esc(s).replace(/"/g, '&quot;');
 
 /** The field notes own Escape while open. (The ⌘K palette used to as well; it
  *  is gone — the one search is an <input>, and the guard below already refuses
@@ -104,7 +134,15 @@ export const SelCard = {
     el.addEventListener('click', (e: any) => {
       const t = e.target as HTMLElement | null;
       const act = t?.closest?.('[data-act]') as HTMLElement | null;
-      if (act) { e.preventDefault(); this.act(act.dataset.act!); return; }
+      if (act) {
+        e.preventDefault();
+        // A HATCHED CELL IS FOCUSABLE, NOT DEAD. It keeps aria-disabled rather
+        // than [disabled] so its reason stays reachable by keyboard and by
+        // pointer — which means the no-op has to live here, not in the DOM.
+        if (act.getAttribute('aria-disabled') === 'true') return;
+        this.act(act.dataset.act!);
+        return;
+      }
       const row = t?.closest?.('[data-goid]') as HTMLElement | null;
       if (row) { e.preventDefault(); this.select(row.dataset.goid!, null); }
     });
@@ -143,9 +181,9 @@ export const SelCard = {
       if (!SelStore.id) { this.hide(); return; }
       this.show(SelStore.id, r ?? this.resolveAnchor(SelStore.id));
     });
-    // The card's honest line is about the YEAR, and the year now moves on its
-    // own whenever the timeline is panned (the centre-year rule), so the card
-    // has to re-read itself whenever the year moves.
+    // The card's span strip and presence line are about the YEAR, and the year
+    // now moves on its own whenever the timeline is panned (the centre-year
+    // rule), so the card has to re-read itself whenever the year moves.
     //
     // ON A MICROTASK, because the line also quotes the SNAPSHOT the map settled
     // on, and the map is another subscriber of the same store. The card is
@@ -166,8 +204,8 @@ export const SelCard = {
    * empty-canvas click — and an empty-OCEAN click — means.
    *
    * `pt` is the exact point on the globe the user pointed at, which only the
-   * map can know. It is what "Drill down here" drills: someone who clicked the
-   * Tibetan corner of the Qing asked about Tibet, not about Beijing.
+   * map can know. It is what CORE drills: someone who clicked the Tibetan
+   * corner of the Qing asked about Tibet, not about Beijing.
    */
   select(id: string | null, rect: DOMRect | null, pt: Place | null = null) {
     if (id === SelStore.id) {                     // re-click: the store will not fire
@@ -181,7 +219,7 @@ export const SelCard = {
     this._hint = null; this._pt = null;
   },
 
-  /** Lab tells the card which view is on screen — the honest line depends on it. */
+  /** Lab tells the card which view is on screen — aria-current depends on it. */
   setView(v: string) {
     if (this.view === v) return;
     this.view = v;
@@ -190,10 +228,10 @@ export const SelCard = {
   },
 
   /**
-   * The thing moved under the card. "Zoom to view" re-frames the window, so
-   * the mark that was at the right edge when it was clicked is at the centre a
-   * heartbeat later — and a card still parked at the old anchor is now covering
-   * a piece of the very context the button just went and fetched.
+   * The thing moved under the card. TIMELINE re-frames the window, so the mark
+   * that was at the right edge when it was clicked is at the centre a heartbeat
+   * later — and a card still parked at the old anchor is now covering a piece of
+   * the very context the button just went and fetched.
    */
   reanchor() {
     if (!this.open || !SelStore.id) return;
@@ -231,111 +269,265 @@ export const SelCard = {
     if (this.el) this.el.hidden = true;
   },
 
+  /**
+   * THE SNAPSHOT THE MAP WOULD DRAW. On the map view that is whatever the map
+   * is actually showing; anywhere else the map is STALE — nothing syncs it
+   * until you arrive — and the honest answer is the snapshot pressing MAP would
+   * land you on, which is `seeOnMap()`'s own `syncToYear(TimeStore.year)`.
+   * Computed here from the corpus's own eighteen snapshot years rather than
+   * asked of map.ts, which this file may not import.
+   */
+  snapYear(): number {
+    const y = TimeStore.year;
+    if (this.view === 'map' && this.wiring) {
+      try { const m = this.wiring.mapYear(); if (Number.isFinite(m)) return m; } catch { /* stale map */ }
+    }
+    if (!YEARS.length) return y;
+    let best = YEARS[0], bd = Infinity;
+    for (const s of YEARS) { const d = Math.abs(s - y); if (d < bd) { bd = d; best = s; } }
+    return best;
+  },
+
+  /** "1783", or "1776 (nearest snapshot 1783)" — the map draws one of eighteen. */
+  whenOnMap(): string {
+    const y = TimeStore.year, snap = this.snapYear();
+    return snap === y ? fmtY(y) : `${fmtY(y)} (nearest snapshot ${fmtY(snap)})`;
+  },
+
   // ── the body ──────────────────────────────────────────────────────────────
   paint() {
     const el = this.el; if (!el) return;
     const s = describe(SelStore.id);
     if (!s) { this.hide(); return; }
-    const T = tokens();
+    const year = TimeStore.year;
+    el.setAttribute('aria-label', s.name);
+
     const dates = s.end > s.start ? `${fmtBig(s.start)} – ${fmtY(s.end)}` : fmtBig(s.start);
     const band = bandLabel(s);
     const folded = foldedInto(s.id);
     const rels = topRelations(s.id, 4);
     const total = relCount(s.id);
+    const present = this.presence(s);
+    const sp = spanPct(s, year);
 
+    // ── head: identity, then the measurement ───────────────────────────────
+    // The two quietest things on the card share the top line, so the name below
+    // gets the full width and a forty-character title never has to wrap around a
+    // floating ×. The domain marker is the card's ONE data hue — its legend key,
+    // the thing that lets you match the card to the mark you clicked.
+    const dot = CATBY[s.cat] ? ` style="--tl-dot: var(--tl-cat-${s.cat})"` : '';
     let html =
-      `<div class="tl-selcard__hd">` +
-      `<h3 class="tl-selcard__name">${esc(s.name)}</h3>` +
-      `<button class="tl-selcard__x" data-act="close" aria-label="Close" title="Close  Esc">` +
+      `<div class="tl-selcard__grip" aria-hidden="true"></div>` +
+      `<div class="tl-selcard__head">` +
+      `<div class="tl-selcard__top">` +
+      `<div class="tl-selcard__meta"${dot}>` +
+      `<span class="tl-selcard__dot" aria-hidden="true"></span>` +
+      `<span><b>${esc(catLabel(s))}</b> · ${esc(typeLabel(s))}${band ? ' · ' + esc(band) : ''}</span>` +
+      `</div>` +
+      `<button type="button" class="tl-selcard__x" data-act="close" aria-label="Close" title="Close  Esc">` +
       `<svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5" aria-hidden="true">` +
-      `<path d="M4 4l8 8M12 4l-8 8"/></svg></button></div>` +
-      `<div class="tl-selcard__dates">${esc(dates)}</div>`;
+      `<path d="M4 4l8 8M12 4l-8 8"/></svg></button>` +
+      `</div>` +
+      `<h3 class="tl-selcard__name">${esc(s.name)}</h3>`;
+
+    // THE SPAN STRIP — the card's one graphic and the FIRST INFORMATION on it: a
+    // miniature of the shell's engraved rail scoped to this object's life, with
+    // the global year as the same minium index the rail flies. "You are outside
+    // its span" is a picture before it is a sentence — the index simply sits in
+    // the empty margin past the end of the bar.
+    html += `<div class="tl-selcard__span" data-kind="${s.end === s.start ? 'moment' : 'span'}"` +
+      ` style="--sc-a:${sp.a};--sc-b:${sp.b};--sc-i:${sp.i}">` +
+      `<div class="tl-selcard__track" aria-hidden="true">` +
+      `<span class="tl-selcard__life"></span><span class="tl-selcard__idx"></span></div>` +
+      `<div class="tl-selcard__ends"><b>${esc(dates)}</b><span>${esc(fmtY(year))}</span></div>` +
+      (present ? `<div class="tl-selcard__present">${esc(present)}</div>` : '') +
+      `</div>`;
 
     if (s.note) html += `<p class="tl-selcard__note">${esc(s.note)}</p>`;
 
-    html += `<div class="tl-selcard__tags">` +
-      `<span class="tl-selcard__chip"><i style="background:${catColor(s.cat, T)}"></i>${esc(catLabel(s))}</span>` +
-      `<span class="tl-selcard__kind">${esc(typeLabel(s))}${band ? ' · ' + esc(band) : ''}</span>` +
-      `</div>`;
-
-    for (const f of folded) {
-      html += `<div class="tl-selcard__fold"><b>${esc(roleWord(FOLD[f].role))}</b> — ` +
-        `${esc(f)}, ${esc(fmtY(foldYear(f)))}</div>`;
-    }
-
-    const honest = this.honestLine(s);
-    if (honest) html += `<div class="tl-selcard__honest">${esc(honest)}</div>`;
-
-    // ── the actions ───────────────────────────────────────────────────────
-    // Four verbs, one per projection: the timeline, the map, the cube, the
-    // core sample. On the map the first one points the other way, and the
-    // drill goes to the spot that was clicked rather than to the centroid.
-    const onMap = this.view === 'map';
-    const place = this.point ?? placeOf(s);
-    html += `<div class="tl-selcard__acts">`;
-    if (!s.minimal) {
-      html += onMap
-        ? `<button class="btn hero" data-act="persp" ` +
-        `title="The timeline, framed on its span">See on timeline</button>`
-        : `<button class="btn hero" data-act="persp" ` +
-        `title="Frame the timeline around this">Zoom to view</button>`;
-      if (s.polity && !onMap) {
-        html += `<button class="btn" data-act="map" title="The map, at the year you are already on">See on map</button>`;
+    // A founding or dissolution event fold.ts swallowed into this spread. One
+    // fact about the SUBJECT, not a connection to something else, so it sits
+    // with the note rather than in the Connections list.
+    if (folded.length) {
+      html += `<div class="tl-selcard__folds">`;
+      for (const f of folded) {
+        html += `<div class="tl-selcard__fold"><b>${esc(roleWord(FOLD[f].role))}</b> — ` +
+          `${esc(f)}, <time>${esc(fmtY(foldYear(f)))}</time></div>`;
       }
-      if (s.polity) html += `<button class="btn" data-act="cube">See on cube</button>`;
+      html += `</div>`;
     }
-    if (place) {
-      // "HERE" IS A PROMISE ABOUT A PIXEL, so it is only made when there is one:
-      // a selection that arrived from the map click carries the exact spot, one
-      // that arrived from the search box or the timeline does not, and offering
-      // "here" over a map nobody pointed at would name a place the user never
-      // chose. Without a point it is still a drill — at the thing's own place.
-      html += `<button class="btn" data-act="drill" ` +
-        `title="Every sovereign that ever held ${esc(place.label)}, newest first">` +
-        (this.point && onMap ? 'Drill down here' : 'Drill down') + `</button>`;
-    }
-    html += `</div>`;
+    html += `</div>`;                                   // /head
 
-    // ── relations: quiet, secondary, never the point ──
+    // ── the destinations ───────────────────────────────────────────────────
+    html += `<div class="tl-selcard__go">` +
+      `<span class="tl-selcard__lead" id="tlSelcardShowIn">Show this in</span>` +
+      `<div class="tl-selcard__dests" role="group" aria-labelledby="tlSelcardShowIn">`;
+    for (const d of this.dests(s)) {
+      const a = [
+        `type="button"`,
+        `class="tl-selcard__dest${d.primary ? ' tl-selcard__dest--primary' : ''}"`,
+        `data-act="${d.act}"`,
+        `title="${attr(d.title)}"`,
+      ];
+      if (d.current) a.push(`aria-current="true"`);
+      if (d.off) a.push(`aria-disabled="true"`);
+      html += `<button ${a.join(' ')}>${esc(d.label)}` +
+        (d.off ? `<span class="tl-selcard__sr">unavailable — ${esc(d.title)}</span>` : '') +
+        `</button>`;
+    }
+    html += `</div></div>`;
+
+    // ── connections: a ranked micro-chart, never a list of links ───────────
+    // Each row carries the counterpart, the KIND (origin vs opposed-to is a
+    // completely different fact about the same pair) and the weight as a bar, so
+    // four rows read as a little histogram down the right edge: you learn the
+    // SHAPE of the neighbourhood in one fixation. The bar is ink at one value on
+    // a neutral track, never a kind hue — a --tl-cat-* may only be a legend key,
+    // and this card's legend key is already spent on the domain dot.
     if (rels.length) {
-      html += `<div class="tl-selcard__rels">`;
+      html += `<div class="tl-selcard__rels">` +
+        `<div class="tl-selcard__relshd">` +
+        `<span class="tl-selcard__section">Connections</span>` +
+        `<button type="button" class="tl-selcard__all" data-act="all">All ${total} →</button>` +
+        `</div><ul class="tl-selcard__rellist">`;
       for (const r of rels) {
-        html += `<button class="tl-selcard__rel" data-goid="${esc(r.id)}">` +
-          `<span class="n">${esc(r.name)}</span><span class="k">${esc(r.kind)}</span></button>`;
+        html += `<li><button type="button" class="tl-selcard__rel" data-goid="${attr(r.id)}">` +
+          `<span class="tl-selcard__rel-n">${esc(r.name)}</span>` +
+          `<span class="tl-selcard__rel-k">${esc(r.kind)}</span>` +
+          `<span class="tl-selcard__bar" style="--sc-w:${Math.round(r.w * 100)}%" aria-hidden="true"><i></i></span>` +
+          `<span class="tl-selcard__sr">strength ${r.w.toFixed(2)}</span>` +
+          `</button></li>`;
       }
-      html += `</div><button class="tl-selcard__all" data-act="all">` +
-        (total > rels.length ? `All ${total} connections →` : `All connections →`) + `</button>`;
+      html += `</ul></div>`;
     } else {
-      html += `<div class="tl-selcard__rels tl-selcard__rels--none">No curated connections yet.</div>`;
+      // The header absorbs the empty state and the whole block costs one line.
+      // "Yet" is doing work: the corpus is growing, and a subject with no
+      // curated links is not thereby unimportant.
+      html += `<div class="tl-selcard__rels" data-empty="true">` +
+        `<div class="tl-selcard__relshd">` +
+        `<span class="tl-selcard__section">Connections</span>` +
+        `<span class="tl-selcard__none">None curated yet.</span>` +
+        `</div></div>`;
     }
 
     el.innerHTML = html;
   },
 
   /**
-   * THE HONEST LINE. The map cannot draw a polity that has no territory in the
-   * snapshot it is showing, and covering that up — by silently dimming nothing,
-   * or by moving the year without being asked — is the lie this line refuses.
+   * THE DESTINATION GROUP. Built as [timeline, map, cube, core] and only ever
+   * FILTERED — never sorted, never re-ordered. If Map is missing, Cube does not
+   * slide left into its slot; the group just gets shorter and Timeline is still
+   * the first cell. Reordering by relevance makes each card individually optimal
+   * and the set of cards unlearnable.
    */
-  honestLine(s: Subject): string | null {
+  dests(s: Subject): Dest[] {
+    const out: Dest[] = [];
+    const place = this.point ?? placeOf(s);
+
+    // TIMELINE — always, for everything with a curated span. It is the only
+    // destination that exists for every object in the corpus, and a primary that
+    // can disappear is not a primary. (A bare border feature has no span of its
+    // own worth framing — its dates ARE one snapshot's stratum — so it is
+    // suppressed there exactly as it always was.)
+    if (!s.minimal) {
+      const [a0, a1] = perspectiveSpan(s);
+      const deep = fmtBig(a0) !== fmtY(a0);            // beyond 20,000 years
+      out.push({
+        act: 'persp', label: 'Timeline',
+        title: deep
+          ? `Frame the timeline on the ${a1 - a0} years around it`
+          : `Frame the timeline on ${fmtY(a0)} – ${fmtY(a1)} — what else was going on`,
+      });
+    }
+
+    // MAP — only for something that HAS a territory, and hatched rather than
+    // hidden when that territory is empty at this year. Hiding it there would
+    // imply the subject never had a map presence, which is a lie about the
+    // corpus; the user has to be able to see that the door exists and is shut.
+    if (!s.minimal && s.polity) {
+      const n = territoryAt(s.polity, this.snapYear()).size;
+      out.push({
+        act: 'map', label: 'Map',
+        title: n
+          ? 'Highlight its territory on the map, at the year you are already on'
+          : `Nothing to highlight — no ${s.name} borders at ${this.whenOnMap()}`,
+        off: !n,
+      });
+    }
+
+    // CUBE — never disabled by the year: it traces the whole life as a solid.
+    if (!s.minimal && s.polity) {
+      out.push({ act: 'cube', label: 'Cube', title: 'Trace its territory through time as a solid' });
+    }
+
+    // CORE — never disabled by the year either: it shows every sovereign that
+    // ever held that ground. "HERE" IS A PROMISE ABOUT A PIXEL, so it is only
+    // made when there is one: a selection that arrived from a map click carries
+    // the exact spot, one from the search box or the timeline does not. That
+    // promise now lives in the TITLE, where a per-instance detail belongs, so
+    // the cell can stay CORE and the group keeps the same shape on every card.
+    if (place) {
+      const where = this.point ? 'at the point you clicked'
+        : place.label && place.label !== s.name ? `at ${place.label}`
+          : 'where it stood';
+      out.push({ act: 'drill', label: 'Core', title: `Core sample ${where} — every sovereign that ever held that ground` });
+    }
+
+    for (const d of out) {
+      // FILL = do this first. UNDERLINE = you are standing here. The two signals
+      // are different on purpose and never collide: the shell's top rail already
+      // marks the active view with a 2px ink underline and never with a fill.
+      d.current = LANDS_ON[d.act] === this.view;
+      // A ONE-CELL SEGMENTED CONTROL LOOKS LIKE A BUG, so a lone survivor is a
+      // plain full-width primary instead — which for a bare border feature means
+      // Core, the only door that thing has.
+      d.primary = d.act === 'persp' || out.length === 1;
+    }
+    return out;
+  },
+
+  /**
+   * THE PRESENCE LINE — a measurement, never a warning.
+   *
+   * The map cannot draw a polity that has no territory in the snapshot it is
+   * showing, and covering that up — by silently dimming nothing, or by moving
+   * the year without being asked — is the lie this line refuses. But an absence
+   * in a historical atlas is DATA: Rome not being on the 1783 map is the single
+   * most ordinary fact in the corpus, so it gets no box, no tint, no icon and no
+   * accent. It is mono because it is a measurement, and it sits inside the span
+   * strip because it is the caption of the strip.
+   */
+  presence(s: Subject): string | null {
     const y = TimeStore.year;
     // A bare border feature is only ever selected FROM the snapshot it is drawn
-    // in, and its dates ARE that snapshot's stratum, so there is nothing here
-    // it could be honest about that the dates line has not already said.
+    // in, and its dates ARE that snapshot's stratum, so there is nothing here it
+    // could be honest about that the dates line has not already said.
     if (s.minimal) return null;
+
     if (s.polity && this.view === 'map') {
-      // The map draws the nearest of eighteen snapshots, which is usually not
-      // the year you are standing in. Naming only one of the two would be a
-      // small lie in either direction, so it names both whenever they differ.
-      const snap = this.wiring ? this.wiring.mapYear() : y;
-      const when = snap === y ? fmtY(y) : `${fmtY(y)} (nearest snapshot ${fmtY(snap)})`;
-      const n = territoryAt(s.polity, snap).size;
-      return n
-        ? `${n} ${n === 1 ? 'territory' : 'territories'} highlighted in ${when}`
-        : `not on the map in ${when}`;
+      const n = territoryAt(s.polity, this.snapYear()).size;
+      const when = this.whenOnMap();
+      if (n) return `${n} ${n === 1 ? 'territory' : 'territories'} shown at ${when}`;
+      // Nothing drawn. When the year is also outside its life the DISTANCE below
+      // says strictly more than "not on the map" does, and the hatched Map cell
+      // already carries the map's own reason — so only a subject that is alive
+      // and still missing needs this sentence.
+      if (aliveAt(s, y)) return `not on the map at ${when}`;
     }
-    if (!aliveAt(s, y)) return `not there in ${fmtY(y)} — you are outside its span`;
-    return null;
+
+    if (aliveAt(s, y)) return null;
+    // SUPPRESSED WHEN IT WOULD REPEAT THE DATE. Beyond 20,000 years fmtBig
+    // renders the date itself as a relative string, so "541 million yrs ago"
+    // and "541 million yrs before 1783" would be one sentence too many.
+    if (fmtBig(s.start) !== fmtY(s.start)) return null;
+
+    const moment = s.end === s.start;
+    if (y > s.end) {
+      const n = (y - s.end).toLocaleString('en-US');
+      return moment ? `${n} yrs before ${fmtY(y)}` : `ended ${n} yrs before ${fmtY(y)}`;
+    }
+    const n = (s.start - y).toLocaleString('en-US');
+    return moment ? `${n} yrs after ${fmtY(y)}` : `begins ${n} yrs after ${fmtY(y)}`;
   },
 
   // ── the actions ───────────────────────────────────────────────────────────
@@ -377,7 +569,7 @@ export const SelCard = {
     const minX = Math.max(MARGIN, this.dockRight());
     const maxX = Math.max(minX, vw - MARGIN - w);
     const a = this.anchor;
-    let x: number, y: number;
+    let x: number, y: number, side = '';
 
     if (a) {
       const fitsR = a.right + GAP <= maxX;
@@ -385,6 +577,7 @@ export const SelCard = {
       x = fitsR ? a.right + GAP
         : fitsL ? a.left - GAP - w
           : clampN(a.left, minX, maxX);
+      side = fitsR ? 'r' : fitsL ? 'l' : '';
       y = clampN(a.top - 6, MARGIN, vh - MARGIN - h);
       if (!fitsR && !fitsL) {
         // NEITHER SIDE FITS, so it has to stack — and a spread wide enough to
@@ -397,12 +590,23 @@ export const SelCard = {
         const above = a.top - GAP - MARGIN;
         const below = vh - MARGIN - (a.bottom + GAP);
         const room = Math.max(above, below);
-        if (h > room) { h = Math.max(180, room); el.style.maxHeight = h + 'px'; }
-        y = below >= above ? a.bottom + GAP : Math.max(MARGIN, a.top - GAP - h);
+        // THE FLOOR IS MEASURED, NOT GUESSED. It used to be a flat 180px, which
+        // was safe while the whole card scrolled; it no longer does — only the
+        // connections list gives up height (SELCARD.md §3.7), so squeezing below
+        // the head-plus-destinations block now CLIPS the actions rather than
+        // scrolling them, and the actions are the card's entire purpose. So the
+        // floor is whatever those two blocks actually measure, and the list is
+        // the only thing that ever ends up at zero.
+        if (h > room) { h = Math.max(this.keepH(), room); el.style.maxHeight = h + 'px'; }
+        const belowFirst = below >= above;
+        y = belowFirst ? a.bottom + GAP : Math.max(MARGIN, a.top - GAP - h);
+        side = belowFirst ? '' : 't';
       }
       if (overlaps(x, y, w, h, a)) {                    // it may NEVER cover its subject
-        y = a.bottom + GAP + h <= vh - MARGIN ? a.bottom + GAP : Math.max(MARGIN, a.top - GAP - h);
-        if (overlaps(x, y, w, h, a)) x = clampN(a.right + GAP, minX, maxX);
+        const fitsBelow = a.bottom + GAP + h <= vh - MARGIN;
+        y = fitsBelow ? a.bottom + GAP : Math.max(MARGIN, a.top - GAP - h);
+        side = fitsBelow ? '' : 't';
+        if (overlaps(x, y, w, h, a)) { x = clampN(a.right + GAP, minX, maxX); side = 'r'; }
       }
     } else {
       // Parked: the top-right of the stage. Empty on every view that docks its
@@ -421,8 +625,41 @@ export const SelCard = {
     y = clampN(y, MARGIN, Math.max(MARGIN, vh - MARGIN - h));
     el.style.left = Math.round(x) + 'px';
     el.style.top = Math.round(y) + 'px';
+    // THE CARD SLIDES OUT OF THE THING IT NAMES. Written only when it changes,
+    // because animation-name is what the keyframe hangs off and rewriting it
+    // would replay the entry on every resize and every re-anchor.
+    if ((el.dataset.side || '') !== side) {
+      if (side) el.dataset.side = side; else delete el.dataset.side;
+    }
+  },
+
+  /** The height of the blocks that may never be scrolled or clipped away: the
+   *  identity, the measurement and the destinations, plus the card's padding. */
+  keepH(): number {
+    const el = this.el; if (!el) return 180;
+    const head = el.querySelector('.tl-selcard__head') as HTMLElement | null;
+    const go = el.querySelector('.tl-selcard__go') as HTMLElement | null;
+    if (!head || !go) return 180;
+    const cs = getComputedStyle(el);
+    const pad = parseFloat(cs.paddingTop) + parseFloat(cs.paddingBottom);
+    const gap = parseFloat(cs.rowGap) || 0;
+    return Math.ceil(head.offsetHeight + go.offsetHeight + pad + gap * 2);
   },
 };
+
+/**
+ * THE STRIP DOMAIN. It always contains BOTH the subject's life and the current
+ * year, padded 10% each side, so the index is always on the strip and the gap
+ * between them is always to scale — which is what makes "you are outside its
+ * span" a picture. A life that brackets the year lands at 8.3% / 91.7%.
+ */
+function spanPct(s: Subject, year: number) {
+  const lo = Math.min(s.start, year), hi = Math.max(s.end, year);
+  const pad = (hi - lo) * 0.1 || 1;
+  const d0 = lo - pad, d1 = hi + pad;
+  const pct = (v: number) => (((v - d0) / (d1 - d0)) * 100).toFixed(1) + '%';
+  return { a: pct(s.start), b: pct(s.end), i: pct(year) };
+}
 
 /** The founding/dissolution events this spread has swallowed. */
 function foldedInto(id: string): string[] {

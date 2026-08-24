@@ -30,6 +30,7 @@ import { buildRelIndex } from '@/render/relations';
 import { SelCard } from '@/render/selcard';
 import { WorldMap } from '@/render/map';
 import { TL } from '@/render/timeline';
+import { LayerPanel } from '@/render/layerpanel';
 import { VT } from '@/render/vertical';
 import { Flow, initFlow } from '@/render/flow';
 import { Cube } from '@/render/cube';
@@ -40,6 +41,7 @@ import { Pop, loadPopulation } from '@/render/population';
 import { buildGallery } from '@/render/gallery';
 import { Conn, initConn, loadRelations } from '@/render/connections';
 import { searchCorpus, type Hit } from '@/render/search';
+import { Layers } from '@/render/layers';
 import { describe, perspectiveSpan, setPolityAliases } from '@/render/subject';
 import { railPos, railYear, railNum, railEraOf, SNAPSHOTS } from './rail';
 
@@ -156,7 +158,14 @@ const ORDER: ViewId[] = ['map', 'pop', 'horizon', 'vertical', 'zoom', 'flow', 'b
 // These five give the column a strip of its own (shell.css §04) and the canvas
 // takes the remaining width. Map, People, Horizon and Cube keep floating
 // panels — verified sitting over ocean and over empty projection space.
-const DOCKED: ReadonlySet<ViewId> = new Set<ViewId>(['vertical', 'zoom', 'flow', 'braid', 'conn']);
+// The two TIMELINE views left this set when the layer panel landed. The dock
+// was a strip of app ground with a hairline down its right edge, holding a
+// bordered "Controls" panel over it — and the founder's instruction was the
+// opposite of that: "make the layers blend seamlessly to the workspace". The
+// layer panel is now a flex item of the view itself, in the same colour the
+// canvas paints, sharing the canvas's scroller (app.css, THE SEAM). The
+// vertical projection has no panel at all any more, so it takes the full width.
+const DOCKED: ReadonlySet<ViewId> = new Set<ViewId>(['flow', 'braid', 'conn']);
 
 // ── Field notes ─────────────────────────────────────────────────────────────
 // Everything the old <p class="lede"> and the hand-authored captions used to
@@ -257,11 +266,14 @@ function boot() {
   // and TL owns every shared control.
   buildRelIndex();
   SelCard.init();                    // before the renderers: they call SelCard.select()
-  WorldMap.init(); TL.init(); VT.init(); initFlow(); Cube.init(); Core.init(); initBraid(); Horizon.init(); Pop.init(); buildGallery();
+  // LayerPanel.init() goes between the two timeline projections: it needs TL's
+  // canvas bound (it subscribes to TL.onLayout) and VT reads the layer model
+  // through TL, so the model has to be loaded before VT's first render.
+  WorldMap.init(); TL.init(); LayerPanel.init(); VT.init(); initFlow(); Cube.init(); Core.init(); initBraid(); Horizon.init(); Pop.init(); buildGallery();
   initConn();
   WorldMap.render();
   // diagnostic handle for acceptance probes and console debugging — reads only
-  (window as any).__tl = { TL, VT, Conn, WorldMap, Cube, TimeStore, SelStore, SelCard };
+  (window as any).__tl = { TL, VT, Conn, WorldMap, Cube, TimeStore, SelStore, SelCard, Layers, LayerPanel };
 }
 
 
@@ -1152,9 +1164,14 @@ export default function Lab() {
   // sharing one span, one set of lenses, one search and ONE CONTROL PANEL. A
   // control of the view does not belong in the application header, so it now
   // sits at the top of that shared panel and the group shows no seg up here.
+  // …AND THE PROJECTION TOGGLE CAME BACK UP HERE. It was moved into the shared
+  // "Controls" panel because a control of the view does not belong in the
+  // application header. That panel no longer exists for these two views — the
+  // layer panel replaced it, and the layer panel is a list of the reader's
+  // layers, not a place to keep a two-button switch that has nothing to do with
+  // them. The header is where it can live without renting a row from the lanes.
   const seg = members.length > 1;
-  const projSeg = group === 'g-time';                   // …the one that moved
-  const segInHeader = seg && !projSeg;
+  const segInHeader = seg;
   // The engraving on the scale: the 18 world snapshots for Map and Cube, the
   // population slices for People, nothing for the span views (they get a bracket).
   const stopYears: number[] =
@@ -1288,8 +1305,17 @@ export default function Lab() {
             <div className="tl-canvasbox"><canvas id="vertCanvas" width={1200} height={760} /></div>
           </section>
 
-          {/* ── Timeline · Horizontal ─────────────────────────────────────── */}
+          {/* ── Timeline · Horizontal ───────────────────────────────────────
+              THE LAYER PANEL IS INSIDE THE VIEW, not floating over the stage and
+              not in the dock. Two things follow from that and both are the point:
+              it shares .tl-view's scroller with the canvas, so the two can only
+              ever move together; and it sits in normal flow beside the canvas,
+              so there is no gutter, no hairline and no glass between them.
+              layerpanel.ts fills #layerPanel — it MUST ship EMPTY, like #catRow
+              did before it. #layerBar is stage-level below, because "+ Add layer"
+              must stay reachable when the surface is taller than the window. */}
           <section {...sect('zoom')}>
+            <div className="tl-layers" id="layerPanel" />
             <div className="tl-canvasbox"><canvas id="zoomCanvas" height={560} /></div>
           </section>
 
@@ -1396,83 +1422,17 @@ export default function Lab() {
                 <span className="note" id="hzSpeed" />
               </div>
             </aside>
-            {/* THE TIMELINE GROUP SHARES ITS CONTROLS ON PURPOSE.
-                vertical and horizontal are two projections of ONE timeline state —
-                span, lenses, domains, search. The vertical port must reuse these
-                ids, not duplicate them: #catRow, #lensRow, #grammarRowV,
-                #zoomReadout. The seg switches only which canvas is visible. */}
-            <aside {...panel('tl', ['zoom', 'vertical'], 'Controls')}>
-              <div className="tl-panel__grip" aria-hidden="true" />
-              {hd('Controls')}
-              <div className="tl-panel__bd">
-                {/* THE PROJECTION TOGGLE, in the panel that already owns every
-                    other thing these two views share. */}
-                <div className="tl-field-group">
-                  <span className="tl-label">Projection</span>
-                  <div className="tl-seg" id="projSeg" role="group" aria-label="Projection">
-                    {GROUPS.find(g => g.id === 'g-time')!.members.map(m => (
-                      <button key={m} className="tl-seg__item" aria-pressed={m === view}
-                        onClick={() => setView(m)}>{VIEWS[m].seg}</button>
-                    ))}
-                  </div>
-                </div>
-                {/* THE FOUR PRESETS AND THE PANEL SEARCH BOX ARE GONE.
-                    "Remove the random controls!" — Mozart's world, 1776 in context,
-                    Deep time and Reset were canned framings sitting where the panel's
-                    first screenful is; the wheel reaches all four spans and the rail
-                    transport reaches the rest. And "Keep only one search - one at the
-                    top": this box duplicated the search in the top bar.
-                    timeline.ts binds #searchBox and #searchCnt defensively, so their
-                    absence costs nothing; TL.q, TL.clearSearch() and TL.frameTo() are
-                    untouched and the search dropdown above still uses them. */}
-                <hr className="tl-hr" />
-                <div className="tl-field-group">
-                  <span className="tl-label">Lanes</span>
-                  {/* MUST ship EMPTY — timeline.ts appendChild()s one chip per curated
-                      lane from the registry (buildLaneRow), like #catRow. */}
-                  <div className="tl-cluster" id="lensRow" />
-                </div>
-                <div className="tl-field-group">
-                  <span className="tl-label">Domain</span>
-                  {/* MUST ship EMPTY — timeline.ts appendChild()s the whole row. */}
-                  <div className="tl-cluster" id="catRow" />
-                </div>
-                <hr className="tl-hr" />
-                <span className="note" id="zoomReadout" />
-                {/* THE GRAMMAR LEGEND LIVES HERE FOR BOTH PROJECTIONS.
-                    It used to be two panels: a --bl in the vertical dock and a
-                    floating --br over the horizontal view's empty stage space.
-                    The docked one was the problem — a secondary panel in the
-                    column has a floor of a header plus two lines, and the
-                    legend is three rows, so it clipped its own last row (14-22px
-                    of it) while also taking 104px off the Controls panel above,
-                    which is what pushed two domain chips below ITS fold.
-                    One disclosure in the shared panel fixes both, and it is the
-                    more honest arrangement anyway: vertical and horizontal are
-                    two projections of one instrument, so they share the legend
-                    the way they already share the span, the lenses and the
-                    search. buildGrammarLegend() fills it by id. */}
-                <details className="tl-disc">
-                  <summary>Grammar<span className="tl-disc__v">shape &amp; colour</span></summary>
-                  <div className="tl-disc__bd"><div className="grammar" id="grammarRowV" /></div>
-                </details>
-              </div>
-            </aside>
-            {/* THE TIMELINE'S "RELATED" PANEL — the same pattern as Connections'.
-                Click a spread or an event on either projection and relations.ts
-                renders the ranked, grouped relation list (plus the Wikipedia link,
-                which moved here from the old click-through) into #tlRelPanel. */}
-            <aside {...panel('tl', ['zoom', 'vertical'], 'Related', 'tl-panel--secondary tl-panel--request')}
-              hidden={!(view === 'zoom' || view === 'vertical') || !relOpen}>
-              <div className="tl-panel__hd">
-                <span className="tl-panel__title">Related</span>
-                <button className="tl-iconbtn" style={{ width: 24, height: 24 }}
-                  aria-label="Close the full connection list" onClick={() => setRelOpen(false)}>
-                  {I.close}
-                </button>
-              </div>
-              <div className="tl-panel__bd"><div className="relpanel" id="tlRelPanel" /></div>
-            </aside>
+            {/* THE TIMELINE GROUP'S "CONTROLS" PANEL IS GONE.
+                It held four things. PROJECTION went back to the header seg.
+                LANES and DOMAIN were replaced outright by the layer model —
+                a layer is a subject × a kind, which is the thing both of those
+                chips were failing to say. GRAMMAR and the importance readout
+                were standing explanation for a grammar the panel now states in
+                words on every row ("less / normal / detailed") and in a coloured
+                dot beside every name. #catRow, #lensRow, #grammarRowV and
+                #zoomReadout are all resolved defensively in timeline.ts, so
+                their absence costs nothing. The vertical projection loses the
+                panel too and takes the full stage width. */}
             {/* flow */}
             <aside {...panel('tl', ['flow'], 'Controls')}>
               <div className="tl-panel__grip" aria-hidden="true" />
@@ -1765,12 +1725,40 @@ export default function Lab() {
               is 826px tall and its ribbons run the full width, so a --tr and a
               --br panel sat on the chart. They moved into the left dock. */}
           <div className="tl-col tl-col--r">
+            {/* THE TIMELINE'S "RELATED" PANEL — the same pattern as Connections'.
+                Click a spread or an event on either projection and relations.ts
+                renders the ranked, grouped relation list (plus the Wikipedia link,
+                which moved here from the old click-through) into #tlRelPanel.
+
+                IT MOVED TO THE RIGHT. On the left it would land exactly on top of
+                the layer panel, which is permanent chrome the reader steers with;
+                a panel that answers a click may cover some plot, but it may never
+                cover the instrument. */}
+            <aside {...panel('tr', ['zoom', 'vertical'], 'Related', 'tl-panel--secondary tl-panel--request')}
+              hidden={!(view === 'zoom' || view === 'vertical') || !relOpen}>
+              <div className="tl-panel__hd">
+                <span className="tl-panel__title">Related</span>
+                <button className="tl-iconbtn" style={{ width: 24, height: 24 }}
+                  aria-label="Close the full connection list" onClick={() => setRelOpen(false)}>
+                  {I.close}
+                </button>
+              </div>
+              <div className="tl-panel__bd"><div className="relpanel" id="tlRelPanel" /></div>
+            </aside>
             <aside {...panel('tr', ['horizon'], 'In transit', 'tl-panel--secondary')}>
               <div className="tl-panel__hd"><span className="tl-panel__title">In transit</span></div>
               <div className="tl-panel__bd"><div className="newsfeed" id="hzFeed" /></div>
             </aside>
           </div>
 
+
+          {/* THE LAYER BAR. Stage-level and pinned to the bottom-left corner of
+              the panel column, because the panel itself has no scroller of its
+              own — it is one surface with the canvas — so a footer in flow would
+              be under the fold on a tall arrangement. Two verbs and a count; the
+              panel's chrome budget is this row and nothing else.
+              layerpanel.ts fills it, so it MUST ship EMPTY. */}
+          <div className="tl-layers__bar" id="layerBar" hidden={view !== 'zoom'} />
 
           {/* THE INDEX IS A STUB. ALWAYS.
 
