@@ -23,7 +23,8 @@
 
 import { useCallback, useEffect, useRef, useState, useSyncExternalStore } from 'react';
 import {
-  catColor, fmtBig, fmtY, initData, setGotoTab, setLanes, SelStore, TimeStore, tokens, YMAX, YMIN,
+  catColor, clampDomain, fmtBig, fmtY, initData, setGotoTab, setLanes, SelStore, TimeStore,
+  tokens, YMAX, YMIN,
   type Datasets,
 } from '@/render/shared';
 import { buildRelIndex } from '@/render/relations';
@@ -446,6 +447,61 @@ const firstSel = (rows: SRow[]) => {
   return i < 0 ? 0 : i;
 };
 
+/* WHAT THE FRAME LOOP WOULD HAVE DONE. The rail readout and the URL are both
+   written from the app's ONE rAF loop, so a browser that is not compositing
+   leaves them on whatever they booted with — which is how a dropped framing
+   shows up as "#railYear still says 1783" rather than as a still canvas.
+   frameSettled is module-level and they are component state, so the component
+   registers them here, exactly the way it already registers go() through
+   shared.ts's setGotoTab. Null whenever no Lab is mounted. */
+let settleChrome: (() => void) | null = null;
+
+/**
+ * FRAME IT — AND MAKE SURE THE FRAME ACTUALLY LANDS.
+ *
+ * TL.frameTo does its whole job inside requestAnimationFrame: a 650ms tween
+ * whose every step writes d0/d1. A tab that is hidden, occluded, throttled or
+ * otherwise not compositing never receives a frame, so the tween never takes a
+ * single step and the window never moves at all.
+ *
+ * Everything else in this gesture is synchronous — the layer is added, the
+ * thing is selected, the card opens — so the failure is silent and lopsided,
+ * and it wears the exact shape of the bug this whole pass exists to kill: a
+ * card open on Cubism over five thousand undisturbed years. Reproduced
+ * deterministically by stubbing requestAnimationFrame to a no-op: lane added,
+ * card open, selection set, span still [-3000, 2026], #railYear still on the
+ * year it booted with.
+ *
+ * #railYear is stuck for the same reason and it is worth naming: the rail's
+ * centre-year observer (and the URL's y=/s=, written from it) rides ONE rAF
+ * loop for the whole app. No frames, no publication — so even a window that had
+ * moved would not show it.
+ *
+ * Timers survive that state — clamped to about 1/s in a background tab, but
+ * they do run — so one checks up on the tween after it should have finished and
+ * lands the window by hand if no frame ever arrived. The by-hand landing is not
+ * invented here: it is what animTo already does for itself under
+ * prefers-reduced-motion (clamp, write, relatch, paint), plus the centre-year
+ * publication the observer would have made a frame later — which is the same
+ * thing the URL-restore path at mount already does for the same reason.
+ */
+function frameSettled(a: number, b: number) {
+  const was0 = TL.d0, was1 = TL.d1;
+  TL.frameTo(a, b);
+  setTimeout(() => {
+    if (TL.d0 !== was0 || TL.d1 !== was1) return;    // the tween ran; it owns the window
+    const [ca, cb] = clampDomain(a, b);              // never skip the clamp frameTo applies
+    TL.d0 = ca; TL.d1 = cb;
+    TL._relatch = true;
+    TL.paint();
+    SelCard.reanchor();
+    const c = Math.round((ca + cb) / 2);
+    if (Number.isFinite(c)) TimeStore.set(c, 'tl');
+    // the rail and the URL ride the same dead loop — push them by hand too
+    settleChrome?.();
+  }, 900);                                           // animTo's tween is 650ms
+}
+
 interface UrlState { v: ViewId | null; y: number | null; s: number | null }
 
 function readUrl(): UrlState {
@@ -535,12 +591,21 @@ export default function Lab() {
    * Throttled at 500ms rather than the 300 you would guess: Safari rate-limits
    * replaceState to 100 calls per 30 seconds and starts throwing after that,
    * and 300ms of continuous panning sits exactly on that limit. The string is
-   * compared first, so a still app writes nothing at all, and the rAF loop this
-   * rides keeps running after a gesture ends — so the last state always lands.
+   * compared first, so a still app writes nothing at all.
+   *
+   * IT REPORTS WHETHER THE URL IS NOW THE STATE. The old note here claimed
+   * there was no trailing-edge problem, "the rAF loop this rides keeps running
+   * after a gesture ends — so the last state always lands". The loop does keep
+   * running, but it only CALLS this when its key changes, and the key stops
+   * changing the instant a tween finishes. So the final write of any gesture
+   * that settled inside the 500ms window was refused and never asked for again:
+   * a frame to 1875–1955 left ?y=1543&s=338 in the bar, a mid-tween state,
+   * permanently. Returning false for "deferred, ask me again" is what lets the
+   * loop below close that edge.
    */
   const urlRef = useRef({ t: 0, q: '' });
-  const writeUrl = useCallback((force = false) => {
-    if (typeof history === 'undefined' || !history.replaceState) return;
+  const writeUrl = useCallback((force = false): boolean => {
+    if (typeof history === 'undefined' || !history.replaceState) return true;
     try {
       const p = new URLSearchParams(location.search);
       p.set('v', viewRef.current);
@@ -548,12 +613,13 @@ export default function Lab() {
       const span = Math.round(TL.d1 - TL.d0);
       if (Number.isFinite(span) && span > 0) p.set('s', String(span));
       const q = p.toString();
-      if (q === urlRef.current.q) return;
+      if (q === urlRef.current.q) return true;                      // already the state
       const now = performance.now();
-      if (!force && now - urlRef.current.t < 500) return;
+      if (!force && now - urlRef.current.t < 500) return false;     // deferred — ask again
       urlRef.current = { t: now, q };
       history.replaceState(history.state, '', location.pathname + '?' + q + location.hash);
-    } catch { /* a URL is a convenience; it may never break the app */ }
+      return true;
+    } catch { return true; /* a URL is a convenience; it may never break the app */ }
   }, []);
 
   // READ ONCE, DURING THE FIRST RENDER, and never again — because writeUrl()
@@ -627,7 +693,7 @@ export default function Lab() {
           // the horizontal projection. It writes no year of its own — the
           // centre-year observer below turns the new window into the new
           // moment, once, in one place.
-          perspective: (a, b) => { TL.clearSearch(); TL.frameTo(a, b); go('zoom'); },
+          perspective: (a, b) => { TL.clearSearch(); frameSettled(a, b); go('zoom'); },
           // AT THE CURRENT GLOBAL YEAR — syncToYear moves the map to the nearest
           // snapshot without writing TimeStore back.
           seeOnMap: () => { WorldMap.syncToYear(TimeStore.year); go('map'); },
@@ -895,11 +961,16 @@ export default function Lab() {
   const CENTRE_MS = 90;
   const centreRef = useRef({ t: 0, y: NaN });
 
+  useEffect(() => {
+    settleChrome = () => { syncRail(); writeUrl(true); };
+    return () => { settleChrome = null; };
+  }, [syncRail, writeUrl]);
+
   // Renderers own their own state and emit no events, so the rail follows them
   // by watching. One rAF loop, four number reads, DOM touched only on change.
   useEffect(() => {
     if (!ready) return;
-    let raf = 0, last = '';
+    let raf = 0, last = '', urlPending = false;
     const tick = () => {
       const v = viewRef.current;
       // the centre-year observer rides the rail's loop: same cadence, same
@@ -923,7 +994,14 @@ export default function Lab() {
                 : v === 'conn' ? `c${Conn.d0}|${Conn.d1}`
                   : `t${TL.d0}|${TL.d1}|${TL.log}`)
         + `|${TimeStore.year}|${SelStore.id ?? ''}`;   // the global stores nudge the rail too
-      if (key !== last) { last = key; syncRail(); writeUrl(); }
+      // THE TRAILING EDGE. writeUrl's throttle refuses a write inside 500ms of
+      // the last one, and `key` goes still the moment a tween lands — so the
+      // final state of every gesture that finished inside that window used to
+      // be dropped. Now a refusal leaves the loop asking on each frame until it
+      // is taken, which costs one URLSearchParams for the half-second after a
+      // gesture and nothing at all while the app is still.
+      if (key !== last) { last = key; syncRail(); urlPending = !writeUrl(); }
+      else if (urlPending) urlPending = !writeUrl();
       raf = requestAnimationFrame(tick);
     };
     raf = requestAnimationFrame(tick);
@@ -1193,7 +1271,7 @@ export default function Lab() {
     if (!reveal(plan)) return;                           // not drawable — never frame
     const sub = describe(r.h.id);
     SelCard.select(r.h.id, null);
-    if (sub) { const [a, b] = perspectiveSpan(sub); TL.frameTo(a, b); }
+    if (sub) { const [a, b] = perspectiveSpan(sub); frameSettled(a, b); }
     go('zoom');
     // A LANE THAT WAS JUST TURNED ON IS AT THE BOTTOM OF THE BOARD. frameTo
     // moves the window along TIME; it cannot move the surface DOWN, and a lane
