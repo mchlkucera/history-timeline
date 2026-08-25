@@ -1,0 +1,30 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 32 32" role="img" aria-label="Timeline">
+  <!-- THE APP'S OWN GRAMMAR, AT 16 PIXELS. Three spreads of different extent —
+       one running past the right edge, one that ended long ago — crossed by the
+       minium index. That vertical red line means here what it means everywhere
+       else in this product: WHERE YOU ARE IN TIME. It is the only thing the
+       accent is ever spent on, so it is the only thing worth putting in a mark.
+
+       SIZED FOR THE TAB, NOT FOR THIS FILE. A favicon is read at 16px, where a
+       32-unit viewBox halves: bars are 7 units so they land on 3.5 real pixels,
+       with 2.5-unit gaps that survive as a visible 1.25px. The first draft used
+       5-unit bars and 2-unit gaps and they silted up into one blob.
+
+       Theme-aware: an SVG favicon carries its own prefers-color-scheme, which
+       the browser evaluates against the SYSTEM scheme (not the page's), so the
+       bars are plate on light chrome and paper on dark rather than a grey
+       compromise that is weak against both. Values are the real tokens from
+       tokens.css. -->
+  <style>
+    .s { fill: #12181A }
+    .i { fill: #B4382A }
+    @media (prefers-color-scheme: dark) {
+      .s { fill: #DEE6E4 }
+      .i { fill: #E4644B }
+    }
+  </style>
+  <rect class="s" x="2.5" y="3"    width="17"   height="7" rx="3.5"/>
+  <rect class="s" x="7"   y="12.5" width="22.5" height="7" rx="3.5"/>
+  <rect class="s" x="4"   y="22"   width="12"   height="7" rx="3.5"/>
+  <rect class="i" x="19"  y="1"    width="3.5"  height="30" rx="1.75"/>
+</svg>

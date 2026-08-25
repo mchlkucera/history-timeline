@@ -40,3 +40,6 @@ yarn-error.log*
 # typescript
 *.tsbuildinfo
 next-env.d.ts
+
+# Agent build dirs (TL_DIST_DIR escape hatch in next.config.ts)
+.next*
