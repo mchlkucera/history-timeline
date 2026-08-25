@@ -800,8 +800,19 @@ export default function Lab() {
       if (span) span.hidden = true;
       let year = 0, era = '';
       if (v === 'map') {
-        year = (WorldMap as any).year();
-        era = `${railEraOf(year)} · ${WorldMap.ix + 1}/18`;
+        // The index sits at the GLOBAL moment, the same rule spelled out for
+        // the span views below — and #yearLabel now reads TimeStore too. The
+        // atlas year only earns a mention when it is NOT the year you are at,
+        // which happens exactly when a card sent you here off-snapshot.
+        year = TimeStore.year;
+        const shot = (WorldMap as any).year();
+        era = shot === year
+          ? `${railEraOf(year)} · ${WorldMap.ix + 1}/18`
+          // fmtY, not railNum: railNum drops the era, so the 1 BCE snapshot
+          // came out as a bare "ATLAS 1" — indistinguishable from 1 CE, which
+          // is the one place on this line where the era actually decides the
+          // meaning.
+          : `${railEraOf(year)} · ATLAS ${fmtY(shot)} · ${WorldMap.ix + 1}/18`;
       } else if (v === 'pop') {
         year = Pop.year();
         era = `${railEraOf(year)} · slice ${Math.round(Pop.ix) + 1}/${Math.max(1, Pop.slices().length)}`;

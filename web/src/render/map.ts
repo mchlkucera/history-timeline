@@ -281,7 +281,18 @@ export const WorldMap = {
     ctx.globalAlpha = 1;
     this.labels(ctx, paths, dim, T);
     ctx.restore(); ctx.textAlign = 'left';
-    $('#yearLabel')!.textContent = fmtY(y);
+    // THE BIG NUMBER IS WHERE YOU ARE, NOT WHAT IS DRAWN. Everywhere else the
+    // 32px readout is TimeStore — "where you are" app-wide, the same rule the
+    // span views state outright about the red index. The map answered with the
+    // SNAPSHOT instead, so arriving from a card at 184 put a large "1 BCE"
+    // directly under a card that said, correctly, "1 territory shown at 184
+    // (nearest snapshot 1 BCE)": two numbers, one question, and the bigger one
+    // wrong. Every other way into this view — slider, play, rail drag, arrow
+    // keys — writes the snapshot back to TimeStore, so the two already agree
+    // there and this changes nothing; only the card's arrival left them apart,
+    // and it is the reader's position that is right. The snapshot keeps its own
+    // line: the lede below already says "Nearest snapshot to 184 — …".
+    $('#yearLabel')!.textContent = fmtY(TimeStore.year);
     ($('#yearSlider') as HTMLInputElement).value = String(this.ix);
     $('#yearSlider')!.setAttribute('aria-valuetext', fmtY(y));
     const near = TimeStore.year !== y ? `Nearest snapshot to <b>${fmtY(TimeStore.year)}</b> — ` : '';
@@ -392,7 +403,11 @@ export const WorldMap = {
     // SelStore is global, so the map has to answer it too — this is what makes
     // a selection made on the timeline still mean something over here.
     SelStore.subscribe(() => this.render());
-    $('#yearSlider')!.addEventListener('input', (e: any) => { this.ix = +e.target.value; this.render(); TimeStore.set(YEARS[this.ix], 'map'); });
+    // TimeStore FIRST, then render. render() paints #yearLabel from the global
+    // year, so setting it afterwards left the label one gesture behind: drag to
+    // 1815 and the map drew 1815 under a headline still reading 184. The store
+    // ignores its own 'map' source, so this cannot loop back.
+    $('#yearSlider')!.addEventListener('input', (e: any) => { this.ix = +e.target.value; TimeStore.set(YEARS[this.ix], 'map'); this.render(); });
     $('#btnReset')!.addEventListener('click', () => { this.k = 1; this.centrePan(); this.render(); });
     $('#btnPlay')!.addEventListener('click', () => { this.playing ? this.stop() : this.play(); });
     this.setPlayLabel(false);                        // strips the shell's placeholder glyph on mount
@@ -519,7 +534,7 @@ export const WorldMap = {
   },
   play() {
     this.setPlayLabel(true);
-    this.playing = setInterval(() => { this.ix = (this.ix + 1) % YEARS.length; this.render(); TimeStore.set(YEARS[this.ix], 'map'); }, 1400);
+    this.playing = setInterval(() => { this.ix = (this.ix + 1) % YEARS.length; TimeStore.set(YEARS[this.ix], 'map'); this.render(); }, 1400);   // store first — see the slider above
   },
   stop() { this.setPlayLabel(false); clearInterval(this.playing); this.playing = null; },
 };
