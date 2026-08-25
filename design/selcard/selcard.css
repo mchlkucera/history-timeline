@@ -7,18 +7,15 @@
    three-state theming (bare :root / prefers-color-scheme / [data-theme]) for
    free and can never drift from the shell.
 
-   ACCENT BUDGET — two marks, both legal under DESIGN.md §7:
-     1. the index on the span strip   (minium = "where you are", on a scale)
-     2. the keyboard focus ring       (minium = "where you are", on a control)
-   Nothing else in this file is coloured. No button is accented. Exactly one
+   ACCENT BUDGET — ONE mark, legal under DESIGN.md §7:
+     1. the keyboard focus ring       (minium = "where you are", on a control)
+   The span strip's minium index was the other one; the strip is gone, so this
+   file now spends the accent exactly once. Nothing else in it is coloured. No button is accented. Exactly one
    --tl-cat-* value may appear, quoted through --tl-dot on the domain marker,
    so the card can be matched to the mark you clicked on the canvas.
 
    RUNTIME INPUTS — set inline by the app, never by the palette:
      --tl-dot   the domain colour of the subject, e.g. var(--tl-cat-power)
-     --sc-a     start of the subject's life, as a % of the span strip
-     --sc-b     end of the subject's life, as a % of the span strip
-     --sc-i     the current global year, as a % of the span strip
      --sc-w     one relation's weight, as a % (0-100)
 
    NAMESPACE — every class is .tl-selcard*. Nothing here selects a bare element
@@ -150,9 +147,9 @@
 
 /* ── 03  The name ─────────────────────────────────────────────────────────────
    16px, not 18px. You clicked this thing on purpose, so the name is
-   confirmation rather than news; it stays first in reading order and first in
-   size, but the loudest object on the card is the span strip below it, which
-   carries the fact you did NOT already have.
+   confirmation rather than news — it stays first in reading order and first in
+   size without shouting, and the fact you did NOT already have is the dates
+   directly beneath it.
 */
 .tl-selcard__name {
   font-size: var(--tl-text-md);
@@ -170,65 +167,20 @@
 }
 
 
-/* ── 04  The span strip ───────────────────────────────────────────────────────
+/* ── 04  The dates ────────────────────────────────────────────────────────────
 
-   The card's one graphic, and the reason the card has an accent at all: a
-   miniature of the shell's engraved time rail, scoped to this object's life.
-   Minor ticks every 10%, a hairline baseline, the subject's extent as a solid
-   ink bar, and the current global year as the same minium index the rail flies
-   — triangle plus hairline.
+   This block used to open with a miniature of the shell's engraved time rail,
+   scoped to the subject's life, with the global year as a minium index — so
+   that "you are outside its span" was a picture before it was a sentence. It
+   was removed at the founder's request: it restated what the two text lines
+   below it already say, and the card is read at a glance beside the thing it
+   describes, where a second scale competes with the real one at the foot of
+   the window.
 
-   It makes "you are outside its span" a PICTURE before it is a sentence: the
-   index simply sits in the empty margin beside the bar. That is why the
-   presence line underneath can be a flat measurement instead of a warning.
-
-   Domain: the app computes [min(start, year), max(end, year)] padded 8% each
-   side, then writes --sc-a / --sc-b / --sc-i as percentages of it.
+   What remains is the measurement in words — the subject's dates on the left,
+   the year you are standing in on the right, and the presence line beneath.
 */
 .tl-selcard__span { display: flex; flex-direction: column; gap: var(--tl-space-2); }
-
-.tl-selcard__track {
-  position: relative;
-  height: 18px;
-  border-bottom: var(--tl-border) solid var(--tl-rule);
-  /* The ruled scale sits at the FOOT of the track and the extent bar floats
-     just above it, so the engraving stays visible under a full-width life —
-     stacked the other way the bar covers every tick it spans. */
-  background-image: repeating-linear-gradient(to right, var(--tl-tick) 0 1px, transparent 1px 10%);
-  background-size: 100% 5px;
-  background-position: 0 100%;
-  background-repeat: no-repeat;
-}
-
-/* The extent. A moment has no extent, so --sc-b === --sc-a and the rule below
-   gives it a 3px pip instead of a hairline nobody can see. */
-.tl-selcard__life {
-  position: absolute;
-  bottom: 7px;
-  left: var(--sc-a, 0%);
-  width: max(3px, calc(var(--sc-b, 100%) - var(--sc-a, 0%)));
-  height: 4px;
-  background: var(--tl-ink-2);
-}
-.tl-selcard__span[data-kind="moment"] .tl-selcard__life { bottom: 5px; height: 8px; width: 3px; }
-
-/* THE INDEX — where you are. Same object as .tl-index-line in the shell. */
-.tl-selcard__idx {
-  position: absolute;
-  top: 5px; bottom: -1px;
-  left: var(--sc-i, 50%);
-  width: 1px;
-  background: var(--tl-accent);
-  transition: left var(--tl-dur-base) var(--tl-ease);
-}
-.tl-selcard__idx::before {
-  content: "";
-  position: absolute;
-  top: -5px; left: -3px;
-  border-left: 3.5px solid transparent;
-  border-right: 3.5px solid transparent;
-  border-top: 5px solid var(--tl-accent);
-}
 
 /* Ends of the scale: the subject's own dates on the left, the year you are
    standing in on the right. A DATE IS A MEASUREMENT, so both are mono. */

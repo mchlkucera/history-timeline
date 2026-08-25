@@ -22,15 +22,22 @@
    HIERARCHY. Timeline is primary on every view, expressed with three
    NON-CHROMATIC signals — position (always first, never reordered), weight (a
    solid ink block) and full width when it is the only survivor. The accent is
-   never spent on a button: minium means "where you are", and the only two marks
-   of it on this card are the span index and the focus ring.
+   never spent on a button: minium means "where you are", and since the span
+   strip was removed the focus ring is the card's ONLY mark of it.
 
-   DEGRADATION is the difference between NEVER and NOT NOW. A life can never
+   DEGRADATION is the difference between NEVER and NOWHERE. A life can never
    have a territory, so Map and Cube are NOT RENDERED for it — a permanently
-   dead cell on all thirty-nine lives teaches the user the app is broken. Rome
-   HAS territory, just not in 1783, so Map is rendered HATCHED with its reason
-   on the button: hiding it there would imply Rome never had a map presence,
-   which is a lie about the corpus. Order is never touched either way.
+   dead cell on all thirty-nine lives teaches the user the app is broken.
+
+   A polity that HAS territory is always reachable, whatever year you are on.
+   Map used to hatch whenever the CURRENT year had no borders — Rome selected
+   in 1783 — but with 18 atlas snapshots across five millennia that is the
+   normal case for almost every polity almost all of the time, and it left the
+   map unreachable for a subject that is very much on it. The cell now travels:
+   it goes to the first snapshot the thing is actually drawn in, and its title
+   names that year before you press it. Only a polity drawn in NO snapshot is
+   still hatched, because there the door really does open onto nothing. Order is
+   never touched either way.
 
    NOTHING IN HERE WRITES TimeStore. "Timeline" moves the timeline's WINDOW, and
    the year follows the window's centre by the global centre-year rule that lives
@@ -72,12 +79,32 @@ const SUPPRESS = new Set(['conn']);
 /** Which view each destination lands you on — the aria-current join. */
 const LANDS_ON: Record<string, string> = { persp: 'zoom', map: 'map', cube: 'cube', drill: 'core' };
 
+/**
+ * THE FIRST SNAPSHOT THIS POLITY IS ACTUALLY DRAWN IN, or null if it is drawn
+ * in none of them. This is what makes the MAP destination reachable from any
+ * year: the atlas holds 18 snapshots across five millennia, so "no borders at
+ * the year you happen to be standing on" is the normal case for almost every
+ * polity almost all of the time, and it is not a reason to shut the door.
+ *
+ * The ascending scan is deliberate over "nearest snapshot": the founder asked
+ * for the BEGINNING of the thing, and a fixed destination is predictable —
+ * the same click from 3000 BCE and from 1994 lands you in the same place, and
+ * the cell's title names that year before you press it. territoryAt is a lookup
+ * into a table built at load, so 18 of them cost nothing per render.
+ */
+function firstMapYear(polity: string | null): number | null {
+  if (!polity) return null;
+  for (const y of YEARS) if (territoryAt(polity, y).size) return y;
+  return null;
+}
+
 /** Everything the card can do, injected by Lab.tsx at boot. */
 export interface CardWiring {
   /** show the horizontal timeline framed on [a, b] — the TIMELINE destination */
   perspective(a: number, b: number): void;
-  /** show the map, at the current global year */
-  seeOnMap(): void;
+  /** show the map — at `year` when the subject is not drawn at the current one,
+   *  otherwise (undefined) at the current global year, leaving it untouched */
+  seeOnMap(year?: number): void;
   /** show the cube with this polity id traced */
   traceInCube(polityId: string): void;
   /** show the core sample, drilled at this point */
@@ -308,7 +335,6 @@ export const SelCard = {
     const rels = topRelations(s.id, 4);
     const total = relCount(s.id);
     const present = this.presence(s);
-    const sp = spanPct(s, year);
 
     // ── head: identity, then the measurement ───────────────────────────────
     // The two quietest things on the card share the top line, so the name below
@@ -330,15 +356,14 @@ export const SelCard = {
       `</div>` +
       `<h3 class="tl-selcard__name">${esc(s.name)}</h3>`;
 
-    // THE SPAN STRIP — the card's one graphic and the FIRST INFORMATION on it: a
-    // miniature of the shell's engraved rail scoped to this object's life, with
-    // the global year as the same minium index the rail flies. "You are outside
-    // its span" is a picture before it is a sentence — the index simply sits in
-    // the empty margin past the end of the bar.
-    html += `<div class="tl-selcard__span" data-kind="${s.end === s.start ? 'moment' : 'span'}"` +
-      ` style="--sc-a:${sp.a};--sc-b:${sp.b};--sc-i:${sp.i}">` +
-      `<div class="tl-selcard__track" aria-hidden="true">` +
-      `<span class="tl-selcard__life"></span><span class="tl-selcard__idx"></span></div>` +
+    // THE DATES. The miniature rail that used to sit above them — a scaled bar
+    // for the life with the global year as a minium index — is gone at the
+    // founder's request. It was the card's one graphic and it was carrying a
+    // fact the two lines below already state in words: the dates, the year you
+    // are on, and (on the map) whether anything of it is actually drawn there.
+    // A picture that only restates its own caption is decoration, and this card
+    // is read at a glance beside the thing it describes.
+    html += `<div class="tl-selcard__span" data-kind="${s.end === s.start ? 'moment' : 'span'}">` +
       `<div class="tl-selcard__ends"><b>${esc(dates)}</b><span>${esc(fmtY(year))}</span></div>` +
       (present ? `<div class="tl-selcard__present">${esc(present)}</div>` : '') +
       `</div>`;
@@ -445,13 +470,23 @@ export const SelCard = {
     // imply the subject never had a map presence, which is a lie about the
     // corpus; the user has to be able to see that the door exists and is shut.
     if (!s.minimal && s.polity) {
-      const n = territoryAt(s.polity, this.snapYear()).size;
+      const shown = territoryAt(s.polity, this.snapYear()).size;
+      const first = firstMapYear(s.polity);
       out.push({
         act: 'map', label: 'Map',
-        title: n
+        title: shown
           ? 'Highlight its territory on the map, at the year you are already on'
-          : `Nothing to highlight — no ${s.name} borders at ${this.whenOnMap()}`,
-        off: !n,
+          : first !== null
+            ? `Not drawn at ${this.whenOnMap()} — go to ${fmtY(first)}, where its borders first appear`
+            : `${s.name} is never drawn on any of the ${YEARS.length} atlas snapshots`,
+        // A DOOR IS ONLY SHUT WHEN THERE IS NOTHING BEHIND IT. This used to be
+        // shut whenever the CURRENT year had no borders, which made the map
+        // unreachable for a polity you were merely standing in the wrong century
+        // for — the overwhelmingly common case, since the atlas has 18 snapshots
+        // across 5,000 years. Now it is shut only when the thing is drawn in no
+        // snapshot at all, and otherwise the click travels to where it is (see
+        // act()). That is the difference between "not here" and "nowhere".
+        off: first === null,
       });
     }
 
@@ -553,7 +588,18 @@ export const SelCard = {
     switch (a) {
       case 'close': this.hide(true); break;
       case 'persp': { const [a0, a1] = perspectiveSpan(s); w?.perspective(a0, a1); break; }
-      case 'map': w?.seeOnMap(); break;
+      // IF IT IS NOT HERE, GO WHERE IT IS. Standing outside a polity's span —
+      // or on one of the 5,000 years between two of the 18 atlas snapshots —
+      // used to leave this cell hatched and the map unreachable. It now travels
+      // to the first snapshot the thing is actually drawn in, so the click
+      // always ends with the territory on screen rather than with an explanation
+      // of why it is not. When it IS drawn here, the year does not move at all.
+      case 'map': {
+        const here = s.polity ? territoryAt(s.polity, this.snapYear()).size : 0;
+        const first = here ? null : firstMapYear(s.polity);
+        w?.seeOnMap(first ?? undefined);
+        break;
+      }
       case 'cube': if (s.polity) w?.traceInCube(s.polity); break;
       case 'drill': {
         // this.point first, ALWAYS: on the map that is the pixel the user put
@@ -663,19 +709,6 @@ export const SelCard = {
   },
 };
 
-/**
- * THE STRIP DOMAIN. It always contains BOTH the subject's life and the current
- * year, padded 10% each side, so the index is always on the strip and the gap
- * between them is always to scale — which is what makes "you are outside its
- * span" a picture. A life that brackets the year lands at 8.3% / 91.7%.
- */
-function spanPct(s: Subject, year: number) {
-  const lo = Math.min(s.start, year), hi = Math.max(s.end, year);
-  const pad = (hi - lo) * 0.1 || 1;
-  const d0 = lo - pad, d1 = hi + pad;
-  const pct = (v: number) => (((v - d0) / (d1 - d0)) * 100).toFixed(1) + '%';
-  return { a: pct(s.start), b: pct(s.end), i: pct(year) };
-}
 
 /** The founding/dissolution events this spread has swallowed. */
 function foldedInto(id: string): string[] {

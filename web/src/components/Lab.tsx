@@ -729,8 +729,31 @@ export default function Lab() {
           // moment, once, in one place.
           perspective: (a, b) => { TL.clearSearch(); frameSettled(a, b); go('zoom'); },
           // AT THE CURRENT GLOBAL YEAR — syncToYear moves the map to the nearest
-          // snapshot without writing TimeStore back.
-          seeOnMap: () => { WorldMap.syncToYear(TimeStore.year); go('map'); },
+          // snapshot without writing TimeStore back, so the rail keeps reading
+          // where YOU are while the map draws the nearest atlas it has.
+          //
+          // WITH A YEAR, the card has decided the subject is not drawn at the
+          // current one and is sending you to where it is. That IS a move
+          // through time, not a projection of the year you are on, so the store
+          // is written and the whole app follows — rail, URL, timeline cursor.
+          // The two cases differ exactly in whether the year was your choice.
+          seeOnMap: (year) => {
+            if (year != null && Number.isFinite(year)) {
+              // stop(), then repaint BY HAND. syncToYear only moves the index —
+              // it does not draw — and go('map') is a no-op when the card was
+              // pressed FROM the map, which is the common case for this branch.
+              // Without the explicit render the borders changed underneath a
+              // headline still reading the year you left. Same order the rail's
+              // own map scrub uses: store first, then paint.
+              WorldMap.stop();
+              WorldMap.syncToYear(year);
+              TimeStore.set((WorldMap as any).year(), 'map');
+              WorldMap.render();
+            } else {
+              WorldMap.syncToYear(TimeStore.year);
+            }
+            go('map');
+          },
           traceInCube: (pid) => { Cube.select(pid); go('cube'); },
           // Fix a place, show every moment. This is where the map's old
           // click-to-drill went: it is now a named action on the card, at the
