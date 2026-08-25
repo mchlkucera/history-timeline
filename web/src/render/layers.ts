@@ -30,7 +30,7 @@
    and asks membership questions of it; layerpanel.ts draws it.
    ============================================================================= */
 
-import { CATBY, EVENTS, LANES, POLITIES, clamp } from './shared';
+import { CATBY, EVENTS, LANES, POLITIES, clamp, evId } from './shared';
 import { REL, SPREADCAT, lvlOfWeight, peakOf, regionOf } from './relations';
 
 // ── detail: three named steps, and each word means something concrete ────────
@@ -99,7 +99,7 @@ export interface LayerDef {
   kind: LayerKind;
   si: number | null;          // swatch index for the dot
   n: number;                  // corpus size, shown in the library
-  anchors?: string[];         // node ids adopted from ANOTHER band (see MZ)
+  anchors?: string[];         // node ids adopted from ANOTHER band or facet (see MZ, and the big-wars adoption in build())
 }
 
 const REGIONS: [string, string][] = [
@@ -141,15 +141,21 @@ let _byId: Map<string, LayerDef> | null = null;
  * about the data rather than a guess written here.
  */
 function build(): LayerDef[] {
-  // count every mark the timeline can draw, by (band, facet)
+  // count every mark the timeline can draw, by (band, facet) — and remember the
+  // strongest (lowest) level seen per facet, which the fold rule below reads.
   const n = new Map<string, number>();
-  const bump = (band: string, facet: string) => n.set(band + '/' + facet, (n.get(band + '/' + facet) || 0) + 1);
-  for (const e of EVENTS) bump(e[3], facetOf(e[6] || 'power', e[7] || (e[1] ? 'episode' : 'moment')));
-  for (const p of POLITIES) bump(p.region === 'AF' ? 'ME' : p.region, 'pol');
+  const strongest = new Map<string, number>();
+  const bump = (band: string, facet: string, lvl: number) => {
+    const k = band + '/' + facet;
+    n.set(k, (n.get(k) || 0) + 1);
+    if (lvl < (strongest.get(k) ?? 9)) strongest.set(k, lvl);
+  };
+  for (const e of EVENTS) bump(e[3], facetOf(e[6] || 'power', e[7] || (e[1] ? 'episode' : 'moment')), e[4] || 3);
+  for (const p of POLITIES) bump(p.region === 'AF' ? 'ME' : p.region, 'pol', polityLvl(p));
   for (const s of REL.spreads) {
     const fp = s.footprint && s.footprint.length ? s.footprint[0] : null;
     const r = fp ? regionOf(fp.lat, fp.lon) : null;
-    if (r) bump(r, facetOf(SPREADCAT[s.kind] || 'society', 'spread'));
+    if (r) bump(r, facetOf(SPREADCAT[s.kind] || 'society', 'spread'), lvlOfWeight(peakOf(s.weight)));
   }
 
   const defs: LayerDef[] = [];
@@ -163,11 +169,31 @@ function build(): LayerDef[] {
     const live: string[] = [];
     for (const f of ['sci', 'war', 'art', 'pol']) {
       const c = n.get(key + '/' + f) || 0;
-      if (c >= FACET_MIN) live.push(f); else essN += c;      // footnote folds into the spine
+      // A facet under FACET_MIN is a footnote and folds into the spine — EXCEPT
+      // a science facet holding a level-1/2 mark. That exemption is the founder's
+      // named miss ("writing is more of a technology topic"): a 5,000-year
+      // level-1 Writing ribbon folding into MidEast Essentials is not a footnote,
+      // it is a miscategorisation, so a sci facet that holds something that big
+      // ships as a real (if thin) layer instead of folding.
+      const keep = c >= FACET_MIN || (f === 'sci' && c > 0 && (strongest.get(key + '/sci') ?? 9) <= 2);
+      if (keep) live.push(f); else essN += c;                // footnote folds into the spine
     }
+    // THE FOUNDER BAR: "show the biggest changes and empires in NORMAL view."
+    // facetOf() gives every cat=war mark to the Wars facet exclusively, which
+    // starved a region's Essentials of its biggest changes — EU Essentials had
+    // neither World War. So Essentials ADOPTS the region's importance-1/2 war
+    // spans through the anchors mechanism timeline.ts already honours: they stay
+    // in Wars, where they belong, and appear in Essentials too, which cannot
+    // tell the region's story without them. Only needed while a live war facet
+    // would otherwise own them exclusively — a folded one is in the spine already.
+    const bigWars = live.includes('war')
+      ? EVENTS.filter(e => e[3] === key && e[1] && (e[6] || 'power') === 'war' && (e[4] || 3) <= 2).map(evId)
+      : [];
     defs.push({
       id: key.toLowerCase() + '-ess', subject: key, facet: 'ess',
-      name: label + ' · ' + FACET_NAME.ess, kind: 'region', si: FACET_SI.ess, n: essN,
+      name: label + ' · ' + FACET_NAME.ess, kind: 'region', si: FACET_SI.ess,
+      n: essN + bigWars.length,
+      ...(bigWars.length ? { anchors: bigWars } : {}),
     });
     for (const f of live) defs.push({
       id: key.toLowerCase() + '-' + f, subject: key, facet: f,
@@ -214,8 +240,17 @@ interface Persisted {
 
 const KEY = 'tl.layers.v1';
 // THE SPINE — what a reader who has never been here gets. Deep time first (it
-// is the backdrop everything else sits on), then the four regions' essentials.
-const SPINE = ['deep', 'eu-ess', 'me-ess', 'as-ess', 'am-ess'];
+// is the backdrop everything else sits on), then, per region, its essentials
+// AND its states & empires. The second half is the founder's order — "show the
+// biggest changes and empires in NORMAL view" — made the default: a polity is
+// routed to exactly one layer by timeline.ts, so the empires reach the default
+// board as their own layer beside each region's essentials rather than by
+// flooding the essentials corpus with every minor state. The zoom LOD keeps the
+// first sight legible: zoomed out, a polity layer shows only its top empires.
+const SPINE = ['deep', 'eu-ess', 'eu-pol', 'me-ess', 'me-pol', 'as-ess', 'as-pol', 'am-ess', 'am-pol'];
+// what the spine was before the empires joined it — load() migrates an
+// untouched old default forward, and nothing else.
+const OLD_SPINE = ['deep', 'eu-ess', 'me-ess', 'as-ess', 'am-ess'];
 
 let uid = 0;
 const nid = () => 'g' + (++uid) + '-' + Math.random().toString(36).slice(2, 6);
@@ -261,6 +296,17 @@ export const Layers = {
       if (typeof g.id !== 'string') continue;
       root.push({ t: 'G', id: g.id, name: String(g.name || 'Group'), collapsed: !!g.collapsed, kids: keepL(g.kids) });
     }
+    // MIGRATION: the default spine changed — it now ships each region's states
+    // & empires layer ("show the biggest changes and empires in NORMAL view").
+    // A stored board that is exactly the untouched OLD default (the five-lane
+    // spine, nothing hidden, every dial at normal) adopts the new default; a
+    // board with any customisation is the reader's own arrangement and keeps itself.
+    const untouched = root.length === OLD_SPINE.length
+      && root.every(nd => nd.t === 'L')
+      && OLD_SPINE.every(id => seen.has(id))
+      && [...seen].every(id => (p!.vis ? p!.vis[id] !== false : true)
+        && ((p!.det ? p!.det[id] ?? 1 : 1)) === 1);
+    if (untouched) { this.reset(); return; }
     this.root = root;
     this.vis = {}; this.det = {}; this.gvis = {};
     for (const id of seen) {

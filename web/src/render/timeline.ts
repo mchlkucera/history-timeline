@@ -186,10 +186,29 @@ const STEPS: ZStep[] = [
 // a wheel parked on a boundary cannot oscillate, and a deliberate reversal
 // costs about a fifth of a rung's worth of scrolling.
 const HYST = 0.09;
-// One settle, and the same one whichever way the ladder is climbed. The slew
-// limiter still bounds the per-frame velocity, so a rung that moves a band by
-// four rows takes longer than this and never moves faster than 2.2px a frame.
+// One settle, and the same one whichever way the ladder is climbed.
 const SETTLE_MS = 230;
+/* HOW WIDE THE LIMITER OPENS FOR A SETTLE, and why it opens at all.
+   The limiter's ordinary caps — 2.2px a frame for a band, 2.5 for a row — are
+   sized for things with NO clock of their own: a pan, a lane toggle, a preset
+   teleport, a search that re-ranks the corpus. Those have to be WALKED, because
+   nothing else is timing them. A settle is timed: an eased ramp of known length
+   between two known geometries. Holding it to the walking pace does not make it
+   gentler, it makes it LONG — measured on the production build, the ordinary
+   caps left a 2.2px/frame TAIL after the settle clock had run out and stretched
+   the two tier-opening crossings to 678 and 680ms. That is no longer part of the
+   gesture, which was the whole point of having a settle.
+
+   So during a settle the cap is DERIVED rather than fixed: exactly the peak
+   velocity of the eased path this particular band has to travel, and never less
+   than the walking pace. A smoothstep's peak is 1.5× its average, and the little
+   over that is headroom for a frame that arrives late. The result is a cap that
+   is as wide as the settle needs and not one pixel wider — a one-row crossing
+   still moves at the walking pace, because that is all a one-row crossing needs
+   — and, because the path it is following starts and ends at rest, what the eye
+   gets at the wide end is a fast movement rather than a jump. */
+const SETTLE_PEAK = 1.6;
+const SETTLE_FRAMES = SETTLE_MS / 16.7;
 const PAD_FRAC = 0.30;      // soft window around the LATCHED window, each side
 const SLEW_ROW = 2.5;       // px/frame a single row's drawn height may move
 const SLEW_LANE = 2.2;      // px/frame a whole band's drawn height may move
@@ -505,7 +524,14 @@ export const TL = {
   step: -1,                    // the rung we are standing on; −1 until the first layout
   _stepFrom: -1,               // the rung the live settle is climbing FROM
   _sT0: 0,                     // when that settle started (0 = nothing settling)
-  /** Crossings, newest last — {step, from, span, ms}. Capped; read it from the console. */
+  /**
+   * Every threshold crossing, newest last, capped at 64. `ms` is what the settle
+   * ACTUALLY cost, measured from the crossing to the frame the last band arrived
+   * — not the nominal SETTLE_MS, because the slew limiter can and does stretch a
+   * big one. It stays −1 when the next crossing arrived first and superseded it,
+   * which is what a flick through six rungs looks like in here. Read it from the
+   * console: __tl.TL.xlog.
+   */
   xlog: [] as { step: number; from: number; span: number; vspan: number; pitch: number; tier: number; at: number; ms: number }[],
   _xPend: null as null | { step: number; from: number; span: number; vspan: number; pitch: number; tier: number; at: number; ms: number },
   /**
@@ -974,10 +1000,14 @@ export const TL = {
     // ══ PHASE B — the budget. Caps stay INTEGER; the slew limiter is what makes a
     // cap change smooth, so there is one mechanism here and not two. ═══════════
     // A lane's floor, in rows the budget may never take. It is a function of the
-    // rung: at a decade a row is 39px and three of them per band would put eight
-    // bands a third of a screen past the budget with nothing left to trim, so the
-    // fattest rungs keep two. Fewer, fatter rows IS the instruction.
-    const SPREAD_FLOOR = pT >= 1.25 ? 2 : 3;
+    // rung, because a row is not a fixed height any more: three rows per band at
+    // the closest rungs is 28-33px each, and nine bands of that is a third of a
+    // screen past the budget with nothing left for the trim to take. Measured at
+    // the default nine-band arrangement, holding the floor at three ran the plot
+    // to 905px against a 791px budget; two brings it back inside and lets the
+    // budget spend the difference where there is something to show. Fewer,
+    // fatter rows IS the instruction.
+    const SPREAD_FLOOR = pT >= 1.05 ? 2 : 3;
     // THE CUMULATIVE SQUEEZE, which replaces the old integer row cap. Rows spend a
     // shared budget of `cap` row-heights in permanent order. A row only 40% faded in
     // spends 0.4 of it, so a row BELOW the cap opens at exactly the rate a row above
@@ -1074,10 +1104,24 @@ export const TL = {
       const pool = ec.length ? ec : sc;
       if (!map) break;
       pool.sort((a, b) => (a.cumS + a.cumE) - (b.cumS + b.cumE));
-      const pick = pool[0], k = pick.L.key, was = map.get(k)!;
-      map.set(k, was - 1); measure(pick);
-      if (total() < this.HMAX - TRIM_OFF) continue;
-      map.set(k, was); measure(pick); break;
+      // TRY THE WHOLE POOL, not just its smallest member. It used to give up the
+      // moment the FIRST candidate failed the hysteresis test, so a lane that
+      // could have taken its row back had to wait for a frame in which it
+      // happened to sort first — the budget converged one row per FRAME. That was
+      // invisible while the layout moved continuously; against a ladder it is
+      // very visible, because it lands in the middle of a settle and drags the
+      // target out from under it. Measured, a crossing that made the budget
+      // redistribute took 580ms to arrive instead of the settle's 230. Now the
+      // budget finishes inside the frame it started, and the settle is the only
+      // clock left in a crossing.
+      let did = false;
+      for (const pick of pool) {
+        const k = pick.L.key, was = map.get(k)!;
+        map.set(k, was - 1); measure(pick);
+        if (total() < this.HMAX - TRIM_OFF) { did = true; break; }
+        map.set(k, was); measure(pick);
+      }
+      if (!did) break;
     }
 
     // ══ PHASE C — what survives the budget, and THE ERA ROW ══════════════════
@@ -1178,15 +1222,31 @@ export const TL = {
         const dr = new Array<number>(st.row.length).fill(0);
         const de = new Array<number>(st.ev.length).fill(0);
         let sum = 0;
-        for (let r = 0; r < st.row.length; r++) { dr[r] = clamp(wRow(r) - st.row[r], -SLEW_ROW, SLEW_ROW); sum += dr[r]; }
-        for (let r = 0; r < st.ev.length; r++) { de[r] = clamp(wEv(r) - st.ev[r], -SLEW_ROW, SLEW_ROW); sum += de[r]; }
-        let dh = clamp(wHead - st.head, -SLEW_ROW, SLEW_ROW); sum += dh;
+        // The caps, each widened to the distance IT governs and to nothing else:
+        // the band's cap to how far the BAND has to travel this settle, a row's to
+        // the furthest any single ROW has to. They are different numbers and the
+        // difference matters — a rung that opens one row while another closes
+        // moves the band barely at all and moves two rows a long way.
+        let kRow = SLEW_ROW, kLane = SLEW_LANE;
+        if (sp < 1) {
+          const add = (a: number[]) => { let t = 0; for (const v of a) t += v; return t; };
+          const far = Math.abs(tHead - st.h0);
+          let mr = far;
+          for (let r = 0; r < st.row.length; r++) mr = Math.max(mr, Math.abs(tOf(tRow, r, n) - tOf(st.r0, r, st.r0.length)));
+          for (let r = 0; r < st.ev.length; r++) mr = Math.max(mr, Math.abs(tOf(tEv, r, m) - tOf(st.e0, r, st.e0.length)));
+          const band = Math.abs((tHead + add(tRow) + add(tEv)) - (st.h0 + add(st.r0) + add(st.e0)));
+          kRow = Math.max(kRow, mr / SETTLE_FRAMES * SETTLE_PEAK);
+          kLane = Math.max(kLane, band / SETTLE_FRAMES * SETTLE_PEAK);
+        }
+        for (let r = 0; r < st.row.length; r++) { dr[r] = clamp(wRow(r) - st.row[r], -kRow, kRow); sum += dr[r]; }
+        for (let r = 0; r < st.ev.length; r++) { de[r] = clamp(wEv(r) - st.ev[r], -kRow, kRow); sum += de[r]; }
+        let dh = clamp(wHead - st.head, -kRow, kRow); sum += dh;
         const scale = (k: number) => {
           for (let r = 0; r < dr.length; r++) dr[r] *= k;
           for (let r = 0; r < de.length; r++) de[r] *= k;
           dh *= k;
         };
-        if (Math.abs(sum) > SLEW_LANE) scale(SLEW_LANE / Math.abs(sum));
+        if (Math.abs(sum) > kLane) scale(kLane / Math.abs(sum));
         // AND THEN ON THE BAND HEIGHT ITSELF, not merely on the row sum. L.h is the sum
         // PLUS two GAP_H terms that pass through a min(1, …) — derived furniture that a
         // row crossing that knee drags along faster than the sum reports. Measured, a
@@ -1205,8 +1265,8 @@ export const TL = {
         };
         for (let pass = 0; pass < 2; pass++) {
           const move = Math.abs(hOf(1) - hOf(0));
-          if (move <= SLEW_LANE) break;
-          scale(SLEW_LANE / move);
+          if (move <= kLane) break;
+          scale(kLane / move);
         }
         // the SNAP test is against the waypoint (that is where this frame is
         // going); `anim` is against the TARGET, so the loop keeps running until
