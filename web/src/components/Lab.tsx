@@ -287,7 +287,10 @@ function boot() {
   initConn();
   WorldMap.render();
   // diagnostic handle for acceptance probes and console debugging — reads only
-  (window as any).__tl = { TL, VT, Conn, WorldMap, Cube, TimeStore, SelStore, SelCard, Layers, LayerPanel };
+  // Flow and Braid are both Ribbons() instances and were the only canvas views
+  // with no handle here, which made them the only ones a gesture probe could not
+  // measure. Reads only, like the rest.
+  (window as any).__tl = { TL, VT, Conn, WorldMap, Cube, Flow, Braid, TimeStore, SelStore, SelCard, Layers, LayerPanel };
 }
 
 
@@ -1519,6 +1522,23 @@ export default function Lab() {
     if (next) { el.setAttribute('data-theme', next); try { localStorage.setItem('tl-theme', next); } catch { /* ignore */ } }
     else { el.removeAttribute('data-theme'); try { localStorage.removeItem('tl-theme'); } catch { /* ignore */ } }
   };
+
+  /* THE PLACEHOLDER IS SHORTER ON A FINGER, because the type is bigger there.
+     iOS zooms the whole page in when a sub-16px field takes focus, so app.css
+     §1 forces 16px on coarse pointers — and 16px "Search anything…" measures
+     130px inside an 89px input at an iPad's portrait width, which renders as
+     "Search anytl" and reads as a broken layout rather than as a hint. The
+     field itself cannot simply grow: .tl-app's one grid column is max-content
+     and a rigid field pushes the right-hand end of the rail off the clip (see
+     the note beside the markup). So the WORDS step down instead of the box.
+
+     Set from an effect rather than in the JSX: matchMedia does not exist during
+     the server render, and a placeholder that differs between the two passes is
+     a hydration mismatch. */
+  useEffect(() => {
+    const box = document.getElementById('cmdk') as HTMLInputElement | null;
+    if (box && matchMedia('(pointer: coarse)').matches) box.placeholder = 'Search…';
+  }, []);
 
   // ── ⌘K ────────────────────────────────────────────────────────────────────
   // It used to open a modal palette. There is no modal any more — the shortcut

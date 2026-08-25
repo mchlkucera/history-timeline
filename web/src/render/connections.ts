@@ -20,6 +20,9 @@ import {
   $, BELIEFS, EVENTS, POLITIES, SelStore, catColor, clamp, fitCanvas, fmtY, fontMono, fontUI,
   hexHsl, hideTip, reduceMotion, repaintOnFonts, showTip, tokens, varyColor, yearPill, type Tokens,
 } from './shared';
+import {
+  bindPinch, slopFor, TAP_PAD, armSafariGestureGuard, refuseSafariGestures,
+} from './gesture';
 import { flowLayout } from './flow';
 import {
   REL, SPREADCAT, esc, kindColor, lit as litOf, lvlOfWeight, peakOf, regionOf,
@@ -628,21 +631,23 @@ export const Conn = {
     this.hits.push({ id: n.id, li, kind: 'item', x0, x1: Math.max(x0, x1), y, ax: x0, ay: y });
   },
 
-  at(mx: number, my: number) {
+  /** `pad` widens every target by the same margin — 0 for a cursor, TAP_PAD for
+   *  a fingertip, which cannot be aimed at a 14px-tall node row. */
+  at(mx: number, my: number, pad = 0) {
     // points win over ribbons — the contained thing is the smaller target
     for (let i = this.hits.length - 1; i >= 0; i--) {
       const h = this.hits[i];
       if (h.kind !== 'item') continue;
-      if (mx >= h.x0 - 6 && mx <= h.x1 + 6 && Math.abs(my - h.y) <= 7) return h;
+      if (mx >= h.x0 - 6 - pad && mx <= h.x1 + 6 + pad && Math.abs(my - h.y) <= 7 + pad) return h;
     }
     const G = 12, Wp = this.cv.clientWidth - G - 12;
     for (const h of this.hits) {
       if (h.kind !== 'ribbon') continue;
       const a = h.a, n = a.top.length;
       const x0 = this.X(a.top[0][0], G, Wp), x1 = this.X(a.top[n - 1][0], G, Wp);
-      if (mx < x0 - 2 || mx > x1 + 2) continue;
+      if (mx < x0 - 2 - pad || mx > x1 + 2 + pad) continue;
       const t = clamp(Math.round((mx - x0) / Math.max(x1 - x0, 1) * (n - 1)), 0, n - 1);
-      if (my >= h.rTop + a.top[t][1] - 1 && my <= h.rTop + a.bot[t][1] + 1) return h;
+      if (my >= h.rTop + a.top[t][1] - 1 - pad && my <= h.rTop + a.bot[t][1] + 1 + pad) return h;
     }
     return null;
   },
@@ -708,15 +713,39 @@ export const Conn = {
     this.sel = SelStore.id;
     SelStore.subscribe(() => { this.sel = SelStore.id; this.render(); this.panel(); });
     repaintOnFonts(() => this.render());
+    armSafariGestureGuard();
+    refuseSafariGestures(cv);
+    /* Same division as every other view: one finger drags the graph through time,
+       two zoom about their midpoint. The pinch calls the wheel's own arithmetic
+       with `pow(1.0018, deltaY)` replaced by the finger ratio, against the same
+       [8, 30000] span clamp — one zoom path, two input devices. */
+    const P = bindPinch(cv, {
+      onStart: () => { this.drag = null; hideTip(); },
+      onPinch: (now, prev) => {
+        const r = cv.getBoundingClientRect(); const G = 12, Wp = cv.clientWidth - G - 12;
+        const yc = this.d0 + (prev.cx - r.left - G) / Wp * (this.d1 - this.d0);
+        const s = clamp(this.span() * (prev.d / now.d), 8, 30000);
+        const frac = (yc - this.d0) / (this.d1 - this.d0);
+        this.d0 = yc - frac * s; this.d1 = this.d0 + s;
+        const dy = (now.cx - prev.cx) / Wp * s;
+        this.d0 -= dy; this.d1 -= dy;
+        this.dirty = true; this.render();
+      },
+      onRebase: p => { this.drag = { x: p.clientX, y: p.clientY, d0: this.d0, d1: this.d1, moved: false }; },
+    });
     cv.addEventListener('pointermove', e => {
+      if (P.multi) { this.drag = null; return; }        // the pinch owns the gesture
       const r = cv.getBoundingClientRect(), mx = e.clientX - r.left, my = e.clientY - r.top;
       this.hoverX = mx;
       if (this.drag) {
         const G = 12, Wp = cv.clientWidth - G - 12;
-        const dy = (e.clientX - this.drag.x) / Wp * (this.drag.d1 - this.drag.d0);
-        if (Math.abs(e.clientX - this.drag.x) > 3) this.drag.moved = true;
+        const dx = e.clientX - this.drag.x;
+        const dy = dx / Wp * (this.drag.d1 - this.drag.d0);
+        if (Math.abs(dx) > slopFor(e) || (e.pointerType !== 'mouse' && Math.abs(e.clientY - this.drag.y) > slopFor(e))) this.drag.moved = true;
         this.d0 = this.drag.d0 - dy; this.d1 = this.drag.d1 - dy; this.dirty = true; this.render(); return;
       }
+      // hover is a mouse affordance; the tap below opens the same node instead
+      if (e.pointerType !== 'mouse') return;
       const h = this.at(mx, my);
       const id = h ? h.id : null;
       this.hover = id; this.render();
@@ -736,14 +765,15 @@ export const Conn = {
     });
     cv.addEventListener('pointerleave', () => { hideTip(); this.hover = null; this.hoverX = null; this.render(); });
     cv.addEventListener('pointerdown', e => {
-      this.drag = { x: e.clientX, d0: this.d0, d1: this.d1, moved: false };
-      cv.setPointerCapture(e.pointerId);
+      if (P.multi) { this.drag = null; hideTip(); return; }
+      this.drag = { x: e.clientX, y: e.clientY, d0: this.d0, d1: this.d1, moved: false };
+      try { cv.setPointerCapture(e.pointerId); } catch { /* synthetic or already-lifted pointer */ }
     });
     cv.addEventListener('pointerup', e => {
       const wasDrag = this.drag && this.drag.moved; this.drag = null;
-      if (wasDrag) return;
+      if (wasDrag || P.tapBlocked) return;
       const r = cv.getBoundingClientRect(), mx = e.clientX - r.left, my = e.clientY - r.top;
-      const h = this.at(mx, my);
+      const h = this.at(mx, my, e.pointerType === 'mouse' ? 0 : TAP_PAD);
       this.select(h ? h.id : null);            // empty space clears
     });
     cv.addEventListener('wheel', e => {

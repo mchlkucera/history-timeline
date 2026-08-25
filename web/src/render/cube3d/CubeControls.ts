@@ -82,6 +82,12 @@ export class CubeControls {
   private _pivotTarget: number;
   private _home: View | null = null;
   private _lastWheelPivot = 0;
+  /**
+   * THE LIVE CONTACTS, so the depth pivot can tell a first finger from a second.
+   * OrbitControls keeps this list too (`_pointers`), but it is private to it and
+   * this class binds its own capture-phase listeners, so it keeps its own.
+   */
+  private _down = new Set<number>();
 
   /**
    * @param pickRoot   objects the pivot raycast may hit
@@ -210,14 +216,31 @@ export class CubeControls {
 
   private _onDown = (e: PointerEvent) => {
     if (this._tween) { this._tween = null; this.oc.enabled = true; }
-    if (e.button === 0 || e.button === 1) {
+    if (e.button !== 0 && e.button !== 1) return;
+    const first = this._down.size === 0;
+    this._down.add(e.pointerId);
+    /* ONLY THE FIRST CONTACT PICKS THE PIVOT.
+       A touch pointerdown reports button 0 exactly as a left-click does, so the
+       SECOND finger of a pinch used to re-raycast and move the orbit target to
+       whatever was under it — mid-dolly, with the fingers already moving. There
+       is no visual jump (setPivotAtDepth keeps the target on the view ray by
+       construction) but the dolly's centre and its rate both change underneath
+       the gesture, which is the 3D version of the bug this whole pass is about:
+       treating a second pointer as a replacement for the first. OrbitControls'
+       own `touches.TWO = DOLLY_PAN` handles the pinch itself and wants the pivot
+       left where the gesture began. */
+    if (first) {
       this.setPivotAtDepth(this.pickPoint(e));
       this._dragging = true;
       this._pivotTarget = 1;
     }
   };
 
-  private _onUp = () => { this._dragging = false; this._pivotTarget = 0; };
+  private _onUp = (e: PointerEvent) => {
+    this._down.delete(e.pointerId);
+    if (this._down.size) return;               // a finger is still down: still dragging
+    this._dragging = false; this._pivotTarget = 0;
+  };
 
   // zoom-to-cursor works best when the target is also at the cursor's depth
   private _onWheel = (e: WheelEvent) => {

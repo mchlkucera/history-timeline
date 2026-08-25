@@ -40,8 +40,11 @@
 import {
   $, EVENTS, CATBY, SelStore, TimeStore, catColor, clamp, evId, fitCanvas, fmtBig, fmtSpan, fmtY,
   fontMono, fontUI, hideTip, reduceMotion, repaintOnFonts, showTip, timeTicks, tokens, tv, ty,
-  withA, type Tokens,
+  withA, clampV, type Tokens,
 } from './shared';
+import {
+  bindPinch, slopFor, TAP_PAD, armSafariGestureGuard, refuseSafariGestures,
+} from './gesture';
 import { dimAlpha, relOf } from './relations';
 import { SelCard } from './selcard';
 import { TL } from './timeline';
@@ -594,7 +597,10 @@ export const VT = {
     }
   },
 
-  hit(mx: number, my: number) { return this.boxes.findLast(b => b.vw > 0 && mx >= b.vx && mx <= b.vx + b.vw && my >= b.y && my <= b.y + b.h); },
+  /** `pad` grows every box before the test — 0 for a cursor, TAP_PAD for a
+   *  finger. Same reasoning as timeline.ts's hitAt: these marks are drawn for a
+   *  cursor and a fingertip cannot be aimed at a 4px dot. */
+  hit(mx: number, my: number, pad = 0) { return this.boxes.findLast(b => b.vw > 0 && mx >= b.vx - pad && mx <= b.vx + b.vw + pad && my >= b.y - pad && my <= b.y + b.h + pad); },
   /** A hit box in canvas CSS pixels, as a viewport rect the card can dodge. */
   rectOf(b: any): DOMRect {
     const r = this.cv.getBoundingClientRect();
@@ -632,6 +638,7 @@ export const VT = {
 
     // Wheel stays what it was: time zoom. Sideways travel is on shift+wheel and on an
     // unambiguously horizontal trackpad swipe, so it never fights the zoom.
+    armSafariGestureGuard();
     cv.addEventListener('wheel', e => {
       e.preventDefault();
       const sideways = e.shiftKey || Math.abs(e.deltaX) > Math.abs(e.deltaY) * 2;
@@ -647,7 +654,36 @@ export const VT = {
 
     let drag: any = null;
     const onRail = (my: number) => !!this._rail && my >= this._rail.y0 - 5 && my <= this._rail.y1 + 5;
+    const startDrag = (p: { clientX: number; clientY: number }) => {
+      drag = { x: p.clientX, y: p.clientY, d0: this.d0, d1: this.d1, panX: this.panX, moved: false };
+    };
+    /* THIS PROJECTION'S TIME AXIS IS VERTICAL, so a pinch's ANCHOR is the
+       midpoint's Y — but its SCALE is still the plain separation of the two
+       contacts, which is what a hand means by a pinch whichever way it is held.
+       Zoom goes to TL.zoomBy exactly as the wheel's does, so the shared clamp,
+       the shared fixed-point rule AND the 26-rung ladder (this view reads the
+       same TL state the horizontal one does) all apply unchanged. */
+    refuseSafariGestures(cv);
+    const P = bindPinch(cv, {
+      onStart: () => { drag = null; hideTip(); },
+      onPinch: (now, prev) => {
+        const r = cv.getBoundingClientRect(); const Hp = this.H - this.GY - this.PAD;
+        TL.zoomBy(this.it(prev.cy - r.top, this.GY, Hp), prev.d / now.d);
+        // then carry the sheet with the midpoint: Y through time, X across the
+        // surface. In V-SPACE, and through the shared clamp, because the pinch
+        // reaches deep time where a year-space translation is wildly nonuniform.
+        if (!this.log) {
+          const dv = (now.cy - prev.cy) / Hp * (tv(TL.d1) - tv(TL.d0));
+          const [nv0, nv1] = clampV(tv(TL.d0) - dv, tv(TL.d1) - dv);
+          TL.d0 = ty(nv0); TL.d1 = ty(nv1);
+        }
+        this.panX -= now.cx - prev.cx;
+        this.render();
+      },
+      onRebase: p => startDrag(p),
+    });
     cv.addEventListener('pointerdown', e => {
+      if (P.multi) { drag = null; hideTip(); return; }   // a second finger is a pinch
       const r = cv.getBoundingClientRect(), mx = e.clientX - r.left, my = e.clientY - r.top;
       try { cv.setPointerCapture(e.pointerId); } catch { /* synthetic or already-lifted pointer */ }
       const pl = this.pillAt(mx, my);
@@ -656,10 +692,11 @@ export const VT = {
         drag = { rail: true, moved: true };
         this.panTo((mx - this.GX) / this._rail!.k - this._surface.CW / 2); return;
       }
-      drag = { x: e.clientX, y: e.clientY, d0: this.d0, d1: this.d1, panX: this.panX, moved: false };
+      startDrag(e);
       cv.style.cursor = 'grabbing';
     });
     cv.addEventListener('pointermove', e => {
+      if (P.multi) { drag = null; return; }              // the pinch owns the gesture
       const r = cv.getBoundingClientRect(), mx = e.clientX - r.left, my = e.clientY - r.top;
       this.hoverY = my;
       if (drag && drag.rail) { this.panTo((mx - this.GX) / this._rail!.k - this._surface.CW / 2); return; }
@@ -667,7 +704,8 @@ export const VT = {
         // one gesture, both axes: Y travels through time, X pans the surface
         const Hp = this.H - this.GY - this.PAD;
         const dx = e.clientX - drag.x, dy = e.clientY - drag.y;
-        if (Math.abs(dx) > 3 || Math.abs(dy) > 3) drag.moved = true;
+        const slop = slopFor(e);
+        if (Math.abs(dx) > slop || Math.abs(dy) > slop) drag.moved = true;
         this.panX = drag.panX - dx;
         if (!this.log) {
           const dt = dy / Hp * (drag.d1 - drag.d0);
@@ -675,6 +713,7 @@ export const VT = {
         }
         this.render(); return;   // keep the crosshair: the year readout is the anchor while travelling
       }
+      if (e.pointerType !== 'mouse') return;   // no hover on a finger; the tap selects
       const b = this.hit(mx, my);
       this.render();
       if (onRail(my) || this.pillAt(mx, my)) { hideTip(); cv.style.cursor = 'pointer'; return; }
@@ -687,14 +726,15 @@ export const VT = {
       } else { hideTip(); cv.style.cursor = 'grab'; }
     });
     cv.addEventListener('pointerup', e => {
-      const wasDrag = drag && drag.moved; drag = null; cv.style.cursor = 'grab'; if (wasDrag) return;
+      const wasDrag = drag && drag.moved; drag = null; cv.style.cursor = 'grab';
+      if (wasDrag || P.tapBlocked) return;
       const r = cv.getBoundingClientRect(), mx = e.clientX - r.left, my = e.clientY - r.top;
       if (mx < this.GX) {                              // year gutter: set the global moment
         const Hp = this.H - this.GY - this.PAD;
         TimeStore.set(Math.round(this.it(my, this.GY, Hp)), 'vt');
         return;
       }
-      const b = this.hit(mx, my);
+      const b = this.hit(mx, my, e.pointerType === 'mouse' ? 0 : TAP_PAD);
       // Click means select, and the card opens beside the mark — never over it.
       // Empty canvas clears the selection, exactly as before.
       SelCard.select(b ? evId(b.ev) : null, b ? this.rectOf(b) : null);

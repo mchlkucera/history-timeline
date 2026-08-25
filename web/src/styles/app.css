@@ -1159,3 +1159,131 @@ body.tl-dragging { cursor: grabbing; }
   border-radius: var(--tl-radius-xs);
 }
 #cubeChain:empty { display: none; }
+
+
+/* ═════════════════════════════════════════════════════════════════════════════
+   TOUCH — what a finger needs that a cursor never did
+   ═════════════════════════════════════════════════════════════════════════════
+   The founder, on an iPad: "make sure this is functional also on iPad. right now
+   I can't zoom", and "the cube is super easy to control on iPad for example."
+   The zoom itself is fixed in src/render/gesture.ts — every canvas view now
+   keeps a registry of live pointers, the way the cube's OrbitControls always
+   has. What is left is everything a page does around the canvas, which this
+   block collects rather than scattering through the sections above.
+
+   THE ONE RULE FOR EDITING IT: nothing in here is a design decision. These are
+   platform requirements — a font size iOS insists on, a scroll behaviour, a
+   gesture the browser would otherwise eat. Anything that IS a design decision
+   (how big a control is, what colour it is) belongs in tokens.css / shell.css
+   and is reported upward instead of being forked here.
+   ═══════════════════════════════════════════════════════════════════════════ */
+
+/* ── 1. THE ZOOM THAT DID HAPPEN, AND SHOULD NOT HAVE ─────────────────────────
+   iOS Safari zooms the WHOLE PAGE in when a form control smaller than 16px
+   takes focus. Every field in this app computes to 12px or 13px (#cmdk, the
+   flow and cube filters, the horizon selects), so tapping the search box on an
+   iPad magnified the shell — and because .tl-app is `height:100dvh;
+   overflow:hidden`, a magnified shell is one you cannot pan and cannot scroll
+   back out of. The single zoom an iPad reader could actually trigger was the
+   wrong one, in the app whose complaint was that it would not zoom.
+
+   16px is the platform's threshold, not a taste; `max()` so this can only ever
+   raise a size, never shrink one, and the query so no desktop type changes.
+   If the design system would rather own this, it is one line in tokens.css. */
+@media (pointer: coarse) {
+  /* Specificity, not taste: shell.css's `.tl-field input` and globals.css's
+     `input[type="text"]` are both (0,1,1), so a bare `input` here loses however
+     late it is loaded. Scoping to .tl-app and repeating the type selectors puts
+     this at (0,2,1) — high enough to win, low enough that any real rule in the
+     design system can still take it back without !important. */
+  .tl-app input, .tl-app select, .tl-app textarea,
+  .tl-app input[type="text"], .tl-app input[type="number"], .tl-app input[type="search"] {
+    font-size: max(16px, var(--tl-text-base));
+  }
+}
+
+/* ── 2. NO DOUBLE-TAP ZOOM, NO 350ms TAP DELAY ────────────────────────────────
+   `manipulation` = keep panning and pinching, drop the double-tap gesture. On
+   an instrument where every view has a zoom of its own, a double-tap that
+   magnifies the DOCUMENT is never what was meant — and dropping it also drops
+   the 350ms Safari waits before dispatching a tap, which is the difference
+   between a control that answers and one that feels broken. Canvases set
+   `touch-action: none` themselves (§ .tl-canvasbox above) and keep it: that is
+   what delivers raw multi-touch to the pinch handlers. */
+.tl-app { touch-action: manipulation; }
+
+/* ── 3. NO RUBBER BAND ────────────────────────────────────────────────────────
+   .tl-view is the one scroller in the shell. Left at `auto`, a drag that runs
+   past its end bounces the whole page on iOS and, worse, can hand the gesture
+   to Safari's back-swipe. `none` keeps the overscroll inside the view and stops
+   the chain at the app frame. */
+.tl-app { overscroll-behavior: none; }
+.tl-view { overscroll-behavior: none; }
+
+/* ── 4. A DRAG IS NOT A TEXT SELECTION ────────────────────────────────────────
+   Press-and-hold on a canvas or a draggable row raises iOS's selection callout
+   and its magnifier, both of which cancel the pointer stream underneath — so a
+   slow, careful gesture is exactly the one that fails. The grey flash on every
+   tap goes too: this app draws its own feedback. */
+.tl-app { -webkit-tap-highlight-color: transparent; }
+.tl-canvasbox > canvas,
+.tl-lname,
+[data-a="drag"], [data-a="gdrag"] {
+  -webkit-touch-callout: none;
+  -webkit-user-select: none;
+  user-select: none;
+}
+
+/* ── 5. THE LAYER PANEL'S DRAG-TO-REORDER ─────────────────────────────────────
+   layerpanel.ts drags a row by pointer events on its NAME. The name sat at
+   `touch-action: auto` inside .tl-view's scroller, so on touch the browser
+   claimed the gesture for scrolling and fired pointercancel a few pixels in:
+   reordering was not merely fiddly on an iPad, it was impossible. `none` is
+   what gives the handler the stream; layerpanel.ts does the rest (it now
+   captures the pointer and listens for pointercancel). */
+.tl-lname, [data-a="drag"], [data-a="gdrag"] { touch-action: none; }
+
+/* ── 6. HOVER-ONLY CONTROLS, MADE REACHABLE ───────────────────────────────────
+   Two controls in every layer row are `opacity: 0` until `.tl-lrow:hover`: the
+   DETAIL dial and the REMOVE ×. Quiet-until-pointed-at is the right instinct on
+   a desktop — a column of nineteen rows should not be a column of nineteen
+   toolbars — but `hover: none` means the reveal never fires and both controls
+   are not merely subtle, they are INVISIBLE AND UNREACHABLE. There is no other
+   route to either: nothing else sets a layer's detail, nothing else removes it.
+
+   So on a touch pointer they are simply present, at a reduced weight that keeps
+   the row reading as a name rather than as a toolbar. This is the general shape
+   of the answer wherever hover carried information: on touch, show it. */
+@media (hover: none) {
+  .tl-ldetail, .tl-lx { opacity: .65; }
+  .tl-ldetail:active, .tl-lx:active { opacity: 1; }
+}
+
+/* ── 7. WHAT A FINGER CAN HIT IN THE PANEL ────────────────────────────────────
+   iOS's floor is 44px and these rows cannot have it: a panel row is exactly as
+   tall as the band it labels on the canvas (see "THE BAND RULE RUNS THROUGH"),
+   bands are as short as 18px, and 44px tall rows would break the one alignment
+   the whole panel exists to make. HEIGHT is spoken for; WIDTH is not. So each
+   icon grows sideways to the widest it can be without pushing the name out,
+   which is the part of the target a thumb actually misses. The remaining
+   shortfall in height is real, is reported upward, and is not solvable here. */
+@media (pointer: coarse) {
+  .tl-leye { width: 26px; }
+  .tl-lx   { width: 26px; }
+  .tl-lchev { width: 22px; }
+  .tl-ldetail { padding: 0 var(--tl-space-3); }
+}
+
+/* ── 8. A KEYBOARD HINT ON A DEVICE WITH NO KEYBOARD ──────────────────────────
+   The search field carries a `⌘K` badge. On an iPad it is both untrue — there
+   is no ⌘ to press — and expensive: it takes about 30px out of a field that is
+   already the tightest thing in the rail, which is what clipped the placeholder
+   to "Search anytl" once the field's type went to the 16px iOS requires (§1).
+   Removing it on a coarse pointer fixes an affordance that lies AND gives the
+   placeholder its room back. `(any-hover: hover)` is deliberately not used: an
+   iPad with a Magic Keyboard reports a coarse primary pointer and DOES have a ⌘
+   key, so this hides the badge from it too — a hint you do not need is a much
+   smaller loss than a rail that does not fit. */
+@media (pointer: coarse) {
+  .tl-field--cmdk .tl-kbd { display: none; }
+}

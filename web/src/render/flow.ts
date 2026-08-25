@@ -6,6 +6,9 @@ import {
   $, POLITIES, clamp, fitCanvas, fmtY, fontMono, fontUI, hideTip, reduceMotion, repaintOnFonts, showTip,
   tokens, yearPill, type Tokens,
 } from './shared';
+import {
+  bindPinch, slopFor, armSafariGestureGuard, refuseSafariGestures,
+} from './gesture';
 
 // Lineage-ordered stacked ribbons: children sit next to their parent, so a split
 // renders as a fork. Thickness = weight. This is the Histomap mechanic.
@@ -249,22 +252,58 @@ export function Ribbons(cfg: RibbonCfg) {
       }
       return null;
     },
+    /** The ribbon's whole story, as the tooltip body. One builder, two callers:
+     *  the mouse's hover and the finger's tap. */
+    tipFor(b: any): string {
+      const p = b.p;
+      const par = (this.lay.pars.get(p.id) || []).map((i: string) => this.lay.set.get(i).name);
+      const kid = (this.lay.kids.get(p.id) || []).map((i: string) => this.lay.set.get(i).name);
+      return `<div class=t>${p.name}</div><div class=m>${fmtY(p.start)} – ${fmtY(p.end)}${p.region ? ' · ' + p.region : ''}</div>` +
+        (p.note ? `<div class=m>${p.note}</div>` : '') +
+        (par.length ? `<div class=m>← from ${par.join(', ')}</div>` : '') +
+        (kid.length ? `<div class=m>→ becomes ${kid.join(', ')}</div>` : '');
+    },
     init() {
       const cv = this.cv = $<HTMLCanvasElement>(cfg.canvas)!;
+      armSafariGestureGuard();
+      // ── gesture ─────────────────────────────────────────────────────────────
+      // Declared before every handler that reads them: bindPinch must own the
+      // FIRST pointerdown listener on this canvas, so that by the time the view's
+      // own pointerdown runs, a second finger has already set `multi`.
+      let drag: any = null;
+      const startDrag = (p: { clientX: number; clientY: number }) => {
+        drag = { x: p.clientX, y: p.clientY, d0: this.d0, d1: this.d1, moved: false };
+      };
+      refuseSafariGestures(cv);
+      const P = bindPinch(cv, {
+        onStart: () => { drag = null; hideTip(); },
+        onPinch: (now, prev) => {
+          const r = cv.getBoundingClientRect(); const G = this.PAD, Wp = cv.clientWidth - G * 2;
+          // the wheel's arithmetic, with `pow(1.0018, deltaY)` swapped for the
+          // finger ratio — the same span clamp, the same fixed-point rule
+          const yc = this.d0 + (prev.cx - r.left - G) / Wp * (this.d1 - this.d0);
+          const s = clamp((this.d1 - this.d0) * (prev.d / now.d), 60, 16000);
+          const frac = (yc - this.d0) / (this.d1 - this.d0);
+          this.d0 = yc - frac * s; this.d1 = this.d0 + s;
+          const dy = (now.cx - prev.cx) / Wp * s;         // then carry it with the midpoint
+          this.d0 -= dy; this.d1 -= dy;
+          this.render();
+        },
+        onRebase: p => startDrag(p),
+      });
       cv.addEventListener('pointermove', e => {
+        if (P.multi) { hideTip(); return; }
         const r = cv.getBoundingClientRect(), mx = e.clientX - r.left, my = e.clientY - r.top;
         this.hoverX = mx;
+        // NO HOVER ON A FINGER: a tooltip pinned under the fingertip covers the
+        // ribbon it describes. The tap path below opens the same tooltip, offset
+        // from the touch, and the next tap on empty ground dismisses it.
+        if (e.pointerType !== 'mouse') return;
         const b = this.at(mx, my);
         const id = b ? b.id : null;
         this.hover = id; this.render();
         if (b) {
-          const p = b.p;
-          const par = (this.lay.pars.get(p.id) || []).map((i: string) => this.lay.set.get(i).name);
-          const kid = (this.lay.kids.get(p.id) || []).map((i: string) => this.lay.set.get(i).name);
-          showTip(e.clientX, e.clientY, `<div class=t>${p.name}</div><div class=m>${fmtY(p.start)} – ${fmtY(p.end)}${p.region ? ' · ' + p.region : ''}</div>` +
-            (p.note ? `<div class=m>${p.note}</div>` : '') +
-            (par.length ? `<div class=m>← from ${par.join(', ')}</div>` : '') +
-            (kid.length ? `<div class=m>→ becomes ${kid.join(', ')}</div>` : ''));
+          showTip(e.clientX, e.clientY, this.tipFor(b));
           cv.style.cursor = 'pointer';
         } else { hideTip(); cv.style.cursor = 'crosshair'; }
       });
@@ -277,13 +316,31 @@ export function Ribbons(cfg: RibbonCfg) {
         const frac = (yc - this.d0) / (this.d1 - this.d0);
         this.d0 = yc - frac * s; this.d1 = this.d0 + s; this.render();
       }, { passive: false });
-      let drag: any = null;
-      cv.addEventListener('pointerdown', e => { drag = { x: e.clientX, d0: this.d0, d1: this.d1 }; cv.setPointerCapture(e.pointerId); });
-      cv.addEventListener('pointerup', () => { drag = null; });
+      cv.addEventListener('pointerdown', e => {
+        if (P.multi) { drag = null; hideTip(); return; }
+        startDrag(e);
+        try { cv.setPointerCapture(e.pointerId); } catch { /* synthetic or already-lifted pointer */ }
+      });
+      /* THIS VIEW HAD NO TAP AT ALL. Every fact it holds — the polity's name, its
+         dates, what it came from and what it became — lived in a hover tooltip,
+         and there is no hover on a finger, so on an iPad the Flow was a picture
+         with no readable content whatsoever. It has no selection model to fall
+         back on either (there is no SelCard here), so the tap opens the tooltip
+         the mouse would have got, and a tap on empty ground dismisses it. */
+      cv.addEventListener('pointerup', e => {
+        const wasDrag = drag && drag.moved; drag = null;
+        if (wasDrag || P.tapBlocked || e.pointerType === 'mouse') return;
+        const r = cv.getBoundingClientRect();
+        const b = this.at(e.clientX - r.left, e.clientY - r.top);
+        this.hover = b ? b.id : null; this.render();
+        if (b) showTip(e.clientX, e.clientY, this.tipFor(b)); else hideTip();
+      });
       cv.addEventListener('pointermove', e => {
-        if (!drag) return;
+        if (!drag || P.multi) return;
         const G = this.PAD, Wp = cv.clientWidth - G * 2;
-        const dy = (e.clientX - drag.x) / Wp * (drag.d1 - drag.d0);
+        const dx = e.clientX - drag.x;
+        if (Math.abs(dx) > slopFor(e) || Math.abs(e.clientY - drag.y) > slopFor(e)) drag.moved = true;
+        const dy = dx / Wp * (drag.d1 - drag.d0);
         this.d0 = drag.d0 - dy; this.d1 = drag.d1 - dy; this.render();
       });
       repaintOnFonts(() => this.render());

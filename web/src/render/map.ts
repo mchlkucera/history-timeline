@@ -7,6 +7,9 @@ import {
   hexHsl, hexOklch, hslHex, maxChroma, mix, oklchHex, repaintOnFonts, showTip, hideTip,
   sovColor, textW, tokens,
 } from './shared';
+import {
+  bindPinch, slopFor, armSafariGestureGuard, refuseSafariGestures,
+} from './gesture';
 import { SelCard } from './selcard';
 import { describe, featureLabel, polityForFeature, registerSubject, territoryAt } from './subject';
 
@@ -412,6 +415,7 @@ export const WorldMap = {
     $('#btnPlay')!.addEventListener('click', () => { this.playing ? this.stop() : this.play(); });
     this.setPlayLabel(false);                        // strips the shell's placeholder glyph on mount
     repaintOnFonts(() => this.render());
+    armSafariGestureGuard();
     cv.addEventListener('wheel', e => {
       e.preventDefault();
       const f = Math.pow(1.0015, -e.deltaY); const nk = clamp(this.k * f, this.kMin(), 9);
@@ -422,19 +426,48 @@ export const WorldMap = {
       this.k = nk; this.clampPan(); this.render();
     }, { passive: false });
     let drag: any = null;
+    const startDrag = (p: { clientX: number; clientY: number }) => {
+      drag = { x: p.clientX, y: p.clientY, tx: this.tx, ty: this.ty, moved: false };
+    };
+    /* TWO FINGERS DOLLY THE ATLAS, one drags it — the same division the cube has
+       always had (CubeControls: ONE rotate, TWO dolly-pan) and the same one every
+       other view now uses. The zoom is the wheel's own arithmetic with the wheel's
+       factor swapped for the finger ratio: k is multiplied, clamped to the same
+       [kMin, 9], and the anchor keeps the point under the fingers under the
+       fingers. `pow(1.0015, -deltaY)` and `now.d / prev.d` are the same number in
+       two currencies, so there is one zoom path here, not two. */
+    refuseSafariGestures(cv);
+    const P = bindPinch(cv, {
+      onStart: () => { drag = null; hideTip(); },
+      onPinch: (now, prev) => {
+        const r = cv.getBoundingClientRect();
+        const nk = clamp(this.k * (now.d / prev.d), this.kMin(), 9);
+        const sx = prev.cx - r.left, sy = prev.cy - r.top;
+        this.tx = sx - (sx - this.tx) * (nk / this.k);
+        this.ty = sy - (sy - this.ty) * (nk / this.k);
+        this.k = nk;
+        // then carry the sheet with the midpoint, so the fingers HOLD the map
+        this.tx += now.cx - prev.cx; this.ty += now.cy - prev.cy;
+        this.clampPan(); this.render();
+      },
+      onRebase: p => startDrag(p),
+    });
     cv.addEventListener('pointerdown', e => {
-      drag = { x: e.clientX, y: e.clientY, tx: this.tx, ty: this.ty, moved: false };
+      if (P.multi) { drag = null; hideTip(); return; }   // second finger: a pinch, not a pan
+      startDrag(e);
       // A pointer that has already ended — or a synthetic one — has no active
       // id, and setPointerCapture THROWS on it rather than returning false.
       // Uncaught, that aborts the handler and the pan never starts.
       try { cv.setPointerCapture(e.pointerId); } catch { /* uncaptured, still panning */ }
     });
     cv.addEventListener('pointermove', e => {
+      if (P.multi) { drag = null; return; }              // the pinch owns the gesture
       if (drag) {
         const dx = e.clientX - drag.x, dy = e.clientY - drag.y;
-        if (Math.abs(dx) + Math.abs(dy) > 3) drag.moved = true;
+        if (Math.abs(dx) + Math.abs(dy) > slopFor(e)) drag.moved = true;
         this.tx = drag.tx + dx; this.ty = drag.ty + dy; this.clampPan(); this.render();
-      } else {
+      } else if (e.pointerType === 'mouse') {
+        // hover is a mouse affordance; on touch the tap opens the card instead
         const r = cv.getBoundingClientRect();
         const [lon, lat] = this.screenToLonLat(e.clientX - r.left, e.clientY - r.top);
         const f = (lon >= -180 && lon <= 180 && lat >= -60 && lat <= 85) ? featureAt(this.year(), lon, lat) : null;
@@ -464,7 +497,7 @@ export const WorldMap = {
      */
     cv.addEventListener('pointerup', e => {
       const wasDrag = drag && drag.moved; drag = null;
-      if (wasDrag) return;
+      if (wasDrag || P.tapBlocked) return;               // a pinch's last lift is not a click
       const r = cv.getBoundingClientRect();
       const [lon, lat] = this.screenToLonLat(e.clientX - r.left, e.clientY - r.top);
       const inWorld = lon >= -180 && lon <= 180 && lat >= -60 && lat <= 85;

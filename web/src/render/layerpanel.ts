@@ -26,6 +26,7 @@
    ============================================================================= */
 
 import { $, clamp } from './shared';
+import { TAP_SLOP } from './gesture';
 import {
   DETAIL_TEXT, DETAIL_WORDS, Layers, layerDef, resetCatalogue,
   type Detail, type GNode, type LayerDef,
@@ -55,7 +56,7 @@ export const LayerPanel = {
   addBtn: null as HTMLButtonElement | null,
   rows: [] as Row[],
   _lay: null as any,
-  _drag: null as null | { id: string; isG: boolean; x: number; y: number; live: boolean },
+  _drag: null as null | { id: string; isG: boolean; x: number; y: number; live: boolean; slop: number },
   _built: false,
 
   init() {
@@ -71,6 +72,15 @@ export const LayerPanel = {
     host.addEventListener('pointerdown', e => this.onDown(e));
     window.addEventListener('pointermove', e => this.onMove(e));
     window.addEventListener('pointerup', () => this.onUp());
+    /* POINTERCANCEL WAS MISSING, and on touch it is not an edge case — it is the
+       ORDINARY ending. The browser fires it the moment it decides a touch belongs
+       to a scroll or to iOS's selection magnifier, and this panel lives inside
+       .tl-view's scroller, so that decision was being made a few pixels into
+       every drag. With nothing listening, `_drag` stayed set and the ghost stayed
+       parked on screen with no way to dismiss it. app.css §5 stops the browser
+       claiming the gesture in the first place; this makes the failure survivable
+       if anything ever claims it again. */
+    window.addEventListener('pointercancel', () => this.onUp());
     document.addEventListener('pointerdown', e => {
       const t = e.target as HTMLElement;
       if (!t.closest('.tl-lpop') && !t.closest('[data-a="detail"]') && !t.closest('[data-lbar]')) closePops();
@@ -245,12 +255,20 @@ export const LayerPanel = {
     const isG = t.dataset.a === 'gdrag';
     const host = (e.target as HTMLElement).closest('.tl-lrow') as HTMLElement;
     const id = isG ? host.dataset.gid! : host.dataset.lid!;
-    this._drag = { id, isG, x: e.clientX, y: e.clientY, live: false };
+    // CAPTURE THE POINTER. The move/up listeners are on `window`, which is enough
+    // for a mouse; a finger that leaves the row mid-drag can have its events
+    // retargeted or swallowed without one, and the drop lands nowhere.
+    try { t.setPointerCapture(e.pointerId); } catch { /* synthetic pointer */ }
+    // 4px was this panel's own mouse threshold and it keeps it; a finger gets
+    // the touch slop (see gesture.ts) because a fingertip's centroid rolls
+    // several pixels just pressing down, and at 4px every tap on a layer name
+    // became a reorder.
+    this._drag = { id, isG, x: e.clientX, y: e.clientY, live: false, slop: e.pointerType === 'mouse' ? 4 : TAP_SLOP };
   },
   onMove(e: PointerEvent) {
     const d = this._drag; if (!d) return;
     if (!d.live) {
-      if (Math.abs(e.clientY - d.y) + Math.abs(e.clientX - d.x) < 4) return;
+      if (Math.abs(e.clientY - d.y) + Math.abs(e.clientX - d.x) < d.slop) return;
       d.live = true; closePops();
       ghost().style.display = 'block';
       ghost().textContent = d.isG

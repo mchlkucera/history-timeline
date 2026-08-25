@@ -17,6 +17,9 @@ import {
 import {
   REL, SPREADCAT, peakOf, lvlOfWeight, regionOf, relOf, dimAlpha, lit, renderRelatedPanel,
 } from './relations';
+import {
+  bindPinch, slopFor, TAP_PAD, armSafariGestureGuard, refuseSafariGestures, coarsePointer,
+} from './gesture';
 import { FOLD, roleWord } from './fold';
 import { SelCard } from './selcard';
 import {
@@ -1487,8 +1490,15 @@ export const TL = {
    * row is drawn but registers no box at all: a mark that faint is scenery, and
    * making it clickable only means the pointer catches ghosts on the way past.
    */
-  hitAt(mx: number, my: number) {
-    const inside = (b: any) => mx >= b.x && mx <= b.x + b.w && my >= b.y && my <= b.y + b.h;
+  /**
+   * `pad` grows every box by the same margin BEFORE the containment test. Zero
+   * for a mouse, which lands where it is pointed; TAP_PAD for a finger, because
+   * an event dot is a few pixels tall and a fingertip is nine millimetres wide.
+   * findLast still decides, so the topmost mark under the tap keeps winning and
+   * the pad only ever adds candidates at the edges of what was already there.
+   */
+  hitAt(mx: number, my: number, pad = 0) {
+    const inside = (b: any) => mx >= b.x - pad && mx <= b.x + b.w + pad && my >= b.y - pad && my <= b.y + b.h + pad;
     if (this.q) { const m = this.boxes.findLast((b: any) => b.isMatch && inside(b)); if (m) return m; }
     return this.boxes.findLast(inside);
   },
@@ -1568,16 +1578,32 @@ export const TL = {
       // flex row gives it no space at all and it lands on the canvas's right edge
       r.style.cssText = 'position:sticky;top:0;width:0;flex:0 0 0;'
         + 'align-self:flex-start;z-index:4;pointer-events:none;';
+      /* WHAT THE AFFORDANCE SAYS DEPENDS ON WHAT THE READER HAS. "hold ⇧ and
+         scroll" is a sentence about a keyboard, and the founder was reading it on
+         an iPad, where it named a key that is not there and a wheel that is not
+         there either. The gesture underneath it is different too: on touch the
+         canvas's own drag carries Y (see the pointermove handler), so the true
+         instruction is "drag". Branch on the POINTER, not on the viewport — a
+         Magic-Keyboard iPad is a coarse pointer with a real Shift key, and "drag
+         up" is still true for it, whereas "hold ⇧" is not true for a finger. */
+      const coarse = coarsePointer();
       // THE HIT AREA IS WIDER THAN THE BAR. The bar reads as a 9px hairline
       // because that is all a scroll position needs to say; the thing you grab is
-      // 20px, which is a finger. Below 760px the panel is hidden and the canvas
-      // takes touch-action:none, so the rail is the ONLY way down the sheet
-      // there — it cannot also be a 9px target.
+      // 20px, which is a finger — on a mouse-driven page. On a tablet it is half
+      // of one. iOS's floor is 44 and this cannot be 44: the rail sits OVER the
+      // right-hand end of the plot, so 44px of grab is 44px of marks that can no
+      // longer be tapped. 32px is as far as that trade goes, and the plot-drag
+      // above means the rail is no longer the ONLY way down the sheet on touch,
+      // which is what made 20px untenable rather than merely tight.
+      const trackW = coarse ? 32 : 20;
       const track = this._track = document.createElement('div');
-      track.style.cssText = 'position:absolute;right:0;top:30px;bottom:34px;width:20px;'
+      track.style.cssText = 'position:absolute;right:0;top:30px;bottom:34px;'
+        + `width:${trackW}px;`
         + 'opacity:0;transition:opacity .16s ease;cursor:pointer;touch-action:none;'
         + 'pointer-events:none;';
-      track.title = 'The plot is taller than the window — drag this, or hold Shift and scroll.';
+      track.title = coarse
+        ? 'The plot is taller than the window — drag this, or drag the plot itself up.'
+        : 'The plot is taller than the window — drag this, or hold Shift and scroll.';
       const bar = document.createElement('div');
       bar.style.cssText = 'position:absolute;right:4px;top:0;bottom:0;width:9px;'
         + 'border-radius:5px;background:var(--tl-surface-2);';
@@ -1587,7 +1613,7 @@ export const TL = {
       bar.appendChild(thumb);
       track.appendChild(bar);
       const cue = this._cue = document.createElement('div');
-      cue.textContent = '▾ more below — hold ⇧ and scroll';
+      cue.textContent = coarse ? '▾ more below — drag up' : '▾ more below — hold ⇧ and scroll';
       cue.style.cssText = 'position:absolute;right:20px;bottom:12px;white-space:nowrap;'
         + 'font:600 10.5px/1 var(--tl-font-ui);letter-spacing:.02em;'
         + 'color:var(--tl-ink-2);background:var(--tl-surface-over);'
@@ -2025,7 +2051,7 @@ export const TL = {
     // plot is doing, and only while it is true.
     if (rd) rd.textContent = `importance ≤ ${baseL} of 5 · span ${fmtSpan(this.span())}`
       + ` · step ${this.step + 1}/${STEPS.length} · ${STEPS[this.step].name}`
-      + (sst.over > 2 ? ' · ⇧ + scroll to move down' : '');
+      + (sst.over > 2 ? (coarsePointer() ? ' · drag up to move down the sheet' : ' · ⇧ + scroll to move down') : '');
     const sc = $('#searchCnt'); if (sc) sc.textContent = q ? `${hitCount} hits` : '';
     /* ── THE SET YEAR HAS NO LINE ON THIS CANVAS ─────────────────────────────
        There used to be a minium stub rising off the axis at x(TimeStore.year).
@@ -2183,6 +2209,7 @@ export const TL = {
   _storesBound: false,
   init() {
     const cv = this.cv = $<HTMLCanvasElement>('#zoomCanvas')!;
+    armSafariGestureGuard();          // idempotent; whichever view boots first arms it
     // WHICH LAYERS ARE ON IS NOT DECIDED HERE ANY MORE. It used to be the
     // registry's `default` flag, re-read on every boot. It is the reader's own
     // arrangement now, restored from localStorage by LayerPanel.init(), and the
@@ -2236,22 +2263,85 @@ export const TL = {
     // keyboard once it has focus. All of them land here.
     const sc = this.scroller();
     if (sc) sc.addEventListener('scroll', () => this.onScroll(), { passive: true });
+    /* ══ TOUCH ═══════════════════════════════════════════════════════════════
+       ONE FINGER pans time and, because the plot is taller than the window and
+       a finger has no Shift key, scrolls the sheet on the same drag. TWO
+       FINGERS zoom about their midpoint and carry the window with it.
+
+       THE PINCH IS NOT A SECOND ZOOM ROUTE. It computes a factor and hands it
+       to zoomBy() — the identical call the wheel makes one screenful above,
+       with the identical argument shape. The wheel's factor is
+       pow(1.0018, deltaY); the pinch's is prev.d / now.d, which is the same
+       quantity written in the other currency (a pinch that halves the finger
+       separation IS ln(2)/ln(1.0018) ≈ 385 notches of wheel). So the v-span is
+       the only thing either gesture touches, the LADDER still decides the rung
+       from that span, and the hysteresis and the slew limiter downstream cannot
+       tell a pinch from a wheel — which is the point. Layout stays bit-frozen
+       between rungs for exactly the same reason it does under the wheel:
+       layout()'s re-latch test is `moved && sameSpan`, and a pinch changes the
+       span on every frame it fires. */
     let drag: any = null;
+    const startDrag = (p: { clientX: number; clientY: number }) => {
+      const sc0 = this.scroller();
+      drag = {
+        x: p.clientX, y: p.clientY, v0: tv(this.d0), v1: tv(this.d1),
+        top: sc0 ? sc0.scrollTop : 0, moved: false,
+      };
+    };
+    refuseSafariGestures(cv);
+    const P = bindPinch(cv, {
+      onStart: () => { drag = null; hideTip(); },
+      onPinch: (now, prev) => {
+        const r = cv.getBoundingClientRect(); const G = this.gutter(), Wp = cv.clientWidth - G - 10;
+        // (1) ZOOM ABOUT THE MIDPOINT. The anchor is where the midpoint WAS, so
+        // the year the two fingers were holding is the year that stays put —
+        // the same invariant zoomBy's own docblock states for the cursor.
+        this.zoomBy(this.ix(prev.cx - r.left, G, Wp), prev.d / now.d);
+        // (2) THEN CARRY IT. The midpoint itself may have travelled; without
+        // this the fingers scale the sheet but do not hold it, which reads as
+        // slipping. Panning uses the POST-zoom span, so the two compose exactly.
+        const dv = (now.cx - prev.cx) / Wp * (tv(this.d1) - tv(this.d0));
+        const [nv0, nv1] = clampV(tv(this.d0) - dv, tv(this.d1) - dv);
+        this.d0 = ty(nv0); this.d1 = ty(nv1);
+        this.paint();
+      },
+      onRebase: p => startDrag(p),      // second finger left; the survivor keeps panning
+    });
     cv.addEventListener('pointerdown', e => {
-      drag = { x: e.clientX, v0: tv(this.d0), v1: tv(this.d1), moved: false };
+      if (P.multi) { drag = null; hideTip(); return; }   // a second finger is a pinch, never a pan
+      startDrag(e);
       try { cv.setPointerCapture(e.pointerId); } catch { /* synthetic or already-lifted pointer */ }
     });
     cv.addEventListener('pointermove', e => {
+      if (P.multi) { drag = null; return; }              // the pinch owns the gesture
       const r = cv.getBoundingClientRect(), mx = e.clientX - r.left, my = e.clientY - r.top;
       this.hoverX = mx;
       if (drag) {
         // pan in v-space, or deep-time panning is wildly nonuniform
         const G = this.gutter(), Wp = cv.clientWidth - G - 10;
-        const dv = (e.clientX - drag.x) / Wp * (drag.v1 - drag.v0);
-        if (Math.abs(e.clientX - drag.x) > 3) drag.moved = true;
+        const dx = e.clientX - drag.x, dy = e.clientY - drag.y;
+        const dv = dx / Wp * (drag.v1 - drag.v0);
+        const slop = slopFor(e);
+        if (Math.abs(dx) > slop || (e.pointerType !== 'mouse' && Math.abs(dy) > slop)) drag.moved = true;
         const [nv0, nv1] = clampV(drag.v0 - dv, drag.v1 - dv);
-        this.d0 = ty(nv0); this.d1 = ty(nv1); this.paint(); return;
+        this.d0 = ty(nv0); this.d1 = ty(nv1);
+        // THE SECOND AXIS, FOR A HAND. On desktop the sheet moves on Shift+wheel
+        // and on the rail; a finger has neither, and the canvas takes
+        // touch-action:none so the browser will not scroll it either. So a touch
+        // drag carries both axes at once — X through time, Y down the sheet —
+        // which is also exactly what the vertical projection has always done.
+        // Gated on pointerType: the mouse's gesture is untouched.
+        if (e.pointerType !== 'mouse') {
+          const sc2 = this.scroller();
+          if (sc2) { const was = sc2.scrollTop; sc2.scrollTop = drag.top - dy; if (sc2.scrollTop !== was) this.onScroll(); }
+        }
+        this.paint(); return;
       }
+      // NO HOVER ON A FINGER. A touch pointermove that reaches here is the tail
+      // of a tap, and a tooltip pinned under the fingertip covers the thing it
+      // describes and then has nothing to dismiss it. Tap opens the card, which
+      // says more and can be closed.
+      if (e.pointerType !== 'mouse') return;
       const b = this.hitAt(mx, my);
       this.render();
       if (b && b.kind === 'more') {
@@ -2277,7 +2367,10 @@ export const TL = {
       } else { hideTip(); cv.style.cursor = 'crosshair'; }
     });
     cv.addEventListener('pointerup', e => {
-      const wasDrag = drag && drag.moved; drag = null; if (wasDrag) return;
+      // tapBlocked: this gesture was a pinch, so the lift that ended it is not a
+      // click on whatever happens to be under the last finger.
+      const wasDrag = drag && drag.moved; drag = null; if (wasDrag || P.tapBlocked) return;
+      const pad = e.pointerType === 'mouse' ? 0 : TAP_PAD;
       const r = cv.getBoundingClientRect(), mx = e.clientX - r.left, my = e.clientY - r.top;
       const G = this.gutter(), Wp = cv.clientWidth - G - 10;
       const H = cv.clientHeight;
@@ -2288,7 +2381,7 @@ export const TL = {
         TimeStore.set(Math.round(this.ix(mx, G, Wp)), 'tl');
         return;
       }
-      const b = this.hitAt(mx, my);
+      const b = this.hitAt(mx, my, pad);
       if (b && b.kind === 'more') {                    // open (or close) the lane — never zoom
         if (b.lane) {
           if (this.expanded.has(b.lane)) this.expanded.delete(b.lane); else this.expanded.add(b.lane);
