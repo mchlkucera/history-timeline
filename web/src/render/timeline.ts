@@ -116,9 +116,12 @@ interface Layout {
       easing curve — there is no timer and no duration. When the input is idle
       the drawn height equals the target exactly, so nothing breathes.
 
-   3. HYSTERESIS ON THE TRIM. The global budget engages at HMAX+24 and releases
-      only if restoring a row would leave the total under HMAX−24, a 48px dead
-      band against a 24px row, so it cannot oscillate near the cap.
+   3. HYSTERESIS ON THE TRIM. The global budget engages at budgetOf()+24 and
+      releases only if restoring a row would leave the total under budgetOf()−24,
+      a 48px dead band against a 24px row, so it cannot oscillate near the cap.
+      (The budget was a flat HMAX when this was written. It is a function of the
+      rung's air now — see budgetOf — but it is still one number per frame and the
+      dead band around it is still 48px, so nothing about this argument changed.)
 
    Together they replace the 180ms discrete-moment ease that was on the table:
    ONE mechanism, not two, and it covers cases an enumerated ease would miss. */
@@ -163,23 +166,51 @@ interface ZStep {
   v: number;                // enter this rung when the v-span falls to or below this
   tier: number;             // importance visible here, 1..5 (before the layer's detail offset)
   pitch: number;            // multiplier on row pitch, rectangle height and label size
+  air: number;              // multiplier on every piece of WHITESPACE (see the note below)
   ev: number;               // how many rows the event stratum may open
   name: string;             // what this rung is, in words
 }
+/* ── THE THIRD THING A RUNG FIXES: HOW MUCH AIR THERE IS ─────────────────────
+
+   The founder, zoomed in: "When I am zooming and rectangles are getting bigger
+   so should whitespace — it looks very crowded upon zoom now."
+
+   He is describing a real arithmetic hole. `pitch` scaled the MARKS (TIER_H, the
+   dot radius, the label size) and the ROW PITCH, so the gutter INSIDE a row grew
+   with them. Everything BETWEEN the marks was a bare constant: the pad above a
+   band's first row (HEAD_PAD), the separation between the spread stratum and the
+   event stratum (GAP_H), the pad under a band's last mark (GAP_H again) and
+   therefore the whole distance from one band's last rectangle to the next band's
+   first one, which sat at a flat 14px whether the rectangles either side of it
+   were 12px tall or 32px tall. Measured on the default arrangement, the gap
+   between two bands was 14px at EVERY one of the thirteen rungs.
+
+   So a rung now fixes a third number, and it is deliberately NOT `pitch`. Air
+   that merely tracked pitch would keep every ratio in the picture exactly where
+   it is — the same drawing at a bigger size, which is precisely the thing that
+   reads as crowded, because ink area grows as the square of a linear scale while
+   the gaps grow linearly. Air therefore RUNS AHEAD of pitch above the reference
+   rung (roughly pitch^1.75: at the closest rung the marks are 1.62x and the air
+   is 2.28x) and trails a little below it, where slim rows and many of them is
+   the whole point. At `an era` — pitch 1.00, air 1.00 — the geometry is
+   bit-identical to what it was before this existed, so that rung stays the
+   reference every other number in this file was tuned against.
+
+   The cost is height, and it is paid for in FIX 2's scrolling: see `budgetOf`. */
 const STEPS: ZStep[] = [
-  { v: Infinity, tier: 1, pitch: 0.62, ev: 1, name: 'deep time' },
-  { v: 70000, tier: 1, pitch: 0.68, ev: 1, name: 'the ice' },
-  { v: 33000, tier: 2, pitch: 0.74, ev: 2, name: 'prehistory' },
-  { v: 15500, tier: 2, pitch: 0.80, ev: 2, name: 'civilisations' },
-  { v: 7200, tier: 2, pitch: 0.87, ev: 2, name: 'the long ages' },
-  { v: 3400, tier: 3, pitch: 0.94, ev: 3, name: 'an age' },
-  { v: 1600, tier: 3, pitch: 1.00, ev: 3, name: 'an era' },
-  { v: 760, tier: 4, pitch: 1.08, ev: 3, name: 'centuries' },
-  { v: 360, tier: 4, pitch: 1.17, ev: 4, name: 'a century' },
-  { v: 170, tier: 5, pitch: 1.27, ev: 4, name: 'a lifetime' },
-  { v: 80, tier: 5, pitch: 1.38, ev: 4, name: 'a generation' },
-  { v: 38, tier: 5, pitch: 1.50, ev: 5, name: 'a career' },
-  { v: 18, tier: 5, pitch: 1.62, ev: 5, name: 'a decade' },
+  { v: Infinity, tier: 1, pitch: 0.62, air: 0.82, ev: 1, name: 'deep time' },
+  { v: 70000, tier: 1, pitch: 0.68, air: 0.85, ev: 1, name: 'the ice' },
+  { v: 33000, tier: 2, pitch: 0.74, air: 0.88, ev: 2, name: 'prehistory' },
+  { v: 15500, tier: 2, pitch: 0.80, air: 0.91, ev: 2, name: 'civilisations' },
+  { v: 7200, tier: 2, pitch: 0.87, air: 0.94, ev: 2, name: 'the long ages' },
+  { v: 3400, tier: 3, pitch: 0.94, air: 0.97, ev: 3, name: 'an age' },
+  { v: 1600, tier: 3, pitch: 1.00, air: 1.00, ev: 3, name: 'an era' },
+  { v: 760, tier: 4, pitch: 1.08, air: 1.16, ev: 3, name: 'centuries' },
+  { v: 360, tier: 4, pitch: 1.17, air: 1.34, ev: 4, name: 'a century' },
+  { v: 170, tier: 5, pitch: 1.27, air: 1.55, ev: 4, name: 'a lifetime' },
+  { v: 80, tier: 5, pitch: 1.38, air: 1.78, ev: 4, name: 'a generation' },
+  { v: 38, tier: 5, pitch: 1.50, air: 2.02, ev: 5, name: 'a career' },
+  { v: 18, tier: 5, pitch: 1.62, air: 2.28, ev: 5, name: 'a decade' },
 ];
 // The dead band at every threshold: enter the next rung at 0.91× its door,
 // leave it again only at 1.09×. Nine percent each way against a 2.12× rung, so
@@ -232,9 +263,14 @@ const TRIM_ON = 24, TRIM_OFF = 24;     // the height-budget hysteresis band
    panel row has to stay big enough to hold a name and an eye. So the target is
    MIN_LANE_H when the band is empty and HEAD_PAD when it has content, and it
    crosses between them CONTINUOUSLY with the first row's growth. */
-const HEAD_PAD = 8;         // pad above the first row of a band that has content
-const MIN_LANE_H = 22;      // …and the floor for a band that is empty or hidden
-const GRP_H = 16;           // a group's rule strip in the plot
+/* EVERY NUMBER FROM HERE TO GAP_H IS QUOTED AT air = 1, i.e. at the `an era`
+   rung, and is multiplied by the rung's air wherever it is used. MIN_LANE_H is
+   the one exception and it is not decoration: it is the height a panel row needs
+   to hold a name and an eye, which is what makes "hide this layer" reversible,
+   so it is a FLOOR in real pixels and does not move with the zoom. */
+const HEAD_PAD = 8;         // pad above the first row of a band that has content, at air 1
+const MIN_LANE_H = 22;      // …and the floor for a band that is empty or hidden — NOT scaled
+const GRP_H = 16;           // a group's rule strip in the plot, at air 1
 // How many event rows the per-frame pixel packer may open. Not a cap on what is
 // SHOWN — the global height budget below is the only thing that takes a row
 // away — just the width of the packing table. Ten is more rows than a band ever
@@ -242,7 +278,15 @@ const GRP_H = 16;           // a group's rule strip in the plot
 const EV_BOUND = 10;
 const GUT = 12;             // the plot's left gutter WHEN THE PANEL IS SHOWING
 const GUT_SOLO = 118;       // …and when it is not (see panelOn / the phone note)
-const GAP_H = 6;            // spreads ↔ events separation, faded in with both
+const GAP_H = 6;            // spreads ↔ events separation, at air 1, faded in with both
+/* HOW A ROW PITCH SPLITS. SP_PITCH is 24 and the tallest rectangle in it is
+   TIER_H[1] = 20, so four of those pixels are the gutter between one row's
+   rectangle and the next one's. Those four scale with AIR; the twenty scale with
+   PITCH, because they are the mark. EV_PITCH splits the same way — thirteen for
+   the label line, four for the air around it. Both splits are exact at air 1
+   pitch 1, so the reference rung is untouched. */
+const ROW_AIR = 4;          // of SP_PITCH's 24, the part that is whitespace
+const EV_AIR = 4;           // …and of EV_PITCH's 17
 // The tick-label strip. It used to run along the BOTTOM of the canvas, under the plot,
 // with the set-year pill sliding about inside the lanes above it. His words: "Lets
 // remove the in-canvas orange date shower (which is sliding) altogether… Lets move the
@@ -756,8 +800,31 @@ export const TL = {
   _dh: new Map<string, { row: number[]; ev: number[]; head: number; r0: number[]; e0: number[]; h0: number }>(),
   // the DRAWN pitch: the rung's pitch outside a settle, eased between two rungs
   // during one. render() reads it, so a rectangle grows with its row rather than
-  // jumping to the new size and waiting for the slot to catch up.
-  _pDraw: 1,
+  // jumping to the new size and waiting for the slot to catch up. _aDraw is the
+  // same thing for the rung's AIR, and the two are eased on the one settle clock,
+  // so a row's mark and the space around it arrive together.
+  _pDraw: 1, _aDraw: 1,
+  /** A spread row's pitch: the mark scales with the rung, the gutter with its air. */
+  spOf(p: number, a: number) { return (this.SP_PITCH - ROW_AIR) * p + ROW_AIR * a; },
+  /** An event row's pitch, split the same way. */
+  epOf(p: number, a: number) { return (this.EV_PITCH - EV_AIR) * p + EV_AIR * a; },
+  /* ── HOW TALL THE PLOT MAY BE, NOW THAT IT SCROLLS ────────────────────────
+     The budget used to be the stage height flat: whatever did not fit was
+     trimmed away into "+N more", because there was no way to reach anything
+     below the fold. FIX 2 gave the sheet a scroll, so the fold is no longer a
+     wall — and the moment it is not, holding a zoomed-in plot to one viewport
+     is just a way of refusing the air the rung asked for.
+
+     THE HEADROOM IS EXACTLY THE AIR, AND NOTHING ELSE. Measured on the default
+     nine-band arrangement, the air a close rung adds is about 27% of the stage;
+     0.35 of (air − 1) tracks that with a little slack for arrangements with more
+     bands in them. That is a deliberate choice between the two things the extra
+     height could have bought — whitespace or more rows — and it buys whitespace:
+     the reader sees the SAME marks as before, with room around them, rather than
+     a longer list. It also means the far and mid rungs are unchanged (air ≤ 1 ⇒
+     headroom 1), so "the whole arrangement at a glance" still holds everywhere it
+     held before, and only a rung the reader deliberately zoomed to can overflow. */
+  budgetOf(air: number) { return this.HMAX * clamp(1 + (air - 1) * 0.35, 1, 1.6); },
   _trimS: new Map<string, number>(),        // rows the global budget has taken off a lane
   _trimE: new Map<string, number>(),
   _snap: true,                              // next layout jumps straight to its target
@@ -795,8 +862,15 @@ export const TL = {
     const ST = STEPS[this.step], STF = STEPS[this._stepFrom < 0 ? this.step : this._stepFrom];
     const pT = ST.pitch;                                  // the rung's own pitch — the TARGET
     const pD = this._pDraw = STF.pitch + (pT - STF.pitch) * sp;   // …and the eased DRAWN one
-    const SP = this.SP_PITCH * pT, EP = this.EV_PITCH * pT;
-    const SPd = this.SP_PITCH * pD, EPd = this.EV_PITCH * pD;
+    const aT = ST.air;                                    // the rung's air — the TARGET
+    const aD = this._aDraw = STF.air + (aT - STF.air) * sp;       // …and the eased DRAWN one
+    const SP = this.spOf(pT, aT), EP = this.epOf(pT, aT);
+    const SPd = this.spOf(pD, aD), EPd = this.epOf(pD, aD);
+    // the furniture between the marks, at this rung and at the drawn ease of it
+    const GAP = GAP_H * aT, GAPd = GAP_H * aD;
+    const HEAD = Math.min(MIN_LANE_H, HEAD_PAD * aT);     // never past the empty-lane floor
+    const GRP = GRP_H * aT;
+    const HB = this.budgetOf(aT);                         // the height budget, in pixels
     this.fonts();
     const uiF = this._fUi;
     // The latch. A frame that moved the window without changing its v-span is a
@@ -1006,6 +1080,12 @@ export const TL = {
     // to 905px against a 791px budget; two brings it back inside and lets the
     // budget spend the difference where there is something to show. Fewer,
     // fatter rows IS the instruction.
+    // It is kept at two even though budgetOf() now gives a close rung half a
+    // viewport of headroom, because a FLOOR is not a target: with the headroom in
+    // place the trim rarely reaches it at all (measured: the default arrangement
+    // trims ten rows at the closest rung, none of them off a two-row band), and
+    // raising it would spend the new height on rows rather than on the air it was
+    // borrowed for.
     const SPREAD_FLOOR = pT >= 1.05 ? 2 : 3;
     // THE CUMULATIVE SQUEEZE, which replaces the old integer row cap. Rows spend a
     // shared budget of `cap` row-heights in permanent order. A row only 40% faded in
@@ -1017,9 +1097,9 @@ export const TL = {
     // holds. See the note on HEAD_PAD / MIN_LANE_H above the constants.
     const headTarget = (L: LaneLayout, cum: number) =>
       L.dying ? 0
-        : L.isGroupHead ? GRP_H
+        : L.isGroupHead ? GRP
           : solo ? MIN_LANE_H                        // room for the name the canvas draws
-            : MIN_LANE_H - (MIN_LANE_H - HEAD_PAD) * Math.min(1, cum);
+            : MIN_LANE_H - (MIN_LANE_H - HEAD) * Math.min(1, cum);
     const squeeze = (raw: number[], spare: boolean[], cap: number) => {
       const g = new Array<number>(raw.length).fill(0);
       let cum = 0;
@@ -1052,8 +1132,8 @@ export const TL = {
       // targets zero and the limiter walks it out at 2.2px a frame.
       d.hT = headTarget(L, d.cumS + d.cumE)
         + d.cumS * SP + d.cumE * EP
-        + GAP_H * Math.min(1, d.cumS) * Math.min(1, d.cumE)
-        + GAP_H * Math.min(1, d.cumS + d.cumE);
+        + GAP * Math.min(1, d.cumS) * Math.min(1, d.cumE)
+        + GAP * Math.min(1, d.cumS + d.cumE);
       return d.hT;
     };
     const total = () => drafts.reduce((a, d) => a + d.hT, 0) + 34 + AXIS_TOP;
@@ -1068,7 +1148,7 @@ export const TL = {
       return last >= 0 && !d.spare[last];
     };
     let guard = 400;
-    while (total() > this.HMAX + TRIM_ON && guard-- > 0) {
+    while (total() > HB + TRIM_ON && guard-- > 0) {
       const cands = drafts.filter(canTrim);
       if (cands.length) {
         let m = -1; for (const d of cands) if (d.cumS > m) m = d.cumS;
@@ -1117,7 +1197,7 @@ export const TL = {
       for (const pick of pool) {
         const k = pick.L.key, was = map.get(k)!;
         map.set(k, was - 1); measure(pick);
-        if (total() < this.HMAX - TRIM_OFF) { did = true; break; }
+        if (total() < HB - TRIM_OFF) { did = true; break; }
         map.set(k, was); measure(pick);
       }
       if (!did) break;
@@ -1259,8 +1339,8 @@ export const TL = {
           for (let r = 0; r < st.row.length; r++) s += st.row[r] + dr[r] * k;
           for (let r = 0; r < st.ev.length; r++) e += st.ev[r] + de[r] * k;
           const nS = s / SPd, nE = e / EPd;
-          return (st.head + dh * k) + s + GAP_H * Math.min(1, nS) * Math.min(1, nE)
-            + e + GAP_H * Math.min(1, nS + nE);
+          return (st.head + dh * k) + s + GAPd * Math.min(1, nS) * Math.min(1, nE)
+            + e + GAPd * Math.min(1, nS + nE);
         };
         for (let pass = 0; pass < 2; pass++) {
           const move = Math.abs(hOf(1) - hOf(0));
@@ -1294,8 +1374,8 @@ export const TL = {
       L.evY = new Array<number>(L.evH.length);
       for (let r = 0; r < L.evH.length; r++) { L.evY[r] = ye; ye += L.evH[r]; sumE += L.evH[r]; }
       const nS = sumS / SPd, nE = sumE / EPd;
-      L.gapH = GAP_H * Math.min(1, nS) * Math.min(1, nE);
-      L.h = L.headH + sumS + L.gapH + sumE + GAP_H * Math.min(1, nS + nE);
+      L.gapH = GAPd * Math.min(1, nS) * Math.min(1, nE);
+      L.h = L.headH + sumS + L.gapH + sumE + GAPd * Math.min(1, nS + nE);
       L.evTop = L.headH + sumS + L.gapH;
       L.top = top; top += L.h;
     }
@@ -1372,6 +1452,167 @@ export const TL = {
     if (this.q) { const m = this.boxes.findLast((b: any) => b.isMatch && inside(b)); if (m) return m; }
     return this.boxes.findLast(inside);
   },
+  /* ══ SCROLLING DOWN THE SHEET ═══════════════════════════════════════════
+     The founder: "Add some way to scroll on Y (maybe with shift?)"
+
+     WHOSE OFFSET IT IS. Not this file's. The panel and the canvas are two flex
+     items of ONE element — .tl-view, which app.css already gives overflow-y —
+     so the browser has been holding a single scroll offset for both of them
+     since the panel was built, and layerpanel.ts's header note says so in as
+     many words. A this.scrollY of my own would have been a SECOND offset, and
+     the two would have had to be kept in step by hand through every settle, every
+     fling and every resize; the panel's own history records that exact
+     arrangement being tried and abandoned. So there is nothing here that scrolls.
+     There is only something that MOVES THE ONE SCROLLER THE READER ALREADY HAS,
+     and the lock survives by construction rather than by care: neither side can
+     desync from the other because neither side has an offset of its own.
+
+     It also means hit-testing needed no change at all. Boxes are in canvas
+     coordinates and every pointer handler already converts through
+     getBoundingClientRect(), which moves with the scroll — so a mark 400px below
+     the fold hit-tests exactly where it is drawn, at any offset.
+
+     THE GESTURE, AND WHY. Plain wheel is the time zoom and cannot be shared;
+     that rules out both the mouse wheel and the trackpad's two-finger drag,
+     which arrive as the same event and cannot be told apart with any test worth
+     shipping. So: SHIFT + WHEEL, the founder's own suggestion, reading deltaX as
+     well as deltaY because Chrome and Safari swap the two axes while shift is
+     held. And because a modifier gesture nobody told you about is not a feature,
+     it comes with two things that are not the gesture. A RAIL — a slim,
+     permanently visible scrollbar down the right edge of the plot, present only
+     when there IS something below, draggable, and carrying the sentence that
+     names the gesture in its tooltip; and a CUE beside it that says the gesture
+     in words, until the first time the reader scrolls, after which they know and
+     it goes. (#zoomReadout would have been the obvious place for the words, and
+     the line below still writes them there — but that panel was deleted with the
+     rest of the Timeline controls, so today nothing reads it. The cue is what the
+     reader actually sees.) */
+  /** The one scroller the panel and the canvas share. */
+  scroller(): HTMLElement | null {
+    return this.cv ? this.cv.closest('.tl-view') as HTMLElement | null : null;
+  },
+  /** Move down the sheet. The browser clamps at both ends; nothing here needs to. */
+  scrollBy(dy: number) {
+    const sc = this.scroller(); if (!sc) return;
+    const was = sc.scrollTop;
+    sc.scrollTop = was + dy;
+    if (sc.scrollTop !== was) this.onScroll();
+  },
+  /** How far down the sheet we are, and how far it goes. */
+  scrollState() {
+    const sc = this.scroller();
+    if (!sc || !sc.clientHeight) return { top: 0, view: 0, all: 0, over: 0 };
+    const over = Math.max(0, sc.scrollHeight - sc.clientHeight);
+    return { top: sc.scrollTop, view: sc.clientHeight, all: sc.scrollHeight, over };
+  },
+  _rail: null as HTMLElement | null,
+  _track: null as HTMLElement | null,
+  _thumb: null as HTMLElement | null,
+  _cue: null as HTMLElement | null,
+  _railDrag: null as null | { y: number; top: number },
+  /* THE RAIL IS A STICKY FLEX ITEM, and both halves of that matter. STICKY
+     because an absolutely-positioned child of a scroll container is part of the
+     scrolled content and would travel away with the plot it is supposed to be
+     measuring. A FLEX ITEM of zero width because the section is a flex row —
+     panel, then canvas at flex:1 — so a zero-width third item lands exactly on
+     the canvas's right edge without being given a millimetre of it, and it is
+     hidden with the whole view by app.css when another projection is showing,
+     which no element parked on the stage could manage. */
+  ensureRail(): HTMLElement | null {
+    const sc = this.scroller(); if (!sc) return null;
+    let r = this._rail;
+    if (!r) {
+      r = this._rail = document.createElement('div');
+      r.id = 'tlScrollRail';
+      // height is written every frame from the scroller; width stays 0 so the
+      // flex row gives it no space at all and it lands on the canvas's right edge
+      r.style.cssText = 'position:sticky;top:0;width:0;flex:0 0 0;'
+        + 'align-self:flex-start;z-index:4;pointer-events:none;';
+      // THE HIT AREA IS WIDER THAN THE BAR. The bar reads as a 9px hairline
+      // because that is all a scroll position needs to say; the thing you grab is
+      // 20px, which is a finger. Below 760px the panel is hidden and the canvas
+      // takes touch-action:none, so the rail is the ONLY way down the sheet
+      // there — it cannot also be a 9px target.
+      const track = this._track = document.createElement('div');
+      track.style.cssText = 'position:absolute;right:0;top:30px;bottom:34px;width:20px;'
+        + 'opacity:0;transition:opacity .16s ease;cursor:pointer;touch-action:none;'
+        + 'pointer-events:none;';
+      track.title = 'The plot is taller than the window — drag this, or hold Shift and scroll.';
+      const bar = document.createElement('div');
+      bar.style.cssText = 'position:absolute;right:4px;top:0;bottom:0;width:9px;'
+        + 'border-radius:5px;background:var(--tl-surface-2);';
+      const thumb = this._thumb = document.createElement('div');
+      thumb.style.cssText = 'position:absolute;left:1.5px;width:6px;border-radius:3px;'
+        + 'background:var(--tl-ink-3);opacity:.5;';
+      bar.appendChild(thumb);
+      track.appendChild(bar);
+      const cue = this._cue = document.createElement('div');
+      cue.textContent = '▾ more below — hold ⇧ and scroll';
+      cue.style.cssText = 'position:absolute;right:20px;bottom:12px;white-space:nowrap;'
+        + 'font:600 10.5px/1 var(--tl-font-ui);letter-spacing:.02em;'
+        + 'color:var(--tl-ink-2);background:var(--tl-surface-over);'
+        + 'border:1px solid var(--tl-rule-soft);border-radius:var(--tl-radius-xs);'
+        + 'padding:5px 8px;opacity:0;transition:opacity .22s ease;pointer-events:none;';
+      r.append(track, cue);
+      const to = (e: PointerEvent) => {
+        const st = this.scrollState(); if (!st.over) return;
+        const tb = track.getBoundingClientRect();
+        const th = thumb.offsetHeight;
+        const run = Math.max(1, tb.height - th);
+        const at = clamp((e.clientY - tb.top - this._railDrag!.top) / run, 0, 1);
+        const scr = this.scroller(); if (scr) scr.scrollTop = at * st.over;
+        this.onScroll();
+      };
+      track.addEventListener('pointerdown', e => {
+        const tb = thumb.getBoundingClientRect();
+        const inside = e.clientY >= tb.top && e.clientY <= tb.bottom;
+        this._railDrag = { y: e.clientY, top: inside ? e.clientY - tb.top : thumb.offsetHeight / 2 };
+        thumb.style.opacity = '.85';
+        try { track.setPointerCapture(e.pointerId); } catch { /* synthetic pointer */ }
+        to(e); e.preventDefault();
+      });
+      track.addEventListener('pointermove', e => { if (this._railDrag) to(e); });
+      const up = () => { if (this._railDrag) { this._railDrag = null; thumb.style.opacity = '.5'; } };
+      track.addEventListener('pointerup', up);
+      track.addEventListener('pointercancel', up);
+      track.addEventListener('mouseenter', () => { thumb.style.opacity = '.8'; });
+      track.addEventListener('mouseleave', () => { if (!this._railDrag) thumb.style.opacity = '.5'; });
+    }
+    if (r.parentElement !== sc) sc.appendChild(r);
+    return r;
+  },
+  /** Size and place the rail from the scroller. Called once per painted frame. */
+  updateRail() {
+    const st = this.scrollState();
+    if (st.over <= 2) {                       // nothing below the fold — no affordance
+      if (this._track) { this._track.style.opacity = '0'; this._track.style.pointerEvents = 'none'; }
+      if (this._cue) this._cue.style.opacity = '0';
+      return;
+    }
+    if (!this.ensureRail()) return;
+    const track = this._track!, thumb = this._thumb!;
+    // the rail is exactly as tall as the WINDOW, inset clear of the axis masthead
+    // at the top and the year strip at the bottom
+    this._rail!.style.height = st.view + 'px';
+    track.style.opacity = '1'; track.style.pointerEvents = 'auto';
+    const h = Math.max(30, track.clientHeight || st.view - 64);
+    const th = Math.max(26, Math.round(h * st.view / st.all));
+    thumb.style.height = th + 'px';
+    thumb.style.top = Math.round((h - th) * (st.top / st.over)) + 'px';
+    // …and the words go the moment the reader has used them once
+    this._cue!.style.opacity = st.top < 8 ? '1' : '0';
+  },
+  /* The sheet moved under the reader. The canvas itself needs no repositioning —
+     it IS the sheet — but three things are pinned to the WINDOW rather than to
+     the plot and have to be told: the rail, the cursor's year pill (drawn at the
+     visible bottom edge, because a cursor readout that scrolled out of sight
+     would be a readout you cannot read), and a selection card anchored to a mark
+     that has just moved. */
+  onScroll() {
+    this.updateRail();
+    if (this.hoverX !== null) this.render();
+    SelCard.reanchor();
+  },
   /** Register another projection of this state (vertical.ts). Repainted by paint(). */
   onProjection(fn: () => void) { PROJECTIONS.push(fn); },
   /** Register a projection that has to bring a named band into view (vertical.ts). */
@@ -1423,8 +1664,15 @@ export const TL = {
   },
 
   render() {
-    const dim = this.size(); if (!dim) return;
+    const dim = this.size();
+    if (!dim) { this.updateRail(); return; }        // no width ⇒ not on screen ⇒ no rail
     const { cw, H, ctx, lay } = dim; const T = tokens();
+    // ONE read of the scroller per frame. Both of the things that are pinned to
+    // the window rather than to the sheet — the cursor's year pill and the
+    // readout's hint — ask the same question, and asking it three times forces
+    // three synchronous layouts for one answer. (updateRail keeps its own read:
+    // it runs after the panel has been placed, which invalidates this one.)
+    const sst = this.scrollState();
     ctx.fillStyle = T.panel; ctx.fillRect(0, 0, cw, H);
     const { G, Wp, lanes, sel, rels, q } = lay;
     this.boxes = [];
@@ -1471,7 +1719,8 @@ export const TL = {
     // it), so both are this frame's — the pitch eased if a settle is in flight,
     // the fonts fixed by the rung so a name's truncation is computed once per rung
     // and re-used for every frame spent on it.
-    const pD = this._pDraw, SPd = this.SP_PITCH * pD, EPd = this.EV_PITCH * pD;
+    const pD = this._pDraw, aD = this._aDraw;
+    const SPd = this.spOf(pD, aD), EPd = this.epOf(pD, aD);
     const uiF = this._fUi, inF = this._fIn;
 
     for (const L of lanes) {
@@ -1728,8 +1977,12 @@ export const TL = {
     // the layout last moved, and the reader should be able to see which rung a
     // given picture belongs to.
     const rd = $('#zoomReadout');
+    // NAMED IN WORDS AS WELL AS DRAWN. The rail says "there is more below"; this
+    // says how to get there, in the one strip that is already reporting what the
+    // plot is doing, and only while it is true.
     if (rd) rd.textContent = `importance ≤ ${baseL} of 5 · span ${fmtSpan(this.span())}`
-      + ` · step ${this.step + 1}/${STEPS.length} · ${STEPS[this.step].name}`;
+      + ` · step ${this.step + 1}/${STEPS.length} · ${STEPS[this.step].name}`
+      + (sst.over > 2 ? ' · ⇧ + scroll to move down' : '');
     const sc = $('#searchCnt'); if (sc) sc.textContent = q ? `${hitCount} hits` : '';
     /* ── THE SET YEAR HAS NO LINE ON THIS CANVAS ─────────────────────────────
        There used to be a minium stub rising off the axis at x(TimeStore.year).
@@ -1758,18 +2011,26 @@ export const TL = {
     if (this.hoverX !== null && this.hoverX > G && this.hoverX < cw) {
       const hx = Math.round(this.hoverX) + .5;
       const yr = this.ix(this.hoverX, G, Wp);
+      // THE PILL RIDES THE WINDOW. The crosshair is the sheet's — full height,
+      // scrolling with the marks it is measuring — but the pill under it is the
+      // cursor's own readout, and a readout that has scrolled 400px off the
+      // bottom of the window is not one. It sits on the last visible 26px of the
+      // sheet, which is exactly where it always sat when the sheet fitted.
+      const pillY = sst.view ? Math.max(AXIS_TOP + 8, Math.min(H - 26, sst.top + sst.view - 26)) : H - 26;
       ctx.globalAlpha = .55; ctx.strokeStyle = T.panel; ctx.lineWidth = 3;
       ctx.beginPath(); ctx.moveTo(hx, AXIS_TOP); ctx.lineTo(hx, H - 30); ctx.stroke();
       ctx.globalAlpha = .9; ctx.strokeStyle = T.accent; ctx.lineWidth = 1;
       ctx.beginPath(); ctx.moveTo(hx, AXIS_TOP); ctx.lineTo(hx, H - 30); ctx.stroke();
       ctx.globalAlpha = 1;
-      yearPill(ctx, T, this.hoverX, H - 26, fmtBig(yr));
+      yearPill(ctx, T, this.hoverX, pillY, fmtBig(yr));
     }
     // THE GEOMETRY LOCK. The canvas layout is the ONLY source of lane geometry,
     // and the panel is positioned from the very same numbers, in the same frame,
     // after the slew limiter has had its say — so a row and its lane agree at
     // every fractional state of every transition, not just at the ends.
     for (const f of LAYOUTS) f(lay);
+    // …and the rail, which measures the finished sheet against the window
+    this.updateRail();
     // THE FOLLOWER'S ONLY CLOCK. layout() reports `anim` while any drawn height is
     // still short of its target; one rAF per frame walks it the rest of the way and
     // then stops. this.render(), never this.paint(): the vertical projection has its
@@ -1917,11 +2178,21 @@ export const TL = {
     }
     cv.addEventListener('wheel', e => {
       e.preventDefault();
+      // SHIFT IS THE SECOND AXIS. Chrome and Safari move a shifted wheel's
+      // magnitude onto deltaX (the horizontal-scroll convention), Firefox leaves
+      // it on deltaY, and a trackpad sends both — so take whichever is carrying
+      // it. Without shift nothing here has changed: the wheel is the time zoom.
+      if (e.shiftKey) { this.scrollBy(e.deltaY || e.deltaX); return; }
       const r = cv.getBoundingClientRect(); const G = this.gutter(), Wp = cv.clientWidth - G - 10;
       const yc = this.ix(e.clientX - r.left, G, Wp);
       this.zoomBy(yc, Math.pow(1.0018, e.deltaY));
       this.paint();
     }, { passive: false });
+    // The reader may also reach the scroller by every ordinary route the browser
+    // already gives them — the rail, a two-finger scroll over the PANEL, a
+    // keyboard once it has focus. All of them land here.
+    const sc = this.scroller();
+    if (sc) sc.addEventListener('scroll', () => this.onScroll(), { passive: true });
     let drag: any = null;
     cv.addEventListener('pointerdown', e => {
       drag = { x: e.clientX, v0: tv(this.d0), v1: tv(this.d1), moved: false };
