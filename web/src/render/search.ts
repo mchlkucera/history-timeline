@@ -22,6 +22,7 @@
    Lab.tsx, and the canvas keeps its own dimming behaviour untouched.
    ============================================================================= */
 
+import { Layers, layerDefs } from './layers';
 import { relDir } from './relations';
 import { bandLabel, describe } from './subject';
 
@@ -102,4 +103,119 @@ export function searchCorpus(query: string, cap: number): { hits: Hit[]; total: 
     if (hits.length < cap) hits.push(x.h);
   }
   return { hits, total };
+}
+
+/* ═══════════════════════════════════════════════════════════════════════════
+   LANES ARE ANSWERS TOO.
+
+   The founder: "so that I can type in also categories like 'Literature' and it
+   will enable me to add it as a new lane. […] I could also search for existing
+   lane, which would just highlight it."
+
+   Twelve curated lanes and nineteen layers sit in a library behind a "+ Add
+   layer" popover, and the only way to learn that Literature exists at all is to
+   open that popover and read the list. But the reader already has a box that
+   takes any word in the app — so the word "literature" should reach the lane,
+   not just the four literary movements inside it.
+
+   TWO WORDS PER LAYER, NOT ONE. A layer is a SUBJECT × A KIND, and a person
+   types either half: "czech" is a subject, "wars" is a kind, "religion" is
+   both. So each layer carries its name plus the vocabulary of its subject and
+   its facet, and a query is tried against the name first (where a match is
+   strong evidence) and the vocabulary second (where it is a hint).
+   ═══════════════════════════════════════════════════════════════════════════ */
+
+/** What a person might type for a BAND. Never shown — only matched against. */
+const SUBJECT_WORDS: Record<string, string> = {
+  CO: 'deep time prehistory geology cosmos universe earth evolution origins big bang',
+  EU: 'europe european western west',
+  ME: 'middle east africa african arab arabic islamic near east mideast egypt',
+  AS: 'asia asian east china chinese india indian japan japanese',
+  AM: 'americas america new world latin north south indigenous',
+  MU: 'music musical composers song sound',
+  SC: 'science ideas thought discovery knowledge',
+  MZ: 'mozart composer classical music biography person life',
+  AR: 'arts art movements painting style styles aesthetics visual culture',
+  DS: 'design graphic industrial typography product craft objects',
+  LT: 'literature literary books writing novels poetry authors letters fiction',
+  FM: 'film cinema movies motion pictures directors screen',
+  RL: 'religion religions faith belief beliefs church spiritual gods theology sacred',
+  PH: 'philosophy philosophers thought thinkers metaphysics ethics logic ideas',
+  PI: 'political ideologies politics ideology isms doctrine government left right',
+  EC: 'economics economy money trade markets finance capital business',
+  TE: 'technology tech engineering machines invention industry tools computing',
+  MD: 'medicine medical health disease doctors surgery epidemics public health',
+  EX: 'exploration voyages discovery travel navigation expeditions explorers seafaring',
+  CZ: 'czech czechia bohemia bohemian moravia prague czechoslovakia national',
+};
+/** What a person might type for a KIND. */
+const FACET_WORDS: Record<string, string> = {
+  ess: 'essentials overview turning points basics highlights spine main',
+  sci: 'science scientific technology discovery invention knowledge research',
+  war: 'war wars battle battles conflict military campaign army',
+  art: 'art arts culture cultural painting architecture music literature',
+  pol: 'states empires empire polities dynasties nations kingdoms government power realms',
+  all: '',
+};
+
+export interface LayerHit {
+  id: string;
+  name: string;
+  si: number | null;      // swatch index for the dot, the panel's own colour
+  n: number;              // corpus size — what adding it actually puts on screen
+  on: boolean;            // already on the board?
+  hidden: boolean;        // on the board with its eye shut
+  lead: boolean;          // an exact-ish NAME match: this outranks content
+}
+
+const esc = (s: string) => s.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+
+/**
+ * THE LAYER RANKING, in four tiers:
+ *
+ *   0  the name IS the query, or the query is the whole first word of it
+ *      ("literature" → Literature, "czech" → Czech history, "arts" → Arts &
+ *      movements). Only this tier leads the whole dropdown — typing a lane's
+ *      name is not ambiguous, and making you arrow past ten movements to reach
+ *      the lane you just named would be the wrong default.
+ *   1  a word inside the name starts with it ("art" → Art & culture)
+ *   2  the name contains it anywhere
+ *   3  only the subject/kind vocabulary matches ("movies" → Film)
+ *
+ * A layer with an EMPTY corpus is never offered: MU/SC ship as registry
+ * built-ins with no members, and a row that adds a lane which then draws
+ * nothing is the phantom-zoom bug wearing a different hat.
+ */
+export function searchLayers(query: string, cap: number): LayerHit[] {
+  const q = query.trim().toLowerCase();
+  if (q.length < 2) return [];
+  const word = new RegExp('\\b' + esc(q));
+  const scored: { h: LayerHit; tier: number }[] = [];
+  for (const d of layerDefs()) {
+    if (!d.n) continue;                                     // nothing to draw — not an answer
+    const name = d.name.toLowerCase();
+    let tier = -1;
+    if (name === q) tier = 0;
+    else if (name.startsWith(q) && !/[a-z0-9]/.test(name[q.length] || '')) tier = 0;
+    else if (word.test(name)) tier = 1;
+    else if (name.includes(q)) tier = 2;
+    else if (word.test((SUBJECT_WORDS[d.subject] || '') + ' ' + (FACET_WORDS[d.facet] || ''))) tier = 3;
+    if (tier < 0) continue;
+    scored.push({
+      tier,
+      h: {
+        id: d.id, name: d.name, si: d.si, n: d.n,
+        on: Layers.has(d.id), hidden: Layers.has(d.id) && !Layers.visible(d.id),
+        lead: tier === 0,
+      },
+    });
+  }
+  // inside a tier the bigger lane first — "art" should reach the 33-member Arts
+  // lane before a four-mark regional facet — then alphabetically, so the list
+  // does not shuffle under the cursor between keystrokes.
+  scored.sort((a, b) =>
+    a.tier - b.tier
+    || b.h.n - a.h.n
+    || (a.h.name < b.h.name ? -1 : a.h.name > b.h.name ? 1 : 0));
+  return scored.slice(0, cap).map(x => x.h);
 }

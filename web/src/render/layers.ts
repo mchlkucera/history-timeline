@@ -479,3 +479,197 @@ export function layerIdFor(band: string, cat: string, type: string): string | nu
 
 /** The importance level a POLITY carries — shared by the catalogue and the corpus. */
 export const polityLvl = (p: any) => lvlOfWeight(peakOf(p.weight));
+
+/* ═══════════════════════════════════════════════════════════════════════════
+   CAN THIS THING ACTUALLY BE DRAWN? — the phantom-zoom guard.
+
+   The founder: "if I search for something thats not shown its going to zoom on
+   not existing piece. […] Make sure its impossible to zoom in on something that
+   does not exist."
+
+   The search corpus is the WHOLE corpus; the board is a subset of it. Cubism is
+   a real, selectable, framable id whether or not "Arts & movements" is on the
+   board — so choosing it used to move the window to 1875–1955 and land on a
+   lane that is not there. The span was right and the screen was empty, which
+   reads as a broken app rather than as a missing layer.
+
+   The cure is not a warning, it is a RESOLUTION: before anything is framed, the
+   id is resolved to the layer that would draw it, and that layer is asked the
+   three questions that decide whether the mark reaches the canvas —
+
+     is it ON THE BOARD?          Layers.has
+     is its EYE OPEN?             Layers.visible (its own, and its group's)
+     does its DETAIL DIAL ask for something this unimportant?   passesDetail
+
+   planReveal() answers all three as one verdict, and reveal() is the single
+   operation that makes the verdict true. Framing is allowed only afterwards.
+
+   NOTHING HERE GUESSES. The three questions are asked with the same functions
+   timeline.ts asks them with (Layers.has / Layers.visible / passesDetail), on
+   the same numbers the renderer passes (a moment's `end` is 0, exactly as in
+   the event stratum), so this file and the canvas cannot drift into disagreeing
+   about whether something is on screen.
+   ═══════════════════════════════════════════════════════════════════════════ */
+
+// EVENTS only ever grows (initData, then setLanes), so a length check is a
+// sufficient signature — the same trick subject.ts uses for its own index.
+let _evIx: Map<string, any[]> | null = null;
+let _evIxN = -1;
+function eventById(id: string): any[] | null {
+  if (_evIxN !== EVENTS.length) {
+    _evIxN = EVENTS.length;
+    _evIx = new Map();
+    for (const e of EVENTS) { const k = evId(e); if (!_evIx.has(k)) _evIx.set(k, e); }
+  }
+  return _evIx!.get(id) || null;
+}
+
+/** The numbers the renderer's own gates are fed, for one selectable id. */
+interface MarkFacts {
+  own: string | null;      // the layer that OWNS it
+  adopted: string[];       // layers that ALSO draw it, through `anchors`
+  lvl: number;
+  type: string;
+  start: number;
+  end: number;             // 0 for a moment — what the event stratum passes
+}
+
+function factsOf(id: string): MarkFacts | null {
+  layerDefs();
+  if (id.startsWith('polity:')) {
+    const p = POLITIES.find((x: any) => x.id === id.slice(7));
+    if (!p) return null;
+    const band = p.region === 'AF' ? 'ME' : p.region;
+    return {
+      own: layerIdFor(band, 'power', 'polity'), adopted: [],
+      lvl: polityLvl(p), type: 'polity', start: p.start, end: p.end,
+    };
+  }
+  if (id.startsWith('spread:')) {
+    const s = REL.spreads.find(x => x.id === id.slice(7));
+    if (!s) return null;
+    const fp = s.footprint && s.footprint.length ? s.footprint[0] : null;
+    const band = fp ? regionOf(fp.lat, fp.lon) : null;
+    if (!band) return null;                    // no footprint, no band, no lane
+    return {
+      own: layerIdFor(band, SPREADCAT[s.kind] || 'society', 'spread'), adopted: [],
+      lvl: lvlOfWeight(peakOf(s.weight)), type: 'spread', start: s.start, end: s.end,
+    };
+  }
+  const e = eventById(id);
+  if (!e) return null;                         // beliefs, and anything else the timeline never draws
+  const adopted: string[] = [];
+  for (const d of _defs!) if (d.anchors && d.anchors.indexOf(id) >= 0) adopted.push(d.id);
+  return {
+    own: layerIdOfEvent(e), adopted,
+    lvl: e[4] || 3, type: e[7] || (e[1] ? 'episode' : 'moment'),
+    start: e[0], end: e[1] || 0,
+  };
+}
+
+/** The lowest detail step at or above `from` that lets this mark through. */
+function detailFor(f: MarkFacts, kind: LayerKind, from: Detail): Detail {
+  for (let d = from; d <= 2; d++) {
+    if (passesDetail(d as Detail, kind, f.lvl, f.type, f.start, f.end)) return d as Detail;
+  }
+  return 2;                                    // `detailed` is "everything we hold" — it always passes
+}
+
+/** What stands between this id and the canvas. */
+export type RevealNeed = 'ready' | 'add' | 'show' | 'detail' | 'never';
+
+export interface RevealPlan {
+  need: RevealNeed;
+  layer: string | null;          // the layer to act on
+  layerName: string | null;
+  detail: Detail | null;         // the dial reveal() will set, when it has to raise one
+  detailWord: string | null;     // that dial, spelled the way the panel spells it
+  why: string | null;            // set only for `never`: what kind of thing this is
+}
+
+/**
+ * WHAT WOULD IT TAKE TO SEE THIS? Read-only — it decides, it never acts.
+ *
+ * A mark can have more than one candidate layer: Mozart's lifespan is banded MU
+ * and ADOPTED by the Mozart study, the big wars sit in a region's Wars facet and
+ * are adopted by its Essentials. If any candidate already draws it, the answer
+ * is `ready` and nothing is touched — a reader who has Europe · Essentials open
+ * should not have Europe · Wars added underneath them for a mark that is
+ * already on their screen.
+ *
+ * Otherwise the CHEAPEST candidate wins, in the order of how much of the
+ * reader's arrangement it disturbs: raising a dial < opening an eye < adding a
+ * lane. Ties go to the owning layer, which is where the mark actually belongs.
+ */
+export function planReveal(id: string): RevealPlan {
+  // A BELIEF STREAM IS NOT A BUG, IT IS A DIFFERENT VIEW. The braided-rivers
+  // view draws the belief corpus and this one never has; saying so by name is
+  // more use to the reader than a flat "not drawn".
+  const none: RevealPlan = {
+    need: 'never', layer: null, layerName: null, detail: null, detailWord: null,
+    why: id.startsWith('belief:')
+      ? 'a belief stream — the Beliefs view draws these'
+      : 'not drawn on this timeline',
+  };
+  const f = factsOf(id);
+  if (!f || !f.own) return none;
+
+  const cands = [f.own, ...f.adopted];
+  // already drawn by one of them? then there is nothing to do.
+  for (const c of cands) {
+    const def = layerDef(c); if (!def) continue;
+    if (Layers.has(c) && Layers.visible(c)
+      && passesDetail(Layers.detail(c), def.kind, f.lvl, f.type, f.start, f.end)) {
+      return { need: 'ready', layer: c, layerName: def.name, detail: null, detailWord: null, why: null };
+    }
+  }
+
+  let best: RevealPlan | null = null;
+  let bestCost = 99;
+  for (const c of cands) {
+    const def = layerDef(c); if (!def) continue;
+    const on = Layers.has(c);
+    const lit = on && Layers.visible(c);
+    const cur = Layers.detail(c);                 // a layer off the board still remembers its dial
+    const want = detailFor(f, def.kind, cur);
+    const raises = want !== cur;
+    const cost = !on ? 3 : !lit ? 2 : 1;
+    if (cost >= bestCost) continue;
+    bestCost = cost;
+    best = {
+      need: !on ? 'add' : !lit ? 'show' : 'detail',
+      layer: c, layerName: def.name,
+      detail: raises ? want : null,
+      detailWord: raises ? DETAIL_WORDS[want] : null,
+      why: null,
+    };
+  }
+  return best || none;
+}
+
+/**
+ * MAKE THE VERDICT TRUE. One emit, whatever it took: adding a lane and raising
+ * its dial in two emits would rebuild the panel twice and hand the slew limiter
+ * two separate relayouts for one gesture.
+ *
+ * Returns false only when the plan was `never` — i.e. the thing is not drawn on
+ * this timeline at all, and the caller must not frame anything.
+ */
+export function reveal(plan: RevealPlan): boolean {
+  if (plan.need === 'never' || !plan.layer) return false;
+  if (plan.need === 'ready' && plan.detail === null) return true;
+  const id = plan.layer;
+  let touched = false;
+  if (!Layers.has(id)) {
+    Layers.root.push({ t: 'L', id });
+    if (Layers.vis[id] === undefined) Layers.vis[id] = true;
+    if (Layers.det[id] === undefined) Layers.det[id] = 1;
+    touched = true;
+  }
+  if (Layers.vis[id] === false) { Layers.vis[id] = true; touched = true; }
+  const g = Layers.groupOf(id);
+  if (g && Layers.gvis[g.id] === false) { Layers.gvis[g.id] = true; touched = true; }
+  if (plan.detail !== null && Layers.det[id] !== plan.detail) { Layers.det[id] = plan.detail; touched = true; }
+  if (touched) Layers.emit();
+  return true;
+}

@@ -500,9 +500,20 @@ export const SelCard = {
   presence(s: Subject): string | null {
     const y = TimeStore.year;
     // A bare border feature is only ever selected FROM the snapshot it is drawn
-    // in, and its dates ARE that snapshot's stratum, so there is nothing here it
-    // could be honest about that the dates line has not already said.
-    if (s.minimal) return null;
+    // in, and its dates ARE that snapshot's stratum, so there is nothing about
+    // the YEAR here that the dates line has not already said.
+    //
+    // What it does have is a POINT, and on a nameless patch that point used to
+    // be promoted all the way to the card's title: "5.4, 20.0" as the name of a
+    // thing. A coordinate is not a name, it is a measurement — so it lives
+    // here, in the one mono line on the card, beside the other measurements,
+    // while the title says what the atlas actually knows. It is also literally
+    // the pixel CORE will drill, printed to the same two decimals the core
+    // sample prints, so the two can be checked against each other.
+    if (s.minimal) {
+      const p = this.point ?? s.place;
+      return p ? `${Math.abs(p.lat).toFixed(2)}°${p.lat >= 0 ? 'N' : 'S'} · ${Math.abs(p.lon).toFixed(2)}°${p.lon >= 0 ? 'E' : 'W'}` : null;
+    }
 
     if (s.polity && this.view === 'map') {
       const n = territoryAt(s.polity, this.snapYear()).size;

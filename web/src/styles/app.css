@@ -95,6 +95,24 @@
 .tl-lrow--in { padding-left: 18px; box-shadow: inset 10px 0 0 -9px var(--tl-rule); }
 .tl-lrow.is-off .tl-lname, .tl-lrow.is-off .tl-ldot { opacity: .38; }
 .tl-lrow.is-dragging { background: var(--tl-accent-soft); box-shadow: inset 0 0 0 1px var(--tl-accent-line) !important; }
+/* ── "WHICH ONE IS LITERATURE?" ───────────────────────────────────────────────
+   A lane row taken from the search either arrived just now (added) or was
+   already here (located), and in both cases the reader's eyes are on the field
+   at the top of the screen, not on a column of nineteen names. So the row says
+   where it is: two seconds of the accent wash the drag already uses, then
+   nothing. It is a POINTER, not a state — the accent means "where you are", and
+   for these two seconds this is exactly where you are. Lab.tsx scrolls it into
+   view first and removes the class when the animation is done. */
+@keyframes tl-found {
+  0%   { background: var(--tl-accent-soft); box-shadow: inset 0 0 0 1px var(--tl-accent-line); }
+  70%  { background: var(--tl-accent-soft); box-shadow: inset 0 0 0 1px var(--tl-accent-line); }
+  100% { background: transparent; box-shadow: inset 0 -1px 0 var(--tl-rule-soft); }
+}
+.tl-lrow.is-found { animation: tl-found 1.6s var(--tl-ease) forwards; }
+@media (prefers-reduced-motion: reduce) {
+  /* the flash is information, so it stays — it just does not fade */
+  .tl-lrow.is-found { animation: none; background: var(--tl-accent-soft); box-shadow: inset 0 0 0 1px var(--tl-accent-line); }
+}
 .tl-lrow.is-thin { line-height: 18px; }
 
 .tl-leye {
@@ -468,6 +486,48 @@ body.tl-dragging { cursor: grabbing; }
    group and on the input is what actually lets it: without them the input's
    default intrinsic size holds the track open regardless. */
 .tl-field--cmdk { width: 232px; }
+
+/* ── THE DOUBLE ORANGE LINE ───────────────────────────────────────────────────
+   The founder: "The search also has not good looking double orange line."
+
+   MEASURED, NOT GUESSED. With the field focused, the live computed styles were:
+
+     .tl-field  :focus-within    outline rgb(180,56,42) solid 2px, offset 1px
+     #cmdk      :focus-visible   outline rgb(180,56,42) solid 2px, offset 2px
+
+   Two minium rings on one control. The field is a flex wrapper around an icon,
+   an <input> and a ⌘K badge; focusing the input lights the WRAPPER
+   (.tl-field:focus-within, shell.css) and the input itself, because the app's
+   blanket focus rule names `input` (:where(.tl-app) :is(…, input, …)). The
+   input is exactly as tall as the field, so its ring lands one pixel outside
+   the wrapper's — two parallel orange lines along the top edge, two along the
+   bottom, and two more running down through the middle of the control beside
+   the icon and the badge.
+
+   AND THE RING WAS ONLY THE VISIBLE HALF. The reason the two rings could line
+   up at all is that #cmdk was being drawn as a SECOND CONTROL INSIDE THE FIRST:
+   globals.css's compat rule `input[type=text]` gives every bare text input its
+   own 32px height, its own --tl-surface-2 ground, its own hairline border and
+   its own radius. shell.css says `.tl-field input { border: 0; background:
+   none; outline: none }` and means precisely this — but at (0,1,1) it TIES the
+   compat rule and loses on source order, because globals.css is loaded last on
+   purpose. So the search box has been carrying a faint inner box all along, and
+   the doubled focus ring was that inner box lighting up.
+
+   THE ACCENT MEANS "WHERE YOU ARE" AND IT SAYS IT ONCE. One control, one
+   border, one ring: the field wears them and the input inside it wears none.
+   Restated at (0,2,1) so it wins on weight rather than on which file loaded
+   last, and scoped to inputs inside a .tl-field — which in this app is the one
+   search box — so every other focusable thing keeps the ring it has always had. */
+.tl-field input[type="text"] {
+  height: auto;
+  padding: 0;
+  background: none;
+  border: 0;
+  border-radius: 0;
+}
+.tl-field input[type="text"]:hover { border-color: transparent; }
+.tl-field input[type="text"]:focus-visible { outline: none; }
 @media (max-width: 1023px) {
   .tl-rail__end { min-width: 0; }
   .tl-field--cmdk { width: 168px; min-width: 0; }
@@ -606,7 +666,12 @@ body.tl-dragging { cursor: grabbing; }
   display: grid;
   grid-template-columns: 7px 1fr auto;
   align-items: baseline;
-  gap: var(--tl-space-3);
+  /* The gaps are named separately because a row grows a SECOND line when its
+     layer is not on the board, and the column gap is far too big for the space
+     between a name and the sentence under it. A row with no second line never
+     creates row 2 at all, so it costs nothing. */
+  column-gap: var(--tl-space-3);
+  row-gap: 2px;
   width: 100%;
   padding: var(--tl-space-3) var(--tl-space-3);
   border: 0;
@@ -618,6 +683,42 @@ body.tl-dragging { cursor: grabbing; }
   color: var(--tl-ink);
 }
 .tl-sugg__row[data-sel="true"] { background: var(--tl-hover); }
+/* THE SELECTION STATE IS A GROUND, NOT A LINE. The field two pixels above is
+   already wearing the one accent ring this gesture is allowed; a second accent
+   on the highlighted row would be the double line again, one element down. */
+
+/* ── WHY THIS ONE CANNOT BE SHOWN YET ─────────────────────────────────────────
+   The phantom-zoom fix in layers.ts resolves every hit to the layer that would
+   draw it, and this line is that verdict in words: "in Arts & movements — not
+   added". Quiet ink, never accent — it is a fact about the board, not a place
+   the reader is. It sits under the name rather than beside the dates because
+   the dates are the disambiguator and must not be pushed out of the row. */
+.tl-sugg__need {
+  grid-column: 2 / -1;
+  grid-row: 2;
+  font-size: var(--tl-text-2xs);
+  line-height: 1.3;
+  color: var(--tl-ink-3);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+/* NOT DRAWN ON THIS TIMELINE AT ALL — a belief stream, a spread with no
+   footprint. The row still answers the word (it is a true answer), but it is
+   not a choice: no pointer, no hover ground, no arrow-key stop, and takeRow()
+   refuses it even if something did click through. */
+.tl-sugg__row[data-need="never"] {
+  cursor: default;
+  opacity: .55;
+}
+.tl-sugg__row[data-need="never"][data-sel="true"] { background: transparent; }
+
+/* ── A LANE AS AN ANSWER ──────────────────────────────────────────────────────
+   "so that I can type in also categories like 'Literature' and it will enable
+   me to add it as a new lane." The dot is the lane's own swatch — the same
+   colour the layer panel gives it — so the row you choose and the row that
+   flashes in the panel are visibly the same thing. */
+.tl-sugg__row--lane .tl-sugg__meta { font-family: var(--tl-font-ui); }
 .tl-sugg__dot {
   width: 7px; height: 7px;
   border-radius: var(--tl-radius-full);

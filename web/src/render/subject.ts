@@ -18,7 +18,7 @@
    without dragging three.js into the first-paint bundle.
    ============================================================================= */
 
-import { BELIEFS, EVENTS, GEO, PLACES, POLITIES, evId, CATBY, LANES, pip, sharpnessOf, clamp } from './shared';
+import { BELIEFS, EVENTS, GEO, PLACES, POLITIES, evId, CATBY, LANES, fmtY, pip, sharpnessOf, clamp } from './shared';
 import { REL, SPREADCAT, lvlOfWeight, peakOf, relDir, relIndex } from './relations';
 
 // ---------- the polity alias table ----------
@@ -80,6 +80,48 @@ export function polityForFeature(sov: string, name: string, snapshotYear: number
   return best ? best.id : null;
 }
 
+// ---------- naming a bare border feature ----------
+/**
+ * WHAT THE ATLAS ACTUALLY KNOWS ABOUT THIS PATCH OF GROUND.
+ *
+ * Most of the deep-time world is nameless. Counted over the shipped snapshots:
+ * 51 of 75 features at 3000 BCE, 71 of 150 at 1 CE, 80 of 157 at 400, 91 of
+ * 617 at 1600, 87 of 551 at 1715. The border data spells that as '?' (and once
+ * as a run of spaces), and both the name slot and the sovereign slot carry it
+ * — of the 566 nameless features in the corpus exactly 6 have a sovereign of
+ * their own, so "no name" almost always means "nothing at all".
+ *
+ * Clicking one used to mint a subject called "5.4, 20.0", because the fallback
+ * chain ended at the cursor's own coordinates. A coordinate is not a name; it
+ * is where you were standing when you asked. So the chain now ends at the
+ * honest sentence instead, and the coordinates go where a measurement goes —
+ * the card's mono presence line, under the dates.
+ *
+ * Three answers, because three things want different words for it:
+ *   · title — the subject's name, on the card and in the map's Reading capsule
+ *   · where — the PLACE label, which the core sample prints as
+ *             "Drilling at <where> (5.40°, 20.00°)", so it has to read as a
+ *             place and never as a sentence
+ *   · sovs  — the strings the map may join a highlight on; EMPTY for nameless
+ *             ground, because '?' matches two thirds of the 3000 BCE map and
+ *             dimming the world to highlight two thirds of it is not a
+ *             highlight (map.ts falls back to object identity there)
+ */
+export interface FeatureNaming { title: string; where: string; sovs: string[]; named: boolean }
+/** '' when the atlas is telling us it does not know. */
+const known = (s: unknown): string => {
+  const t = typeof s === 'string' ? s.trim() : '';
+  return t && t !== '?' ? t : '';
+};
+export function featureLabel(f: any, snapshotYear: number): FeatureNaming {
+  const name = known(f && f.name), sov = known(f && f.sov);
+  if (name) return { title: name, where: name, sovs: [...new Set([sov, name].filter(Boolean))], named: true };
+  // No name, but somebody's ground: lead with whose. It is the more useful of
+  // the two facts anyway, and it is joinable, so the highlight still works.
+  if (sov) return { title: sov, where: sov, sovs: [sov], named: true };
+  return { title: `Unnamed in the ${fmtY(snapshotYear)} atlas`, where: 'this point', sovs: [], named: false };
+}
+
 // ---------- the subject ----------
 /** A point on the globe, in the order Core.drill() takes it. */
 export interface Place { lon: number; lat: number; label: string }
@@ -101,6 +143,13 @@ export interface Subject {
   place?: Place | null;        // the exact point that was clicked
   sovs?: string[];             // the sovereign strings the map draws it under
   minimal?: boolean;           // a border feature with no curated record
+  // NAMELESS GROUND has no joinable string, so the map holds the one polygon
+  // that was clicked by object identity instead — GEO's feature arrays are
+  // built once at boot and never replaced. Gated by the snapshot it came from,
+  // so panning the years releases the highlight rather than dimming the world
+  // for a feature that is not on it. (See map.ts soloFeature.)
+  feat?: any;
+  fyear?: number;
 }
 
 /**

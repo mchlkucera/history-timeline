@@ -40,8 +40,8 @@ import { Horizon } from '@/render/horizon';
 import { Pop, loadPopulation } from '@/render/population';
 import { buildGallery } from '@/render/gallery';
 import { Conn, initConn, loadRelations } from '@/render/connections';
-import { searchCorpus, type Hit } from '@/render/search';
-import { Layers } from '@/render/layers';
+import { searchCorpus, searchLayers, type Hit, type LayerHit } from '@/render/search';
+import { Layers, planReveal, reveal, type RevealPlan } from '@/render/layers';
 import { describe, perspectiveSpan, setPolityAliases } from '@/render/subject';
 import { railPos, railYear, railNum, railEraOf, SNAPSHOTS } from './rail';
 
@@ -384,9 +384,67 @@ function paintUnread(seen: Set<string>, view: string) {
    There were two: a thread-search in the timeline's control panel that dimmed
    the canvas and offered a dropdown of things in history, and a ⌘K palette that
    went to views. The panel one is gone, which left content search unreachable —
-   so the field in the top bar takes both jobs. One query, one dropdown, two
-   kinds of row: what happened, and where to look at it. */
-type SRow = { k: 'c'; h: Hit } | { k: 'v'; v: ViewId };
+   so the field in the top bar takes both jobs.
+
+   THREE kinds of row now, because there are three kinds of answer to a word:
+
+     c  WHAT HAPPENED    Cubism, the Roman Republic, the Black Death.
+                         Each one carries its RevealPlan — the verdict on
+                         whether the layer that draws it is on the board — so
+                         the row can say "not added" before it is chosen and
+                         choosing it can put that right rather than framing an
+                         empty span. (search.ts + layers.ts do the deciding.)
+     l  WHERE IT LIVES   the lanes themselves: Literature, Religion, Czech
+                         history. On the board → locate it; not on the board →
+                         add it. The founder's second ask.
+     v  WHERE TO LOOK    the eleven views.
+*/
+type SRow =
+  | { k: 'c'; h: Hit; p: RevealPlan }
+  | { k: 'l'; l: LayerHit }
+  | { k: 'v'; v: ViewId };
+
+/**
+ * THE ROW'S SECOND LINE — what stands between this hit and the canvas, in the
+ * fewest words that are still true. Null when nothing does, which is the
+ * common case and draws no line at all.
+ */
+function needLine(p: RevealPlan): string | null {
+  if (p.need === 'never') return p.why || 'not drawn on this timeline';
+  if (!p.layerName) return null;
+  if (p.need === 'add') return `in ${p.layerName} — not added`;
+  if (p.need === 'show') return `in ${p.layerName} — hidden`;
+  if (p.need === 'detail') return `in ${p.layerName} — needs more detail`;
+  return null;
+}
+
+/** The same verdict as a whole sentence, for the row's title attribute. */
+function needTitle(p: RevealPlan, name: string): string | null {
+  const raise = p.detailWord ? ` and sets it to “${p.detailWord}”` : '';
+  if (p.need === 'never') return `${name} is ${p.why || 'not drawn on this timeline'}, so there is nothing here to zoom to.`;
+  if (p.need === 'add') return `Adds the “${p.layerName}” layer${raise}, then selects ${name} and frames it.`;
+  if (p.need === 'show') return `Un-hides “${p.layerName}”${raise}, then selects ${name} and frames it.`;
+  if (p.need === 'detail') return `Raises “${p.layerName}” to “${p.detailWord}”, then selects ${name} and frames it.`;
+  return null;
+}
+
+/* A ROW THAT CANNOT ACT IS NOT IN THE ARROW ORDER. A content hit whose thing is
+   not drawn on this timeline at all (a belief stream, a spread with no
+   footprint) stays in the list because it is still a truthful answer to the
+   word, but the cursor steps over it and Enter cannot land on it — the same
+   rule the group headers have always followed. */
+const canTake = (r: SRow) => !(r.k === 'c' && r.p.need === 'never');
+const stepSel = (rows: SRow[], from: number, dir: number) => {
+  for (let n = 1; n <= rows.length; n++) {
+    const i = ((from + dir * n) % rows.length + rows.length) % rows.length;
+    if (canTake(rows[i])) return i;
+  }
+  return from;
+};
+const firstSel = (rows: SRow[]) => {
+  const i = rows.findIndex(canTake);
+  return i < 0 ? 0 : i;
+};
 
 interface UrlState { v: ViewId | null; y: number | null; s: number | null }
 
@@ -505,7 +563,7 @@ export default function Lab() {
   // Populating a ref during render is safe here: it is not rendered output, so
   // there is nothing for hydration to mismatch on.
   const url0 = useRef<UrlState | undefined>(undefined);
-  if (!url0.current) url0.current = readUrl();
+  if (url0.current == null) url0.current = readUrl();
 
   // Restoring the VIEW is a mount effect rather than a lazy useState initial
   // value, because the page is prerendered: reading location during the first
@@ -974,6 +1032,7 @@ export default function Lab() {
      of a scroll container is clipped by it. Same reasoning as the card and the
      tooltip, which are both out at document level for exactly this. */
   const SEARCH_CAP = 10;
+  const LAYER_CAP = 4;
   const VIEW_CAP = 5;
   const [sRows, setSRows] = useState<SRow[]>([]);
   const [sTotal, setSTotal] = useState(0);          // content matches BEYOND the cap
@@ -1001,7 +1060,8 @@ export default function Lab() {
     setSBox({ left: Math.max(8, Math.min(fr.left, innerWidth - w - 8)), top: fr.bottom + 4, width: w });
   }, []);
 
-  const closeSearch = useCallback(() => { setSRows([]); setSTotal(0); setSSel(0); }, []);
+  const closeSearch = useCallback(() => { setSRows([]); setSTotal(0); setSSel(0); }, [setSRows, setSTotal, setSSel]);
+
 
   /**
    * ONE QUERY, TWO KINDS OF ANSWER.
@@ -1025,6 +1085,7 @@ export default function Lab() {
     const q = raw.trim().toLowerCase();
     if (q.length < 2) return { rows: [], total: 0 };
     const { hits, total } = searchCorpus(raw, SEARCH_CAP);
+    const layers = searchLayers(raw, LAYER_CAP);
     const views = ORDER.filter(v => {
       const m = VIEWS[v];
       return (m.name + ' ' + m.seg + ' ' + m.gist).toLowerCase().includes(q);
@@ -1035,27 +1096,116 @@ export default function Lab() {
         || VIEWS[v].name.toLowerCase() === q
         || (g ? g.label.toLowerCase() === q : false);       // the word on the rail
     });
-    const cRows: SRow[] = hits.map(h => ({ k: 'c', h }));
+    // A LANE'S OWN NAME LEADS. "Literature" is not an ambiguous word in this
+    // app — it is a lane, and one of the four literary movements inside it is
+    // not what was asked for. Anything softer than an exact-ish name match
+    // (search.ts's tier 0) is a hint, and hints go under the content.
+    const laneFirst = layers.some(l => l.lead);
+    const cRows: SRow[] = hits.map(h => ({ k: 'c', h, p: planReveal(h.id) }));
+    const lRows: SRow[] = layers.map(l => ({ k: 'l', l }));
     const vRows: SRow[] = views.map(v => ({ k: 'v', v }));
-    return { rows: navFirst ? [...vRows, ...cRows] : [...cRows, ...vRows], total: total - hits.length };
+    const body = laneFirst ? [...lRows, ...cRows] : [...cRows, ...lRows];
+    return {
+      rows: navFirst ? [...vRows, ...body] : [...body, ...vRows],
+      total: total - hits.length,
+    };
   }, []);
 
-  /** Take a row: navigate to a view, or select + frame a thing in history. */
+  /* THE LANE ROW'S GESTURE. Add-or-locate, and the difference is only whether
+     the lane is already on the board — the founder's "I could also search for
+     existing lane, which would just highlight it."
+
+     The flash has to happen AFTER the panel has rebuilt: Layers.emit() runs
+     LayerPanel.build(), which replaces every row element, so a class set before
+     the add would be thrown away with the node it was on. And the panel only
+     exists on the horizontal timeline, so a lane row also navigates there —
+     locating a lane on a view that has no lanes is not locating anything. */
+  const flashLayer = useCallback((id: string) => {
+    // A COLLAPSED GROUP HAS NO ROW TO FLASH. layerpanel.ts skips a collapsed
+    // group's children entirely (the lanes still draw — collapsing is a panel
+    // gesture, not a visibility one), so "find it in the panel" has to open the
+    // group first or there is nothing in the panel to find.
+    const g = Layers.groupOf(id);
+    if (g && g.collapsed) Layers.collapse(g.id);
+    const find = () => document.querySelector(`.tl-lrow[data-lid="${CSS.escape(id)}"]`) as HTMLElement | null;
+    const bring = () => { const r = find(); if (r) r.scrollIntoView({ block: 'nearest', behavior: 'smooth' }); };
+    let tries = 0;
+    const tick = () => {
+      const row = find();
+      // the panel is React's to mount and layerpanel.ts's to fill; on a view
+      // change neither has happened yet, so give it a few frames before giving up
+      if (!row || !row.clientHeight) { if (tries++ < 40) requestAnimationFrame(tick); return; }
+      bring();
+      row.classList.remove('is-found');
+      void row.offsetWidth;                        // restart the animation on a re-locate
+      row.classList.add('is-found');
+      // AND AGAIN WHEN IT HAS FINISHED OPENING. A lane does not arrive at its
+      // full height — the slew limiter walks it open over about half a second,
+      // so the row we just scrolled to was 20px tall and grew to 90 underneath
+      // us, back off the bottom of the window. `nearest` moves the least it can,
+      // which means the first call did nothing at all once the lane was taller.
+      // The second call is against the settled geometry.
+      setTimeout(bring, 750);
+      setTimeout(() => { const r = find(); if (r) r.classList.remove('is-found'); }, 1600);
+    };
+    requestAnimationFrame(tick);
+  }, []);
+
+  /**
+   * TAKE A ROW — and on the content branch, EARN THE FRAME FIRST.
+   *
+   * The founder: "Make sure its impossible to zoom in on something that does
+   * not exist." So the order here is not decoration, it is the whole fix:
+   *
+   *   1. re-plan against the board AS IT IS NOW (the row was built a few
+   *      keystrokes ago, and the reader may have changed the board since);
+   *   2. if the plan is `never`, do nothing at all — no selection, no frame.
+   *      The row is disabled in the markup too, so this is a second lock on a
+   *      door that is already bolted;
+   *   3. reveal() — add the layer, open its eye, raise its dial, whatever the
+   *      verdict said, in ONE emit;
+   *   4. only now select and frame.
+   *
+   * Nothing between 3 and 4 can fail: reveal() has already made Layers.has,
+   * Layers.visible and passesDetail all true for the layer that draws it.
+   */
   const takeRow = useCallback((r: SRow) => {
+    if (r.k === 'c' && r.p.need === 'never') return;     // the door is bolted here too
     closeSearch();
     const box = document.getElementById('cmdk') as HTMLInputElement | null;
     if (box) { box.value = ''; box.blur(); }
-    // Any dim comes off BEFORE anything else happens, on both branches: the
+    // Any dim comes off BEFORE anything else happens, on every branch: the
     // framing has to land on a full world rather than on 12% of one, and a row
     // that navigates to a VIEW would otherwise leave the timeline dimmed by a
     // query the reader can no longer see in the (now empty) field.
     TL.clearSearch();
+
     if (r.k === 'v') { go(r.v); return; }
+
+    if (r.k === 'l') {
+      if (!Layers.has(r.l.id)) Layers.add(r.l.id);       // add-as-a-lane
+      go('zoom');                                        // the lanes live here
+      flashLayer(r.l.id);                                // …and locate it either way
+      return;
+    }
+
+    const plan = planReveal(r.h.id);
+    if (!reveal(plan)) return;                           // not drawable — never frame
     const sub = describe(r.h.id);
     SelCard.select(r.h.id, null);
     if (sub) { const [a, b] = perspectiveSpan(sub); TL.frameTo(a, b); }
     go('zoom');
-  }, [closeSearch, go]);
+    // A LANE THAT WAS JUST TURNED ON IS AT THE BOTTOM OF THE BOARD. frameTo
+    // moves the window along TIME; it cannot move the surface DOWN, and a lane
+    // added by this gesture lands under every lane that was already there —
+    // below the fold on anything but a very tall window. The panel shares one
+    // scroller with the canvas (layerpanel.ts's whole design), so scrolling the
+    // lane's PANEL ROW into view brings the lane itself with it. Only when this
+    // gesture actually changed the board: a hit that was already showing is
+    // where the reader left it, and moving the surface under them would be a
+    // courtesy nobody asked for.
+    if (plan.need !== 'ready' && plan.layer) flashLayer(plan.layer);
+  }, [closeSearch, go, flashLayer]);
 
   // The box is markup this file owns but timeline.ts wires; these listeners are
   // additional, never replacements, so nothing about the dimming changes.
@@ -1066,7 +1216,7 @@ export default function Lab() {
 
     const onInput = () => {
       const { rows, total } = buildRows(box.value);
-      setSRows(rows); setSTotal(total); setSSel(0);
+      setSRows(rows); setSTotal(total); setSSel(firstSel(rows));
       if (rows.length) placeSearch(); else setSBox(null);
     };
     const onKey = (ev: KeyboardEvent) => {
@@ -1087,9 +1237,13 @@ export default function Lab() {
         return;
       }
       if (!rows.length) return;
-      if (k === 'ArrowDown') { ev.preventDefault(); setSSel(i => (i + 1) % rows.length); }
-      else if (k === 'ArrowUp') { ev.preventDefault(); setSSel(i => (i - 1 + rows.length) % rows.length); }
-      else if (k === 'Enter') { ev.preventDefault(); takeRow(rows[sSelRef.current] || rows[0]); }
+      if (k === 'ArrowDown') { ev.preventDefault(); setSSel(i => stepSel(rows, i, 1)); }
+      else if (k === 'ArrowUp') { ev.preventDefault(); setSSel(i => stepSel(rows, i, -1)); }
+      else if (k === 'Enter') {
+        ev.preventDefault();
+        const pick = rows[sSelRef.current] || rows[firstSel(rows)];
+        if (pick && canTake(pick)) takeRow(pick);
+      }
     };
     const onFocus = () => { if (box.value.trim().length >= 2) onInput(); };
     const onBlurOut = (ev: FocusEvent) => {
@@ -1119,10 +1273,17 @@ export default function Lab() {
     return () => removeEventListener('resize', onMove);
   }, [sOpen, placeSearch]);
 
-  // The field is global chrome now, so the list no longer belongs to one view —
-  // but a NAVIGATION away from it (a row taken, ⌘K to somewhere else) should
-  // still put it away.
-  useEffect(() => { closeSearch(); }, [view, closeSearch]);
+  /* THE LIST DOES NOT SURVIVE A NAVIGATION. The field is global chrome, but a
+     dropdown hanging under it after the view has changed underneath is a list
+     of answers to a question the reader has moved on from.
+
+     Closed at the three places a view can change while the list is up, rather
+     than in an effect on `view`: takeRow closes it before it navigates, the
+     header's switch and seg close it below, and any click outside the list
+     blurs the field, which closes it too. (An effect that calls setState
+     synchronously on every view change is a cascading render for a state that
+     is empty 99% of the time — and React's own lint rule says so.) */
+  const leaveSearch = useCallback((v: ViewId) => { closeSearch(); setView(v); }, [closeSearch]);
 
   const railMode = () => VIEWS[viewRef.current].rail;
 
@@ -1327,7 +1488,7 @@ export default function Lab() {
                 <button key={g.id} className="tl-switch__item" role="tab"
                   aria-selected={g.id === group}
                   aria-controls={`tab-${GROUP_DEFAULT[g.id]}`}
-                  onClick={() => setView(g.members.includes(view) ? view : lastMember.current[g.id])}>
+                  onClick={() => leaveSearch(g.members.includes(view) ? view : lastMember.current[g.id])}>
                   {g.label}
                 </button>
               ))}
@@ -1346,7 +1507,7 @@ export default function Lab() {
                   copy of the projection switch in the header — the very control
                   this is getting out of it. */}
               {segInHeader && members.map(m => (
-                <button key={m} className="tl-seg__item" aria-pressed={m === view} onClick={() => setView(m)}>
+                <button key={m} className="tl-seg__item" aria-pressed={m === view} onClick={() => leaveSearch(m)}>
                   {VIEWS[m].seg}
                 </button>
               ))}
@@ -2038,7 +2199,7 @@ export default function Lab() {
                   <button key={m} className="tl-seg__item" aria-pressed={m === view}
                     aria-label={`${VIEWS[m].seg} projection`}
                     title={`Draw the same timeline ${m === 'vertical' ? 'down the page' : 'across the page'}`}
-                    onClick={() => setView(m)}>
+                    onClick={() => leaveSearch(m)}>
                     {m === 'vertical' ? I.projV : I.projH}
                     <span className="tl-projseg__w">{VIEWS[m].seg}</span>
                   </button>
@@ -2068,26 +2229,53 @@ export default function Lab() {
         <div className="tl-sugg" id="searchSugg" role="listbox" aria-label="Search results"
           style={{ left: sBox.left, top: sBox.top, width: sBox.width }}>
           {sRows.map((r, i) => {
-            // A header wherever the KIND changes, which is once at most: the two
-            // groups are contiguous by construction, so this needs no grouping
-            // pass — it just notices the seam.
+            // A header wherever the KIND changes: the three groups are
+            // contiguous by construction, so this needs no grouping pass — it
+            // just notices the seam.
             const head = i === 0 || sRows[i - 1].k !== r.k
-              ? (r.k === 'c' ? 'In history' : 'Views')
+              ? (r.k === 'c' ? 'In history' : r.k === 'l' ? 'Lanes' : 'Views')
               : null;
             const sel = i === sSel;
+            const key = r.k === 'c' ? r.h.id : r.k === 'l' ? 'l:' + r.l.id : 'v:' + r.v;
             return (
-              <div key={r.k === 'c' ? r.h.id : 'v:' + r.v}>
+              <div key={key}>
                 {head && <div className="tl-sugg__group">{head}</div>}
-                {r.k === 'c' ? (
-                  <button className="tl-sugg__row" role="option" aria-selected={sel} data-sel={String(sel)}
+                {r.k === 'c' ? (() => {
+                  // A HIT WHOSE LAYER CANNOT BE MADE TO DRAW IT IS NOT A
+                  // CHOICE. It stays in the list (it is a truthful answer to
+                  // the word) and says why, but it cannot be clicked, cannot
+                  // be arrowed onto and cannot frame anything.
+                  const dead = r.p.need === 'never';
+                  const note = needLine(r.p);
+                  return (
+                    <button className="tl-sugg__row" role="option" aria-selected={sel} data-sel={String(sel)}
+                      data-need={r.p.need} disabled={dead} aria-disabled={dead || undefined}
+                      title={needTitle(r.p, r.h.name) || undefined}
+                      onMouseDown={e => e.preventDefault()}
+                      onMouseEnter={() => { if (!dead) setSSel(i); }}
+                      onClick={() => takeRow(r)}>
+                      <i className="tl-sugg__dot" style={{ background: catColor(r.h.cat, tokens()) }} aria-hidden="true" />
+                      <span className="tl-sugg__name">{r.h.name}</span>
+                      <span className="tl-sugg__meta">
+                        {r.h.end > r.h.start ? `${fmtBig(r.h.start)} – ${fmtY(r.h.end)}` : fmtBig(r.h.start)}
+                        {r.h.lane ? ` · ${r.h.lane}` : ''}
+                      </span>
+                      {note && <span className="tl-sugg__need">{note}</span>}
+                    </button>
+                  );
+                })() : r.k === 'l' ? (
+                  <button className="tl-sugg__row tl-sugg__row--lane" role="option" aria-selected={sel} data-sel={String(sel)}
+                    title={r.l.on
+                      ? `“${r.l.name}” is already a lane — find it in the panel.`
+                      : `Add “${r.l.name}” as a lane: ${r.l.n} marks.`}
                     onMouseDown={e => e.preventDefault()}
                     onMouseEnter={() => setSSel(i)}
                     onClick={() => takeRow(r)}>
-                    <i className="tl-sugg__dot" style={{ background: catColor(r.h.cat, tokens()) }} aria-hidden="true" />
-                    <span className="tl-sugg__name">{r.h.name}</span>
+                    <i className="tl-sugg__dot" aria-hidden="true"
+                      style={{ background: r.l.si === null ? 'var(--tl-ink-3)' : `var(--s${r.l.si + 1})` }} />
+                    <span className="tl-sugg__name">{r.l.name}</span>
                     <span className="tl-sugg__meta">
-                      {r.h.end > r.h.start ? `${fmtBig(r.h.start)} – ${fmtY(r.h.end)}` : fmtBig(r.h.start)}
-                      {r.h.lane ? ` · ${r.h.lane}` : ''}
+                      {r.l.on ? (r.l.hidden ? 'on the board · hidden' : 'on the board') : `add as a lane · ${r.l.n}`}
                     </span>
                   </button>
                 ) : (

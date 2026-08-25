@@ -4,10 +4,102 @@
 // at module load, because in Next the module is evaluated before the DOM exists.
 import {
   $, GEO, YEARS, CAPSULES, SelStore, TimeStore, clamp, fitCanvas, fmtY, featureAt, fontUI,
-  repaintOnFonts, showTip, hideTip, sovColor, tokens,
+  hexHsl, hexOklch, hslHex, maxChroma, mix, oklchHex, repaintOnFonts, showTip, hideTip,
+  sovColor, textW, tokens,
 } from './shared';
 import { SelCard } from './selcard';
-import { describe, polityForFeature, registerSubject, territoryAt } from './subject';
+import { describe, featureLabel, polityForFeature, registerSubject, territoryAt } from './subject';
+
+/* =============================================================================
+   THE ATLAS TINT — why 1492 was a soup, and what it is now.
+
+   MEASURED, not guessed. Three faults stacked, and only the first is the one
+   everybody sees:
+
+   1. THE POLYGONS GENUINELY OVERLAP, and only in 1492. Sampling the Americas
+      on a 1° grid: 1492 runs a mean stack depth of 1.96 with a maximum of 8 —
+      the source atlas (aourednik/historical-basemaps) draws indigenous nation
+      extents that legitimately nest and cross. 1600 and 1715 measure 1.00 flat
+      and 1279 measures 1.00. So the 881-feature year was not adjacent shapes
+      bleeding at the seams; it was up to eight translucent fills multiplying
+      on top of one another, which is the definition of mud. Alpha could never
+      have survived that, so the fills are now OPAQUE and the overlap is
+      resolved by Z-ORDER instead — see buildPaths.
+
+   2. THE COLOUR VARIATION WAS FREE JITTER. sovColor() hands an unfamous
+      sovereign `hsl(h 34-52% 52-66%)`, and HSL lightness is not lightness:
+      across 1492's 830 distinct sovereigns that band spans OKLab L 0.400 →
+      0.828 and chroma 0.055 → 0.203. Half the perceptual range and a 3.7×
+      chroma spread, at random, on adjacent ground — that is the psychedelia.
+      The territory pigment now keeps the sovereign's HUE (so one empire is
+      still one hue on the map, in the core sample's swatch and in the cube)
+      and BOUNDS the other two axes to a three-rung ladder inside one narrow
+      band: ΔL 0.09 total, one chroma. It is the same discipline the timeline's
+      catLadder applies, spelled for a field of contiguous fills rather than
+      for rectangles floating on whitespace.
+
+   3. THE LABELS NEVER CHECKED EACH OTHER. See labels() below.
+
+   The band is chosen where sRGB actually has room. The tightest hue holds
+   C 0.111 at L 0.78 and C 0.088 at the top rung L 0.825, so the 0.086 target
+   is reached at EVERY hue: the tint is genuinely uniform, nothing clips, and
+   therefore nothing drifts in hue — the one thing a sovereign's colour may not
+   lose. Dark ground gets its own band (L 0.395–0.485, C 0.066) for the same
+   reason, measured the same way.
+============================================================================= */
+const TINT = {
+  light: { L: [0.735, 0.780, 0.825], C: 0.086, neutral: 0.830 },
+  dark: { L: [0.395, 0.440, 0.485], C: 0.066, neutral: 0.375 },
+};
+/** Chroma for ground the atlas does not attribute to anyone. Not zero — it is
+ *  still land and still needs to sit on the sea — but far enough below the
+ *  0.086/0.066 the named powers get (ΔE ≈ 7) to read as "nobody said". */
+const NEUTRAL_C = 0.010;
+/** Which of the three rungs this sovereign takes. Decorrelated from the hue on
+ *  purpose: two neighbours that landed on near-identical hues then still have a
+ *  2-in-3 chance of differing by ΔL 0.045 (≈ΔE 4.5) as well as by their border. */
+const rungOf = (s: string) => {
+  let h = 0;
+  for (let i = 0; i < s.length; i++) h = (h * 31 + s.charCodeAt(i)) >>> 0;
+  h = (h ^ (h >>> 16)) >>> 0; h = Math.imul(h, 2246822507) >>> 0;
+  h = (h ^ (h >>> 13)) >>> 0; h = Math.imul(h, 3266489909) >>> 0;
+  return ((h ^ (h >>> 16)) >>> 0) % 3;
+};
+const _tint = new Map<string, [string, string]>();
+/** [fill, dimmed fill] for one sovereign on this ground. The dim is a real
+ *  colour mixed toward the sea, NEVER an alpha: alpha over eight stacked
+ *  polygons is the bug this whole file just walked away from. */
+function territoryFill(sov: string, light: boolean, sea: string): [string, string] {
+  const key = (light ? 'L' : 'D') + sov;
+  const hit = _tint.get(key); if (hit) return hit;
+  const band = light ? TINT.light : TINT.dark;
+  const named = (sov || '').trim() && (sov || '').trim() !== '?';
+  let L: number, C: number, h: number;
+  if (named) {
+    const src = sovColor(sov);                       // the sovereign's identity hue
+    const m = /^hsl\(([\d.]+)\s+([\d.]+)%\s+([\d.]+)%\)$/.exec(src);
+    const hex = m ? hslHex(+m[1], +m[2], +m[3]) : src;
+    h = hexOklch(hex)[2];
+    L = band.L[rungOf(sov)];
+    C = band.C;
+  } else {
+    // GROUND NOBODY IS NAMED FOR. 51 of 75 features at 3000 BCE, 91 of 617 at
+    // 1600 — the source atlas draws the shape and leaves the label blank, and
+    // the old palette handed all of it one arbitrary olive, which claimed
+    // there was a polity called '?' holding two thirds of the Bronze Age. It
+    // gets the sea's own hue at almost no chroma instead: unmistakably land,
+    // unmistakably unattributed, and the handful of named powers on those
+    // snapshots finally stand out of it.
+    h = hexOklch(sea)[2];
+    L = band.neutral;
+    C = NEUTRAL_C;
+  }
+  const fill = oklchHex(L, Math.min(C, maxChroma(L, h) * 0.97), h);
+  const out: [string, string] = [fill, mix(sea, fill, 0.30)];
+  if (_tint.size > 6000) _tint.clear();
+  _tint.set(key, out);
+  return out;
+}
 
 export const WorldMap = {
   cv: null as unknown as HTMLCanvasElement, ix: 11, k: 1, tx: 0, ty: 0, playing: null as any,
@@ -18,9 +110,19 @@ export const WorldMap = {
   ilon(x: number) { return x / this.MW * 360 - 180; },
   ilat(y: number) { return 85 - y / this.MH * 145; },
   paths: {} as Record<number, { f: any; p: Path2D }[]>,
+  /**
+   * THE DRAW ORDER IS BIGGEST FIRST, and that is load-bearing now that the
+   * fills are opaque. Where the source genuinely overlaps — 1492's indigenous
+   * nations, up to eight deep — the polygon left on top is the SMALLEST one
+   * covering the pixel, which is exactly the feature featureAt() returns for a
+   * click there. Before this the order was whatever the file happened to list,
+   * so the thing you saw and the thing you selected were two different
+   * territories about a third of the time in the Americas. Sorted once per
+   * snapshot, with the paths, and memoised with them.
+   */
   buildPaths(y: number) {
     if (this.paths[y]) return this.paths[y];
-    return this.paths[y] = GEO[y].map((f: any) => {
+    const built = GEO[y].map((f: any) => {
       const p = new Path2D();
       for (const r of f.rings) {
         p.moveTo(this.px(r[0]), this.py(r[1]));
@@ -29,6 +131,8 @@ export const WorldMap = {
       }
       return { f, p };
     });
+    built.sort((a: any, b: any) => b.f.area - a.f.area);
+    return this.paths[y] = built;
   },
   year() { return YEARS[this.ix]; },
 
@@ -65,6 +169,24 @@ export const WorldMap = {
     if (!s.polity) return null;
     const hit = territoryAt(s.polity, this.year());
     return hit.size ? hit : null;
+  },
+
+  /**
+   * THE ONE PATCH OF NAMELESS GROUND THAT WAS CLICKED — or nothing.
+   *
+   * A bare feature is normally highlighted through the sovereign strings the
+   * border data draws it with (see above). An UNNAMED one has no such string:
+   * its name and its sovereign are both '?', and 51 of the 75 features at 3000
+   * BCE share that. Joining on it dimmed the world to highlight two thirds of
+   * it, which is not a highlight. So a nameless feature is held by OBJECT
+   * IDENTITY instead — GEO's arrays are built once and never replaced — and
+   * only while the map is still on the snapshot it was clicked in.
+   */
+  soloFeature(): any | null {
+    const s = describe(SelStore.id);
+    if (!s || !s.minimal || !s.feat) return null;
+    if (s.sovs && s.sovs.length) return null;        // it has a string; join on it
+    return s.fyear === this.year() ? s.feat : null;
   },
 
   /** Move to the snapshot nearest a year WITHOUT writing TimeStore — the map
@@ -115,6 +237,7 @@ export const WorldMap = {
     // repaint can never leave the viewport parked off the edge of the world.
     this.fitPan(dim, !this._placed); this._placed = true;
     const { cw, ch, ctx, s0 } = dim; const T = tokens(); const y = this.year();
+    const hsl = hexHsl(T.sea); const lightGround = (hsl ? hsl[2] : 92) > 50;
     ctx.fillStyle = T.sea; ctx.fillRect(0, 0, cw, ch);
     ctx.save();
     ctx.translate(this.tx, this.ty); ctx.scale(this.k * s0, this.k * s0);
@@ -124,19 +247,31 @@ export const WorldMap = {
     for (let lat = -60; lat <= 85; lat += 30) { ctx.moveTo(0, this.py(lat)); ctx.lineTo(this.MW, this.py(lat)); }
     ctx.stroke(); ctx.globalAlpha = 1;
     const paths = this.buildPaths(y);
-    const hi = this.highlight();
-    const onSel = (f: any) => !!hi && (hi.has(f.sov) || hi.has(f.name));
+    const solo = this.soloFeature();
+    const hi = solo ? null : this.highlight();
+    const onSel = (f: any) => (solo ? f === solo : !!hi && (hi.has(f.sov) || hi.has(f.name)));
+    const dimming = !!solo || !!hi;
+    const nSel = solo ? 1 : (hi ? hi.size : 0);   // what the Reading capsule counts
+    /**
+     * ONE PASS, OPAQUE, IN Z-ORDER. Each territory is filled at full opacity
+     * and then hairlined, so adjacency reads as a BORDER instead of as a blend
+     * and eight-deep overlap reads as the smallest claim on top instead of as
+     * a bruise. Only the hairline still spends alpha — a shared edge stroked
+     * twice just comes out a shade firmer, which is what a shared edge is.
+     */
     ctx.lineWidth = 0.7 / (this.k * s0);
+    ctx.strokeStyle = T.stroke;
     for (const { f, p } of paths) {
-      const on = !hi || onSel(f);
-      ctx.fillStyle = sovColor(f.sov);
-      ctx.globalAlpha = hi ? (on ? .95 : .35) : .82;
+      const on = !dimming || onSel(f);
+      const [fill, dimmed] = territoryFill(f.sov, lightGround, T.sea);
+      ctx.globalAlpha = 1;
+      ctx.fillStyle = on ? fill : dimmed;
       ctx.fill(p, 'evenodd');
-      ctx.globalAlpha = hi && !on ? .28 : .9;
-      ctx.strokeStyle = T.stroke; ctx.stroke(p);
+      ctx.globalAlpha = on ? .85 : .3;
+      ctx.stroke(p);
     }
     // the selection outline, drawn last so it is never cut by a neighbour
-    if (hi) {
+    if (dimming) {
       ctx.globalAlpha = 1;
       ctx.lineWidth = 1.7 / (this.k * s0);
       ctx.strokeStyle = T.ink;
@@ -144,19 +279,7 @@ export const WorldMap = {
       ctx.lineWidth = 0.7 / (this.k * s0);
     }
     ctx.globalAlpha = 1;
-    const scale = this.k * s0;
-    const labeled = [...paths].sort((a, b) => b.f.area - a.f.area).slice(0, 60);
-    ctx.font = fontUI(11 / scale, 600);              // a place name is language
-    ctx.textAlign = 'center';
-    let drawn = 0;
-    for (const { f } of labeled) {
-      const wpx = f.lw / 360 * this.MW * scale * 1.6;
-      if (wpx < 52 || !f.lc || f.name === '?') continue;
-      const cx = this.px(f.lc[0]), cy = this.py(f.lc[1]);
-      ctx.lineWidth = 3 / scale; ctx.strokeStyle = T.bg; ctx.globalAlpha = .55; ctx.strokeText(f.name, cx, cy);
-      ctx.globalAlpha = .95; ctx.fillStyle = T.ink; ctx.fillText(f.name, cx, cy);
-      if (++drawn >= (14 + this.k * 10)) break;
-    }
+    this.labels(ctx, paths, dim, T);
     ctx.restore(); ctx.textAlign = 'left';
     $('#yearLabel')!.textContent = fmtY(y);
     ($('#yearSlider') as HTMLInputElement).value = String(this.ix);
@@ -168,13 +291,88 @@ export const WorldMap = {
     let lede = '';
     if (sel && (sel.polity || sel.minimal)) {
       const when = TimeStore.year === y ? fmtY(y) : `${fmtY(TimeStore.year)} (nearest snapshot ${fmtY(y)})`;
-      const n = hi ? hi.size : 0;
+      const n = nSel;
       const span = `${fmtY(sel.start)} – ${fmtY(sel.end)}`;
       lede = n
         ? `<b>${sel.name}</b> · ${span} · ${n} ${n === 1 ? 'territory' : 'territories'} highlighted in ${when}.<br>`
         : `<b>${sel.name}</b> · ${span} · <b>not on the map in ${when}</b>.<br>`;
     }
     $('#capsule')!.innerHTML = `${lede}${near}<b>The world in ${fmtY(y)}.</b> ${CAPSULES[String(y)] || ''}`;
+  },
+  /**
+   * PLACE NAMES — and the four rules that stop 881 of them from becoming a
+   * second kind of noise.
+   *
+   * The old pass took the 60 largest features in the WORLD, drew a name on any
+   * whose label box cleared 52px, and stopped after 14 + 10k of them. Nothing
+   * in that ever asked whether a name was on screen or whether it landed on
+   * top of another one, so 1279's North America carried "Desert hunter-
+   * gatherers", "Great Basin hunters" and "Eastern North American hunter-
+   * gatherers" stacked into one illegible smear — and at any zoom most of the
+   * budget was spent on names outside the viewport that were never painted.
+   *
+   *   1. ON SCREEN FIRST. Candidates are clipped to the visible world rect
+   *      before they are ranked, so zooming into the Andes spends the whole
+   *      budget on the Andes.
+   *   2. BIGGEST FIRST. Ranked by extent, so when two names cannot both be
+   *      drawn the larger territory keeps its name — the graceful degradation
+   *      a reader can predict.
+   *   3. THE NAME MUST FIT THE GROUND. A territory has to be worth ~30px and
+   *      the name may not run more than 2.4× its width; an unnamed feature
+   *      ('?' in the source atlas) is never labelled at all, and a name is
+   *      never painted twice (1600 draws "Ottoman Empire" as two features).
+   *   4. NOTHING COLLIDES, EVER. Every accepted label reserves its box; a
+   *      candidate that intersects one already placed is dropped, not nudged.
+   *      Dropping is honest — a nudged label points at the wrong ground.
+   *
+   * All of it in world units, because that is the space the canvas is in while
+   * the transform is up; the font is 11/scale so its metrics are too.
+   */
+  labels(ctx: CanvasRenderingContext2D, paths: { f: any; p: Path2D }[], dim: { cw: number; ch: number; s0: number }, T: any) {
+    const scale = this.k * dim.s0;
+    const font = fontUI(11 / scale, 600);            // a place name is language
+    ctx.font = font;
+    ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
+    const x0 = -this.tx / scale, x1 = (dim.cw - this.tx) / scale;
+    const y0 = -this.ty / scale, y1 = (dim.ch - this.ty) / scale;
+    const cand: { f: any; nm: string; cx: number; cy: number }[] = [];
+    for (const { f } of paths) {
+      // '?' is the atlas's "no name"; so is a run of spaces, which is what one
+      // feature actually carries — drawn, it would spend a slot on nothing.
+      const nm = typeof f.name === 'string' ? f.name.trim() : '';
+      if (!f.lc || !nm || nm === '?') continue;
+      const cx = this.px(f.lc[0]), cy = this.py(f.lc[1]);
+      if (cx < x0 || cx > x1 || cy < y0 || cy > y1) continue;
+      cand.push({ f, nm, cx, cy });
+    }
+    cand.sort((a, b) => b.f.area - a.f.area);
+    const pad = 3 / scale, halfH = 7 / scale;
+    const boxes: number[][] = [];
+    const seen = new Set<string>();
+    for (const c of cand) {
+      if (boxes.length >= 44) break;                 // a ceiling on the ink, not on the truth
+      if (seen.has(c.nm)) continue;
+      const fw = c.f.lw / 360 * this.MW;             // the ground's own width, world units
+      if (fw * scale < 30) continue;                 // too small on screen to own a name
+      const w = textW(ctx, c.nm, font);
+      if (w > fw * 2.4) continue;                    // the name would swamp the ground
+      const hw = w / 2 + pad, hh = halfH + pad;
+      const b = [c.cx - hw, c.cy - hh, c.cx + hw, c.cy + hh];
+      // A HALF-LABEL IS A COLLISION WITH THE FRAME. The centre test above only
+      // says the anchor is on screen; a long name anchored two pixels inside
+      // the left edge still runs off it, which is how "Madagascar" came to be
+      // painted as "adagascar" against the bezel.
+      if (b[0] < x0 || b[2] > x1 || b[1] < y0 || b[3] > y1) continue;
+      let clash = false;
+      for (const o of boxes) if (b[0] < o[2] && b[2] > o[0] && b[1] < o[3] && b[3] > o[1]) { clash = true; break; }
+      if (clash) continue;
+      boxes.push(b); seen.add(c.nm);
+      ctx.lineWidth = 3 / scale; ctx.strokeStyle = T.bg; ctx.globalAlpha = .55;
+      ctx.strokeText(c.nm, c.cx, c.cy);
+      ctx.globalAlpha = .95; ctx.fillStyle = T.ink;
+      ctx.fillText(c.nm, c.cx, c.cy);
+    }
+    ctx.globalAlpha = 1;
   },
   screenToLonLat(sx: number, sy: number) {
     const dim = this.size()!; const s0 = dim.s0;
@@ -225,8 +423,13 @@ export const WorldMap = {
         const r = cv.getBoundingClientRect();
         const [lon, lat] = this.screenToLonLat(e.clientX - r.left, e.clientY - r.top);
         const f = (lon >= -180 && lon <= 180 && lat >= -60 && lat <= 85) ? featureAt(this.year(), lon, lat) : null;
-        if (f) showTip(e.clientX, e.clientY, `<div class=t>${f.name}</div>${f.sov !== f.name ? `<div class=m>part of <b>${f.sov}</b></div>` : ''}<div class=m>${fmtY(this.year())} · click to select</div>`);
-        else hideTip();
+        // The hover name is the SAME name the card will show — nameless ground
+        // says so here too rather than hovering a bare "?".
+        if (f) {
+          const nm = featureLabel(f, this.year());
+          const of = nm.named && f.sov !== f.name && f.sov && f.sov !== '?' ? `<div class=m>part of <b>${f.sov}</b></div>` : '';
+          showTip(e.clientX, e.clientY, `<div class=t>${nm.title}</div>${of}<div class=m>${fmtY(this.year())} · click to select</div>`);
+        } else hideTip();
       }
     });
     /**
@@ -253,24 +456,30 @@ export const WorldMap = {
       const f = inWorld ? featureAt(this.year(), lon, lat) : null;
       if (!f) { SelCard.select(null, null); return; }
       const y = this.year();
-      const named = f.name && f.name !== '?';
-      const label = named ? f.name : (f.sov && f.sov !== '?' ? f.sov : `${lat.toFixed(1)}, ${lon.toFixed(1)}`);
-      const pt = { lon, lat, label };
+      const nm = featureLabel(f, y);
+      // The PLACE label is a place ("this point" where the atlas has no name),
+      // never the subject's sentence — Core.drill prints it as "Drilling at …".
+      const pt = { lon, lat, label: nm.where };
       // The card dodges its anchor, so a point anchor is a small box AT the
       // cursor: the card lands beside the click, never under it.
       const rect = new DOMRect(e.clientX - 7, e.clientY - 7, 14, 14);
-      const pid = polityForFeature(f.sov, f.name, y);
+      const pid = nm.named ? polityForFeature(f.sov, f.name, y) : null;
       if (pid) { SelCard.select('polity:' + pid, rect, pt); return; }
       // No curated record for this ground. Mint the minimal subject the core
       // sample would show anyway: what it is called, whose it is, and the
-      // stratum of years this snapshot stands for.
+      // stratum of years this snapshot stands for. NAMELESS ground gets an id
+      // of its own per patch — '?' is not an identity, and two clicks on two
+      // different anonymous polygons are two different subjects.
       const i = YEARS.indexOf(y);
-      const id = `feature:${y}:${f.sov}|${f.name}`;
+      const id = nm.named
+        ? `feature:${y}:${f.sov}|${f.name}`
+        : `feature:${y}:@${lon.toFixed(2)},${lat.toFixed(2)}`;
       registerSubject({
-        id, name: label, start: y, end: (i >= 0 && i < YEARS.length - 1) ? YEARS[i + 1] : 2026,
-        cat: 'power', type: 'zone', note: f.sov && f.sov !== f.name ? `Part of ${f.sov}.` : '',
+        id, name: nm.title, start: y, end: (i >= 0 && i < YEARS.length - 1) ? YEARS[i + 1] : 2026,
+        cat: 'power', type: 'zone',
+        note: nm.named && f.sov && f.sov !== f.name ? `Part of ${f.sov}.` : '',
         lvl: 4, peakYear: y, hasCurve: false, polity: null, band: null,
-        place: pt, sovs: [f.sov, f.name], minimal: true,
+        place: pt, sovs: nm.sovs, minimal: true, feat: f, fyear: y,
       });
       SelCard.select(id, rect, pt);
     });
