@@ -1148,14 +1148,6 @@ html:has(body.tl-body) { height: 100%; overflow: hidden; }
   overflow: hidden;
   min-width: 0;
 }
-.tl-scale__bands {
-  position: absolute; inset: 0;
-  background: linear-gradient(90deg,
-    var(--tl-era-a) 0 32%,
-    var(--tl-era-b) 32% 58%,
-    var(--tl-era-a) 58% 78%,
-    var(--tl-era-b) 78% 100%);
-}
 .tl-scale__era {
   position: absolute;
   top: var(--tl-space-3);

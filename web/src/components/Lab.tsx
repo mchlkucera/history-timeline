@@ -2310,7 +2310,11 @@ export default function Lab() {
           <div className="tl-scale" id="railScale" data-inert={String(meta.rail === 'legend')}
             onPointerDown={onRailDown} onPointerMove={onRailMove}
             onPointerUp={onRailUp} onPointerCancel={onRailUp}>
-            <div className="tl-scale__bands" aria-hidden="true" />
+            {/* The era bands are gone. They shaded the scale at a FIXED
+                32/58/78% of its width regardless of what years those positions
+                actually held, so the stripes claimed era boundaries they had no
+                knowledge of — decoration wearing the costume of data. The ticks
+                and the labels below carry the structure, and they are true. */}
             <span className="tl-scale__label tl-scale__label--start" data-edge>3000 BCE</span>
             {([[-1000, '1000 BCE', true], [1, '1 CE', false], [500, '500', true], [1000, '1000', true],
             [1500, '1500', true], [1800, '1800', false], [1900, '1900', true]] as [number, string, boolean][])

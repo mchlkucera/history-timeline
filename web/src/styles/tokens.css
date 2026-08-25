@@ -141,8 +141,6 @@
   --tl-coast:        rgba(18, 24, 26, 0.30);
 
   /* Era wash on the time rail — 5% alpha, never more */
-  --tl-era-a:        rgba(18, 24, 26, 0.055);
-  --tl-era-b:        rgba(18, 24, 26, 0.000);
 
   /* ── Typography ────────────────────────────────────────────────────────── */
   --tl-font-ui:    "Instrument Sans", "Helvetica Neue", -apple-system, BlinkMacSystemFont, "Segoe UI", system-ui, sans-serif;
@@ -301,8 +299,6 @@
     --tl-land:         #1E2A2C;
     --tl-coast:        rgba(222, 230, 228, 0.26);
 
-    --tl-era-a:        rgba(222, 230, 228, 0.05);
-    --tl-era-b:        rgba(222, 230, 228, 0.000);
 
     --tl-shadow-panel: 0 1px 2px rgba(0, 0, 0, 0.5), 0 10px 28px -10px rgba(0, 0, 0, 0.7);
     --tl-shadow-pop:   0 2px 6px rgba(0, 0, 0, 0.55), 0 20px 48px -14px rgba(0, 0, 0, 0.8);
@@ -362,8 +358,6 @@
   --tl-land:         #1E2A2C;
   --tl-coast:        rgba(222, 230, 228, 0.26);
 
-  --tl-era-a:        rgba(222, 230, 228, 0.05);
-  --tl-era-b:        rgba(222, 230, 228, 0.000);
 
   --tl-shadow-panel: 0 1px 2px rgba(0, 0, 0, 0.5), 0 10px 28px -10px rgba(0, 0, 0, 0.7);
   --tl-shadow-pop:   0 2px 6px rgba(0, 0, 0, 0.55), 0 20px 48px -14px rgba(0, 0, 0, 0.8);
