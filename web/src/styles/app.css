@@ -467,9 +467,43 @@ body.tl-dragging { cursor: grabbing; }
    .tl-switch and .tl-gist both carry min-width:0, so flex shrinkage was being
    split between them and the switcher's items overflowed *visibly* on top of
    the seg. All shrinkage must land on the gist, which already ellipsises and
-   disappears entirely below 1180px. */
-.tl-rail__mid > .tl-switch { flex: none; overflow-x: auto; overflow-y: hidden; scrollbar-width: none; }
-.tl-rail__mid > .tl-switch::-webkit-scrollbar { display: none; }
+   disappears entirely below 1180px.
+
+   EXCEPT THE GIST IS NOT RENDERED. Lab.tsx never mounts a .tl-gist — the one
+   line of view blurb lives in the field notes — so "all shrinkage lands on the
+   gist" resolved to "nothing in this row can shrink at all", and the row simply
+   ran past the end of its grid column. Measured at a 1024px viewport with
+   nothing selected: .tl-rail__mid's column ends at x=692 and the seg's right
+   edge is at x=739, i.e. Horizon was already printing 35px INSIDE the search
+   field. (Look at design/shots or any 1024px capture from before this change:
+   "Horiz…" runs under the magnifier.) The chip below only made an existing
+   collision worse, so it gets fixed rather than dodged.
+
+   THE ROW IS THE SCROLLER NOW, AT EVERY WIDTH. It already was below 1024 —
+   shell.css §13 hands it overflow-x, a snap axis and an edge mask there, and
+   Lab.tsx's readOvf() has always measured this element and published data-ovf
+   off it. Promoting that to the base means one mechanism instead of two: the
+   nested scroller on .tl-switch goes (a scroller that is also flex:none can
+   never actually scroll — it just refuses to shrink and overflows its parent),
+   the row clips at its own column edge, and the fade and the chevrons follow
+   the same measured state they always did. */
+.tl-rail__mid {
+  overflow-x: auto;
+  overflow-y: hidden;
+  scrollbar-width: none;
+  --tl-ovf-l: 0px;
+  --tl-ovf-r: 0px;
+  mask-image: linear-gradient(90deg,
+      transparent 0, #000 var(--tl-ovf-l),
+      #000 calc(100% - var(--tl-ovf-r)), transparent 100%);
+  -webkit-mask-image: linear-gradient(90deg,
+      transparent 0, #000 var(--tl-ovf-l),
+      #000 calc(100% - var(--tl-ovf-r)), transparent 100%);
+}
+.tl-rail__mid::-webkit-scrollbar { display: none; }
+.tl-rail__mid[data-ovf~="l"] { --tl-ovf-l: 30px; }
+.tl-rail__mid[data-ovf~="r"] { --tl-ovf-r: 34px; }
+.tl-rail__mid > .tl-switch { flex: none; overflow: visible; }
 .tl-rail__mid > .tl-seg { flex: none; }
 .tl-rail__mid > .tl-gist { flex: 1 1 0; }
 
@@ -851,82 +885,75 @@ body.tl-dragging { cursor: grabbing; }
   .tl-panel__bd .tl-disc__bd { gap: var(--tl-space-3); padding-top: var(--tl-space-3); }
 }
 
-/* The rail is the containing block for the two overflow chevrons below, and
-   they are display:none everywhere the switcher row is NOT a scroller — which
-   is also what keeps them out of the rail's three-column grid, where two extra
-   in-flow children would wrap onto a row of their own. */
-.tl-rail { position: relative; }
-.tl-rail__more { display: none; }
+/* ── THE OVERFLOW, MADE LEGIBLE — AT EVERY WIDTH NOW ──────────────────────────
+   At 390px the switcher row wants 623px and has 390: six group names fill it
+   and the Map group's seg (Borders / People / Horizon) begins 3px past the
+   right edge. It cannot be made to fit — see the note on readOvf() in Lab.tsx —
+   so the row scrolls, and the job of these rules is to make that visible
+   instead of leaving three controls silently amputated.
 
-/* shell.css moves .tl-rail__mid onto its own scrolling row at 1023px. These
-   two rules are the app-side half of that: the rules above make the switcher
-   flex:none with its own overflow so all shrinkage lands on the gist, and a
-   nested scroller inside a scrolling row would swallow the seg instead of
-   letting the row carry it. app.css loads after shell.css, so the override has
-   to be here or it silently loses. */
+   shell.css fades the right edge unconditionally. Unconditional is the bug: on
+   the Map view the last group name ends 22px short of the edge, so the 28px
+   fade lands on bare rail and says nothing, and once you HAVE scrolled to the
+   end it goes on lying about content that is no longer there. The two fade
+   widths (above) are variables Lab.tsx's measured `data-ovf` sets, so a side
+   fades exactly when that side runs on — and never otherwise.
+
+   AND A FADE ALONE IS STILL ONLY A HINT. The chevron is the affordance: a real
+   control, sitting in the faded strip, that scrolls the row when it is pressed.
+   It is shown by the SIBLING selector off the row's own state, so the button's
+   existence and the fade under it can never disagree.
+
+   BOTH USED TO STOP AT 1023px, because that was the only width where the row
+   was a scroller. The row is a scroller everywhere now (see the block above),
+   so the affordance goes everywhere with it — otherwise the 1024–1250px band,
+   which is exactly where a selection chip squeezes the row hardest, would
+   scroll with no fade and no control.
+
+   PLACED IN THE GRID RATHER THAN ABSOLUTELY. Absolute positioning anchored
+   these to the RAIL, which is the same box as the switcher row only while the
+   switcher owns a full-width row of its own. Above 1024 the row is one column
+   of four, and `right: 0` would have put the chevron on top of the search
+   field. A grid item in the row's own cell lands on the row's own edges at
+   every width, and needs no containing block to be true. */
+.tl-rail { position: relative; }
+.tl-rail__more {
+  display: none;
+  grid-row: 1;
+  grid-column: 2;
+  z-index: 1;
+  place-items: center;
+  align-self: stretch;
+  width: 30px;
+  padding: 0;
+  border: 0;
+  background: none;
+  color: var(--tl-ink-2);
+  cursor: pointer;
+}
+.tl-rail__more svg { width: 14px; height: 14px; display: block; }
+.tl-rail__more--l { justify-self: start; }
+.tl-rail__more--r { justify-self: end; }
+.tl-rail__mid[data-ovf~="l"] ~ .tl-rail__more--l,
+.tl-rail__mid[data-ovf~="r"] ~ .tl-rail__more--r { display: grid; }
+
 @media (max-width: 1023px) {
-  .tl-rail__mid > .tl-switch { overflow: visible; }
   /* The seg is the payload of the second row and must not be the thing that
      falls off the end, so it keeps clearance ahead of the row's 28px fade mask
      — as margin for the resting layout, and as scroll-margin so that
      scrollIntoView() (Lab.tsx) parks it clear of the fade rather than under
      it. */
   .tl-rail__mid > .tl-seg { margin-right: var(--tl-space-6); scroll-margin-inline-end: 34px; }
-
-  /* ── THE OVERFLOW, MADE LEGIBLE ────────────────────────────────────────────
-     At 390px this row wants 623px and has 390: six group names fill it and the
-     Map group's seg (Borders / People / Horizon) begins 3px past the right
-     edge. It cannot be made to fit — see the note on readOvf() in Lab.tsx — so
-     the row scrolls, and the job of these rules is to make that visible instead
-     of leaving three controls silently amputated.
-
-     shell.css fades the right edge unconditionally. Unconditional is the bug:
-     on the Map view the last group name ends 22px short of the edge, so the
-     28px fade lands on bare rail and says nothing, and once you HAVE scrolled
-     to the end it goes on lying about content that is no longer there. Here the
-     two fade widths are variables Lab.tsx's measured `data-ovf` sets, so a side
-     fades exactly when that side runs on — and never otherwise. */
-  .tl-rail__mid {
-    --tl-ovf-l: 0px;
-    --tl-ovf-r: 0px;
-    mask-image: linear-gradient(90deg,
-        transparent 0, #000 var(--tl-ovf-l),
-        #000 calc(100% - var(--tl-ovf-r)), transparent 100%);
-    -webkit-mask-image: linear-gradient(90deg,
-        transparent 0, #000 var(--tl-ovf-l),
-        #000 calc(100% - var(--tl-ovf-r)), transparent 100%);
-  }
-  .tl-rail__mid[data-ovf~="l"] { --tl-ovf-l: 30px; }
-  .tl-rail__mid[data-ovf~="r"] { --tl-ovf-r: 34px; }
-
-  /* And a fade alone is still only a hint. The chevron is the affordance: a
-     real control, sitting in the faded strip, that scrolls the row when it is
-     pressed — which is what a phone reader needs, because the row is 34px tall
-     and a horizontal drag inside it is easy to miss and easy to mistake for a
-     page swipe. It is shown by the SIBLING selector off the row's own state, so
-     the button's existence and the fade under it can never disagree. */
-  .tl-rail__more {
-    position: absolute;
-    bottom: 0;
-    z-index: 1;
-    display: none;
-    place-items: center;
-    width: 30px;
-    height: var(--tl-switch-row);
-    padding: 0;
-    border: 0;
-    background: none;
-    color: var(--tl-ink-2);
-    cursor: pointer;
-  }
-  .tl-rail__more svg { width: 14px; height: 14px; display: block; }
-  .tl-rail__more--l { left: 0; }
-  .tl-rail__more--r { right: 0; }
-  .tl-rail__mid[data-ovf~="l"] ~ .tl-rail__more--l,
-  .tl-rail__mid[data-ovf~="r"] ~ .tl-rail__more--r { display: grid; }
+  /* The switcher has a row of its own here, so the chevrons follow it down. */
+  .tl-rail__more { grid-row: 2; grid-column: 1 / -1; }
 }
 
 @media (max-width: 759px) {
+  /* The selection chip takes row 2 here (shell.css §13), pushing the switcher
+     row to 3 — and the chevrons are pinned to the switcher row, so they move
+     with it or they end up floating over the chip. */
+  .tl-app[data-sel="on"] .tl-rail__more { grid-row: 3; }
+
   .tl-doc { padding: var(--tl-space-6) var(--tl-space-5) var(--tl-space-11); }
   /* Panels become bottom sheets in shell.css. Only the primary one survives;
      stacking four sheets on a phone would bury the canvas entirely. */

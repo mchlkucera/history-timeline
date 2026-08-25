@@ -89,9 +89,23 @@ html:has(body.tl-body) { height: 100%; overflow: hidden; }
 
 /* ── 02  Top rail ─────────────────────────────────────────────────────────── */
 
+/* FOUR COLUMNS, NOT THREE: mark · switcher · SELECTION · end group.
+   The selection chip (§03b) needs a cell of its own so that appearing can
+   never move the nav (column 2 is the 1fr and absorbs it) and can never
+   shorten the search field (column 4 is content-sized and stays put).
+
+   THE FOURTH TRACK IS DECLARED ONLY WHILE SOMETHING IS IN IT. A grid gap is
+   drawn between two tracks whether or not either holds anything, so a
+   permanently-declared empty fourth column left a 12px gap hanging off the
+   right-hand end of the rail and pulled the whole end group — search included —
+   12px inboard; selecting something then snapped it back. Measured, not
+   theorised: .tl-rail__end sat at x=1108 with nothing selected and x=1120 with
+   Rome selected, at a 1440px viewport. A chip whose arrival shoves the search
+   sideways is the one thing the brief rules out by name, so the template
+   follows the state. */
 .tl-rail {
   display: grid;
-  grid-template-columns: auto minmax(0, 1fr) auto;
+  grid-template-columns: auto minmax(0, 1fr) auto auto;
   align-items: center;
   column-gap: var(--tl-space-5);
   min-height: var(--tl-rail-top);
@@ -100,6 +114,18 @@ html:has(body.tl-body) { height: 100%; overflow: hidden; }
   border-bottom: var(--tl-border) solid var(--tl-rule);
   z-index: var(--tl-z-rail);
 }
+.tl-app:not([data-sel]) .tl-rail { grid-template-columns: auto minmax(0, 1fr) auto; }
+/* EVERY RAIL CHILD IS PLACED BY HAND, not left to auto-placement. The two
+   overflow chevrons (app.css .tl-rail__more) are grid items in the switcher
+   row's own cell now, and an explicitly-placed item makes the auto-placement
+   cursor step over the cell it occupies — which would have pushed the switcher
+   itself into column 3 the moment a chevron appeared. Naming all four is both
+   the fix and the documentation. */
+.tl-rail > .tl-mark      { grid-row: 1; grid-column: 1; }
+.tl-rail > .tl-rail__mid { grid-row: 1; grid-column: 2; }
+.tl-rail > .tl-selchip   { grid-row: 1; grid-column: 3; }
+.tl-rail > .tl-rail__end { grid-row: 1; grid-column: 4; }
+.tl-app:not([data-sel]) .tl-rail > .tl-rail__end { grid-column: 3; }
 
 /* The mark. 15px. The only place the serif appears in the entire system. */
 .tl-mark {
@@ -115,16 +141,34 @@ html:has(body.tl-body) { height: 100%; overflow: hidden; }
   width: 22px; height: 22px;
   border: var(--tl-border) solid var(--tl-rule-strong);
   border-radius: var(--tl-radius-xs);
-  color: var(--tl-ink);          /* identity, not index — demoted from accent */
+  color: var(--tl-ink-2);        /* identity, not index — and not the loudest
+                                    thing in the rail either; see __word */
   flex: none;
 }
 .tl-mark__glyph svg { display: block; width: 14px; height: 14px; }
+/*
+   THE MARK IS NOT A TAB, AND IT USED TO LOOK LIKE THE LOUDEST ONE.
+
+   The founder, on the Map view: "make sure on the map the 'timeline' is not
+   shown white." He is right, and it is literal — the word "Timeline" appears
+   TWICE in this rail, as the wordmark and as a group tab, and the wordmark was
+   the one drawn at full --tl-ink, 15px, four steps larger than the 11px tabs.
+   So on the Map view the largest, brightest word in the chrome said TIMELINE
+   and the tab you were actually on said MAP two shades quieter. Whatever the
+   underline did afterwards, the eye had already answered the question wrong.
+
+   The mark is identity: it never changes, so it never carries information, so
+   it has no business outranking the one thing in the rail that does. Demoted
+   to --tl-ink-2 — still the serif cartouche, still legible, no longer a
+   contender. The active tab is now the brightest ink in the rail, which is
+   the only arrangement in which "where am I" reads at a glance.
+*/
 .tl-mark__word {
   font-family: var(--tl-font-mark);
   font-size: var(--tl-text-md);
   line-height: 1;
   letter-spacing: 0.01em;
-  color: var(--tl-ink);
+  color: var(--tl-ink-2);
 }
 
 .tl-rail__mid {
@@ -169,6 +213,114 @@ html:has(body.tl-body) { height: 100%; overflow: hidden; }
 }
 
 
+/* ── 02b  The selection chip ──────────────────────────────────────────────────
+
+   "We should clearly see I'm in Roman Empire, on the Map view or on Timeline
+   view."
+
+   The selection is GLOBAL (SelStore) and it survives every view switch, which
+   is exactly why it needed a home in the chrome. The selection card floats
+   beside whatever you clicked, is dismissible, and is suppressed outright on
+   Connections — so the app could hold Rome selected, dim half the world for
+   it, and have nothing anywhere in the frame that named what was selected. On
+   the map that reads as "some territory is highlighted"; after a switch to
+   Timeline it reads as nothing at all.
+
+   This is not a second card. It carries four things and no more: a dot, a
+   name, the span, and a way out. Everything else about the subject is the
+   card's job, and the chip's own button re-opens it.
+
+   WHERE IT LIVES, AND WHY. Its own grid track in the top rail, between the
+   switcher and the end group (see .tl-rail). Three properties fall out of that
+   one decision:
+     · it cannot crowd the search — the search sits in the next track, which is
+       content-sized, so the chip's arrival is absorbed by the 1fr track of
+       empty rail to its left and the field does not move by a pixel;
+     · it cannot displace the nav — the nav is left-aligned in that same 1fr;
+     · it is in the same place on all eleven views, because the top rail is,
+       and it is a sibling of the search rather than a thing inside it.
+   It never changes the rail's HEIGHT, which matters more than it looks: the
+   stage is the 1fr row of .tl-app and the renderers size their canvases from
+   its box, so a chip that grew the rail would silently mis-size eleven
+   canvases until the next window resize.
+
+   THE DOT QUOTES THE DATA PALETTE, and that is the one crossing the design
+   system sanctions (§3): a legend key or chip dot may quote a --tl-cat-* hue
+   so the reader can match it to the mark on the canvas. It is set as --tl-dot,
+   inline, as `var(--tl-cat-power)` rather than as a resolved hex — so it
+   re-reads itself on a theme switch instead of freezing whichever theme was
+   live when the chip mounted. Nothing else here is coloured; the accent is
+   not spent on it, because the accent means where you are in TIME and this
+   says what you are looking AT. */
+.tl-selchip {
+  display: inline-flex;
+  align-items: stretch;
+  min-width: 0;
+  max-width: min(280px, 26vw);
+  height: var(--tl-ctl-sm);
+  border: var(--tl-border) solid var(--tl-rule);
+  border-radius: var(--tl-radius-xs);
+  background: var(--tl-surface-2);
+  overflow: hidden;
+}
+.tl-selchip__main {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--tl-space-4);
+  min-width: 0;
+  flex: 1 1 auto;
+  padding: 0 var(--tl-space-4);
+  border: 0;
+  background: none;
+  color: var(--tl-ink);
+  font-family: inherit;
+  font-size: var(--tl-text-sm);
+  text-align: left;
+  cursor: pointer;
+  transition: background var(--tl-dur-fast) var(--tl-ease);
+}
+.tl-selchip__main:hover { background: var(--tl-hover); }
+.tl-selchip__dot {
+  width: 7px; height: 7px;
+  flex: none;
+  border-radius: var(--tl-radius-full);
+  background: var(--tl-dot, var(--tl-ink-3));
+}
+.tl-selchip__name {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-weight: var(--tl-w-medium);
+}
+/* A span is a measurement, so it is mono and tabular — §4's one rule. */
+.tl-selchip__yrs {
+  flex: none;
+  font-family: var(--tl-font-mono);
+  font-size: var(--tl-text-2xs);
+  font-variant-numeric: tabular-nums;
+  letter-spacing: 0;
+  color: var(--tl-ink-3);
+}
+.tl-selchip__x {
+  flex: none;
+  width: 24px;
+  display: grid;
+  place-items: center;
+  padding: 0;
+  border: 0;
+  border-left: var(--tl-border) solid var(--tl-rule);
+  background: none;
+  color: var(--tl-ink-3);
+  cursor: pointer;
+  transition: background var(--tl-dur-fast) var(--tl-ease), color var(--tl-dur-fast) var(--tl-ease);
+}
+.tl-selchip__x:hover { background: var(--tl-hover); color: var(--tl-ink); }
+.tl-selchip__x svg { display: block; width: 11px; height: 11px; }
+/* Rail children keep their focus ring inside the rail, like the switcher. */
+.tl-selchip :is(.tl-selchip__main, .tl-selchip__x):focus-visible { outline-offset: -2px; }
+
+
 /* ── 03  View switcher ────────────────────────────────────────────────────── */
 
 .tl-switch {
@@ -194,20 +346,77 @@ html:has(body.tl-body) { height: 100%; overflow: hidden; }
   color: var(--tl-ink-3);
   transition: color var(--tl-dur-fast) var(--tl-ease);
 }
-.tl-switch__item:hover { color: var(--tl-ink-2); }
-.tl-switch__item[aria-selected="true"] { color: var(--tl-ink); }
-/* A 2px ink underline sitting over the rail's own hairline — not a pill. */
+.tl-switch__item:hover { background: var(--tl-hover); color: var(--tl-ink-2); }
+
+/* ── THE ACTIVE TAB, AND WHY IT NEEDED THREE CUES INSTEAD OF ONE ─────────────
+   The founder: "now its muddy." Diagnosed rather than guessed — the six tabs
+   are one silhouette repeated six times (11px, uppercase, 600, .08em), so the
+   ONLY thing separating the one you are on from the five you are not was a
+   step on the ink ramp (--tl-ink vs --tl-ink-3) plus a 2px rule 30px below the
+   label, inset 8px from the word, lying exactly on top of the rail's own
+   bottom hairline. Reading which tab was live therefore meant COMPARING TWO
+   GREYS across 700px of rail, which is a measurement, not a glance — and the
+   underline, being the same colour and the same 1-2px weight as the hairline it
+   sat on, read as a thickening of the rail's edge rather than as a mark under
+   a word. Meanwhile the sub-switcher beside it (§ Segmented control) carried a
+   border, an inset ground, a raised plate AND a shadow, so the SUBORDINATE
+   level looked more selected than the primary one. That inversion is most of
+   the mud.
+
+   Fixed with three cues that stack instead of one that had to carry it all —
+   ground, contrast, and a rule:
+     · a filled plate (--tl-surface-3, the token whose stated job is "pressed /
+       active control fill"), full rail height, square, flush to both edges. A
+       cell that is filled while its neighbours are not is a shape difference,
+       and shape survives the glance that a grey comparison does not;
+     · the ink step, kept, now reading against that plate rather than against
+       the same ground as its neighbours;
+     · the 2px rule, kept — but FULL BLEED to the plate's edges, so it caps the
+       plate as its bottom edge instead of floating as a short dash near a
+       hairline.
+
+   NOT with the accent. --tl-accent means "where you are IN TIME" — the rail
+   index and the cursor year — and spending it on the nav would leave the index
+   sharing its one signal with six tabs. Everything above is the neutral ramp
+   and the hairline, which is exactly what §7's "states without hue" prescribes.
+
+   NOT with a weight change either, though that was the obvious fourth cue:
+   Instrument Sans is proportional, so 600 -> 700 on the live tab reflows every
+   tab to its right by a few pixels on every switch, and below 1024 the row is
+   a scroll-snap scroller where that jitter is visible. The seg below CAN take
+   the weight cue for free, because it is set in a monospace and monospaced
+   faces have one advance width at every weight. */
+.tl-switch__item[aria-selected="true"] {
+  color: var(--tl-ink);
+  background: var(--tl-surface-3);
+}
 .tl-switch__item[aria-selected="true"]::after {
   content: "";
   position: absolute;
-  left: var(--tl-space-4);
-  right: var(--tl-space-4);
+  left: 0;
+  right: 0;
   bottom: -1px;
   height: 2px;
   background: var(--tl-ink);
 }
 .tl-switch__item svg { width: 13px; height: 13px; display: block; opacity: .75; }
 .tl-switch__item[aria-selected="true"] svg { opacity: 1; }
+
+/* THE JOIN BETWEEN THE TWO LEVELS. Six group tabs, then — for the groups that
+   have siblings — a seg holding them. Nothing said the seg belonged to the tab
+   rather than being a seventh independent control, so a reader had no reason
+   to conclude "I am in MAP, and inside Map I am on Borders". A breadcrumb
+   chevron does, in 8px of ink-3, and it pulls the seg in close: the row's own
+   16px gap is cancelled back to 6px on each side of the glyph so the seg reads
+   as hanging off the switcher rather than as sitting beside it. */
+.tl-switch__into {
+  display: inline-flex;
+  align-items: center;
+  flex: none;
+  color: var(--tl-ink-3);
+  margin-inline: calc(var(--tl-space-3) - var(--tl-space-6));
+}
+.tl-switch__into svg { display: block; width: 12px; height: 12px; }
 
 
 /* ── 04  Stage + canvas ───────────────────────────────────────────────────── */
@@ -770,10 +979,26 @@ html:has(body.tl-body) { height: 100%; overflow: hidden; }
   transition: background var(--tl-dur-fast) var(--tl-ease), color var(--tl-dur-fast) var(--tl-ease);
 }
 .tl-seg__item:hover { color: var(--tl-ink-2); }
+/*
+   THE PRESSED MEMBER HAD ONE CUE IN THE DARK AND THREE IN THE LIGHT.
+
+   `background: var(--tl-surface)` inside a `--tl-surface-2` track is a plate
+   that rises out of its well on the light theme and sinks into it on the dark
+   one, and the drop shadow that sold the "raised" reading — rgba(0,0,0,.07) —
+   is invisible over a #0E1416 ground. So in dark the only thing saying which
+   member was live was the ink step, which is precisely the single-cue failure
+   the group tabs above were just rescued from.
+
+   A hairline is theme-proof in a way a shadow is not, so the plate gets one,
+   drawn inset so it costs no layout. And the label takes the weight cue the
+   group tabs could not: this face is IBM Plex Mono, and a monospace has the
+   same advance width at 400 and at 600 — pressing a member cannot reflow the
+   control it sits in. Three cues in both themes, and all three neutral. */
 .tl-seg__item[aria-pressed="true"] {
   background: var(--tl-surface);
   color: var(--tl-ink);
-  box-shadow: 0 1px 1px rgba(0, 0, 0, .07);
+  font-weight: var(--tl-w-semi);
+  box-shadow: inset 0 0 0 var(--tl-border) var(--tl-rule), 0 1px 1px rgba(0, 0, 0, .07);
 }
 
 /* Toggle */
@@ -1303,6 +1528,9 @@ html:has(body.tl-body) { height: 100%; overflow: hidden; }
 /* Gist line is the first thing to go. */
 @media (max-width: 1179px) { .tl-gist { display: none; } }
 @media (max-width: 1099px) { .tl-meta { display: none; } }
+/* The chip sheds its span on the same step the gist goes: the name is the
+   answer to "what am I looking at", the dates are a courtesy. */
+@media (max-width: 1179px) { .tl-selchip__yrs { display: none; } }
 
 /*
    1023 and down: the switcher takes its own row.
@@ -1331,14 +1559,26 @@ html:has(body.tl-body) { height: 100%; overflow: hidden; }
   .tl-transport .tl-seg__item { padding: 0 var(--tl-space-3); }
 
   .tl-rail {
-    grid-template-columns: auto minmax(0, 1fr) auto;
+    grid-template-columns: auto minmax(0, 1fr) auto auto;
     grid-template-rows: var(--tl-rail-top) var(--tl-switch-row);
     padding: 0;
     align-items: center;
   }
-  .tl-mark      { grid-row: 1; grid-column: 1; padding-left: var(--tl-space-5); }
-  .tl-rail__end { grid-row: 1; grid-column: 3; padding-right: var(--tl-space-4); }
-  .tl-rail__mid {
+  /* Written as `.tl-rail > x` to match the specificity of the base placements
+     above — a media query buys no specificity, so `.tl-mark` at (0,1,0) would
+     silently lose to `.tl-rail > .tl-mark` at (0,2,0) and the rail would keep
+     its desktop placement all the way down to 390px. */
+  .tl-rail > .tl-mark { grid-row: 1; grid-column: 1; padding-left: var(--tl-space-5); }
+  /* The chip keeps its own track here too — column 3 of the FIRST row, which
+     is empty at these widths because the switcher has moved to row 2. What it
+     must not do is join that row: the switcher row is a scroll-snap scroller
+     that already overflows at 390px, so a chip parked in it would sit behind
+     the right-hand fade with the seg, and the reader would have to scroll the
+     nav to find out what is selected. */
+  .tl-rail > .tl-selchip { grid-row: 1; grid-column: 3; }
+  .tl-rail > .tl-rail__end { grid-row: 1; grid-column: 4; padding-right: var(--tl-space-4); }
+  .tl-app:not([data-sel]) .tl-rail > .tl-rail__end { grid-column: 3; }
+  .tl-rail > .tl-rail__mid {
     grid-row: 2;
     grid-column: 1 / -1;
     height: var(--tl-switch-row);
@@ -1348,9 +1588,14 @@ html:has(body.tl-body) { height: 100%; overflow: hidden; }
     scroll-snap-type: x proximity;
     -webkit-overflow-scrolling: touch;
     padding: 0 var(--tl-space-5);
-    /* The fade IS the affordance: it says the row runs on past the edge. */
-    mask-image: linear-gradient(90deg, #000 0, #000 calc(100% - 28px), transparent 100%);
-    -webkit-mask-image: linear-gradient(90deg, #000 0, #000 calc(100% - 28px), transparent 100%);
+    /* THE EDGE FADE IS NOT DECLARED HERE ANY MORE. It used to be, as an
+       unconditional fade on the right — which lied on the Map view, where the
+       last group name ends 22px short of the edge, and went on lying once you
+       had scrolled to the end. app.css replaced it with a fade driven by
+       Lab.tsx's MEASURED data-ovf, and now that the row is a scroller at every
+       width that rule lives at the top level there. Re-adding a mask to this
+       selector would beat it: this rule is (0,2,0) and app.css's is (0,1,0),
+       so source order would not save it. */
   }
   .tl-rail__mid::-webkit-scrollbar { display: none; }
   .tl-switch { height: var(--tl-switch-row); }
@@ -1362,6 +1607,39 @@ html:has(body.tl-body) { height: 100%; overflow: hidden; }
 
 /* Narrow: panels become a bottom sheet. */
 @media (max-width: 759px) {
+  /* ── THE CHIP ON A PHONE: ITS OWN ROW, ON THE SAME PRECEDENT AS THE NAV ─────
+     Row one at 390px already holds the mark, a 124px search field and two icon
+     buttons, and it is full: measured, the free middle is 88px, of which the
+     chip's own dot, padding, hairlines and ✕ eat 57. That leaves ~31px of name
+     — four characters — and taking any more would come out of the search,
+     which the brief forbids by name. (Left alone, the grid did exactly that:
+     the field shrank 124px -> 106px.)
+
+     So the chip does at 390px what the SWITCHER already does at 390px: it stops
+     pretending it fits beside everything else and takes a row. That precedent
+     is the whole reason this is not a special case — §9's narrow layout gave
+     the view switcher its own 34px row for the identical reason, and the shell
+     grew a second rail row to hold it. This is the third, it exists only while
+     something is selected, and it costs 3% of a 844px screen for as long as it
+     does.
+
+     It sits BETWEEN the search row and the switcher row, not below both: the
+     switcher has to stay welded to the rail's bottom hairline or the active
+     tab's 2px underline (§03) is left floating in the middle of the chrome,
+     which would undo half of the legibility work above. */
+  .tl-app[data-sel="on"] .tl-rail {
+    grid-template-rows: var(--tl-rail-top) auto var(--tl-switch-row);
+  }
+  .tl-app[data-sel="on"] .tl-selchip {
+    grid-row: 2;
+    grid-column: 1 / -1;
+    justify-self: start;
+    max-width: calc(100% - var(--tl-space-5) * 2);
+    margin: 0 var(--tl-space-5) var(--tl-space-3);
+  }
+  .tl-app[data-sel="on"] .tl-rail__mid { grid-row: 3; }
+  .tl-selchip__yrs { display: none; }
+
   .tl-panel {
     position: fixed;
     left: 0; right: 0; top: auto;

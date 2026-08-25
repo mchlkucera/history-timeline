@@ -21,7 +21,7 @@
    below therefore covers all eleven ids.
    ============================================================================= */
 
-import { useCallback, useEffect, useRef, useState, useSyncExternalStore } from 'react';
+import { type CSSProperties, useCallback, useEffect, useRef, useState, useSyncExternalStore } from 'react';
 import {
   catColor, clampDomain, fmtBig, fmtY, initData, setGotoTab, setLanes, SelStore, TimeStore,
   tokens, YMAX, YMIN,
@@ -88,6 +88,15 @@ const TIME_MEMBERS: ViewId[] = GROUPS.find(g => g.id === 'g-time')!.members;
 // tool, not a view of history. It stays reachable from ⌘K and from the
 // "Concepts, rated →" link in the field-notes footer.
 const groupOf = (v: ViewId): string => GROUPS.find(g => g.members.includes(v))?.id || 'g-map';
+
+// The eight domain tokens, by the name tokens.css spells them. The chip's dot
+// quotes one AS A CUSTOM PROPERTY (`var(--tl-cat-power)`) rather than as a
+// resolved hex, which is the difference between a dot that follows a theme
+// switch and one frozen in whichever theme was live when it mounted. This is
+// the sanctioned crossing between the data palette and the chrome — DESIGN.md
+// §3, "a legend key or chip dot quotes a data hue" — and the only one here.
+const CAT_TOKENS = new Set(['power', 'war', 'belief', 'sci', 'art', 'nature', 'society', 'reach']);
+const dotVar = (cat: string) => (CAT_TOKENS.has(cat) ? `var(--tl-cat-${cat})` : 'var(--tl-ink-3)');
 
 interface ViewMeta { seg: string; name: string; gist: string; meta: string; rail: RailMode }
 
@@ -353,6 +362,20 @@ const subNarrow = (cb: () => void) => {
   return () => m.removeEventListener('change', cb);
 };
 
+// THE SELECTION, READ AS AN EXTERNAL STORE — same reasoning as subNarrow, and
+// the same shape. SelStore is a plain observable owned by src/render, so this
+// is the one honest way to let the chrome re-render off it: the snapshot is the
+// id string itself (stable by value, so React can bail out), and the server
+// snapshot is null because nothing is selected before the user clicks anything.
+const subSel = (cb: () => void) => SelStore.subscribe(cb);
+const selSnapshot = () => SelStore.id;
+const selServerSnapshot = () => null;
+// Escape and the chip's ✕ mean the same thing, and this is that thing: drop the
+// selection, which releases the map highlight, the cube trace and the timeline
+// dimming with it. SelCard hides itself from its own subscription to the store,
+// so there is nothing else to call. (selcard.ts, "ESC CLEARS THE SELECTION".)
+const clearSel = () => SelStore.set(null);
+
 // The one transient minium dot: this view's field notes have not been read yet.
 // Painted imperatively so the seen-set never has to be React state — the markup
 // ships with the dot on, which is both correct for a first visit and identical
@@ -560,6 +583,12 @@ export default function Lab() {
   const seen = useRef<Set<string>>(new Set());
   const narrow = useSyncExternalStore(subNarrow, () => matchMedia(NARROW).matches, () => false);
   const collapsed = collapsedBy ?? narrow;
+  // WHAT IS SELECTED — read straight off the global store, so the chip below
+  // re-renders on every selection and on nothing else. describe() is a pure
+  // lookup over the loaded corpus, hence the `ready` guard: nothing can be
+  // selected before the data lands, but calling it is only meaningful after.
+  const selId = useSyncExternalStore(subSel, selSnapshot, selServerSnapshot);
+  const sel = ready && selId ? describe(selId) : null;
   const viewRef = useRef<ViewId>(view);
   // Declared FIRST so it is up to date before any effect below reads it.
   useEffect(() => { viewRef.current = view; });
@@ -569,6 +598,11 @@ export default function Lab() {
   // while it is open — a rail that says MAP over a page of concept cards lies.
   const group = view === 'concepts' ? '' : groupOf(view);
   const members = group ? GROUPS.find(g => g.id === group)!.members : [];
+  // The group's own word, so the sub-switcher can NAME the thing it lives
+  // inside ("Map views") instead of repeating the generic "View" the six group
+  // tabs already carry. The chevron in the markup below is the same statement
+  // for the eye; this is it for a screen reader.
+  const groupLabel = group ? GROUPS.find(g => g.id === group)!.label : '';
 
   // ── view state ────────────────────────────────────────────────────────────
   // Tolerates unknown ids, and maps the legacy alias 'sketch' -> 'braid'.
@@ -823,6 +857,15 @@ export default function Lab() {
   // Opening or closing the bottom sheet changes how much canvas is left under it,
   // which sizeRenderers() measures — so the canvases have to re-fit when it moves.
   useEffect(() => { if (ready) renderTab(viewRef.current); }, [collapsed, ready]);
+
+  // Below 760px the selection chip takes a rail row of its own (shell.css), so
+  // its arrival and departure change the height of the stage — and the stage is
+  // the 1fr row of .tl-app, which no resize event ever reports. Same failure as
+  // the sheet above, same fix: re-fit on the transition, and only at the widths
+  // where the transition exists. Without it eleven canvases would keep drawing
+  // at their pre-chip height until the next window resize.
+  const hasSel = !!sel;
+  useEffect(() => { if (ready && narrow) renderTab(viewRef.current); }, [hasSel, narrow, ready]);
 
   useEffect(() => {
     const g = groupOf(view);
@@ -1551,7 +1594,9 @@ export default function Lab() {
 
   return (
     <>
-      <div className="tl-app" id="app" data-rail={railOn ? 'on' : 'off'}>
+      {/* data-sel is what lets the phone rail trade the wordmark for the chip:
+          390px cannot hold both, and the search may not pay for it. */}
+      <div className="tl-app" id="app" data-rail={railOn ? 'on' : 'off'} data-sel={sel ? 'on' : undefined}>
 
         {/* ══ TOP RAIL ═════════════════════════════════════════════════════ */}
         <header className="tl-rail">
@@ -1572,13 +1617,22 @@ export default function Lab() {
               ))}
             </nav>
 
+            {/* THE JOIN. Without it the seg is a seventh control sitting beside
+                six tabs, and nothing in the rail says Borders is INSIDE Map —
+                which is half of "make the relationship read". A breadcrumb
+                chevron says it in 12px of ink-3 and costs no decision. Hidden
+                from the a11y tree because the seg's own label carries the same
+                fact in words. */}
+            {segInHeader && <span className="tl-switch__into" aria-hidden="true">{I.next}</span>}
+
             {/* The seg is NAVIGATION between sibling views — Borders / People /
                 Horizon, Empires / Beliefs. The Timeline group's is not:
                 vertical and horizontal are two PROJECTIONS of one state, which
                 is a control of the view rather than a way to another one. It
                 lives in the time rail's control cluster instead, beside where
                 Play sits on the views that have one. See segInHeader. */}
-            <div className="tl-seg" id="viewSeg" role="group" aria-label="View"
+            <div className="tl-seg" id="viewSeg" role="group"
+              aria-label={groupLabel ? `${groupLabel} views` : 'View'}
               style={segInHeader ? undefined : { display: 'none' }}>
               {/* Rendered only when this seg is navigation. Keeping the Timeline
                   members here under display:none would leave a second, silent
@@ -1595,7 +1649,7 @@ export default function Lab() {
 
           {/* THE SCROLL AFFORDANCE — the second half of the data-ovf work above.
               Absolutely positioned against the rail rather than placed in its
-              grid, so adding them cannot invent a fourth column; app.css shows
+              grid, so adding them cannot invent a track of their own; app.css shows
               each one only while the row is actually scrolled away from that
               edge, and only on the widths where the row is a scroller at all.
 
@@ -1612,6 +1666,48 @@ export default function Lab() {
             tabIndex={-1} aria-hidden="true" onClick={() => nudgeRow(1)}>
             <svg viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.6"><path d="M6 3.5L10.5 8L6 12.5" /></svg>
           </button>
+
+          {/* ══ THE SELECTION CHIP ═══════════════════════════════════════════
+              "We should clearly see I'm in Roman Empire, on the Map view or on
+              Timeline view."
+
+              The selection is global and it survives every view switch — that
+              is the whole point of SelStore — but until now the only thing that
+              ever NAMED it was the floating card, which is dismissible, is
+              anchored to whatever you clicked, and is suppressed outright on
+              Connections. So the app could be holding Rome, dimming half the
+              world for it, and have nothing in the frame that said "Rome".
+              Switch to Timeline and even the highlight stopped meaning
+              anything: the map was gone and the card had re-anchored.
+
+              This is the persistent answer, and deliberately NOT a second card:
+              a dot, a name, the span, and a way out. Pressing the body brings
+              the card back (SelCard.select on the id already selected re-shows
+              it and un-dismisses it); pressing ✕ does exactly what Escape does.
+
+              It sits in its own grid track between the switcher and the end
+              group, so it can neither move the nav nor shorten the search — see
+              .tl-rail and §02b in shell.css for why that placement is the whole
+              design. It renders only while something is selected. */}
+          {sel && (
+            <div className="tl-selchip" role="status" aria-live="polite">
+              <button type="button" className="tl-selchip__main"
+                title={`${sel.name} — selected. Show details.`}
+                onClick={() => SelCard.select(sel.id, null)}>
+                <i className="tl-selchip__dot" aria-hidden="true"
+                  style={{ '--tl-dot': dotVar(sel.cat) } as CSSProperties} />
+                <span className="tl-selchip__name">{sel.name}</span>
+                <span className="tl-selchip__yrs">
+                  {sel.start === sel.end ? fmtBig(sel.start) : `${fmtBig(sel.start)}–${fmtY(sel.end)}`}
+                </span>
+              </button>
+              <button type="button" className="tl-selchip__x"
+                aria-label={`Clear selection: ${sel.name}`} title="Clear selection  Esc"
+                onClick={clearSel}>
+                {I.close}
+              </button>
+            </div>
+          )}
 
           <div className="tl-rail__end">
             {/* THE ONE SEARCH. A real input, not a button that opens a modal:
