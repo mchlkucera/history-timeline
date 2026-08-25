@@ -474,9 +474,14 @@ export const SelCard = {
     }
 
     for (const d of out) {
-      // FILL = do this first. UNDERLINE = you are standing here. The two signals
-      // are different on purpose and never collide: the shell's top rail already
-      // marks the active view with a 2px ink underline and never with a fill.
+      // INK BLOCK = do this first. GROUND + 2px BAR = you are standing here.
+      // The second of those is now spelled exactly as the top rail spells it,
+      // because it is the same idea and a reader should only have to learn it
+      // once. (The rail used to mark its active tab with colour alone, which is
+      // what the older note here was written against; it carries a ground and a
+      // bar now, so the card follows it rather than the memory of it.) The two
+      // still cannot collide: primary is the darkest cell in the row, "here" is
+      // a quiet lift off the card.
       d.current = LANDS_ON[d.act] === this.view;
       // A ONE-CELL SEGMENTED CONTROL LOOKS LIKE A BUG, so a lone survivor is a
       // plain full-width primary instead — which for a bare border feature means

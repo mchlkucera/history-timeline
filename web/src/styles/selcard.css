@@ -364,16 +364,31 @@
 .tl-selcard__dest--primary:hover  { background: var(--tl-ink); border-color: var(--tl-ink); color: var(--tl-ink-invert); box-shadow: inset 0 0 0 999px rgba(128, 128, 128, .16); }
 .tl-selcard__dest--primary:active { box-shadow: inset 0 0 0 999px rgba(128, 128, 128, .26); }
 
-/* YOU ARE ALREADY HERE. Same 2px ink underline the top-rail switcher uses for
-   the active view, so it can never be misread as "primary" — the shell has
-   already spent a different signal on that meaning. currentColor makes it an
-   ink bar on a surface cell and an inverted bar on the ink block, from one
-   declaration. The cell stays live: clicking it re-frames the current view. */
+/* YOU ARE ALREADY HERE — SAID EXACTLY THE WAY THE TOP RAIL SAYS IT. The rail's
+   active view is a surface-3 ground PLUS a 2px ink bar along the bottom edge,
+   and this cell now carries both, so the one idea "you are standing here" has
+   one appearance everywhere it appears. It used to carry the bar alone, on the
+   reasoning that a ground would be misread as "primary"; that reasoning was
+   written when the rail marked its active tab with colour alone and nothing in
+   the shell owned a ground. The rail has one now, and the two-signal version is
+   what the reader is being taught upstairs.
+
+   It still cannot collide with primary: primary is the INK block, the darkest
+   cell in the row, and surface-3 is a quiet lift off the card. currentColor
+   makes the bar ink on a surface cell and inverted ink on the block, from one
+   declaration. The cell stays live — clicking it re-frames the current view. */
 .tl-selcard__dest[aria-current="true"] {
+  background: var(--tl-surface-3);
   color: var(--tl-ink);
   box-shadow: inset 0 -2px 0 0 currentColor;
 }
-.tl-selcard__dest--primary[aria-current="true"] { color: var(--tl-ink-invert); }
+/* The primary keeps its ink block. This selector matches the one above on
+   specificity and wins on order, which is the only thing holding the ground
+   back — without it, "you are here" would erase the darkest cell in the row. */
+.tl-selcard__dest--primary[aria-current="true"] {
+  background: var(--tl-ink);
+  color: var(--tl-ink-invert);
+}
 
 /* NOT NOW, as opposed to NEVER. A destination that is real for this KIND of
    thing but empty at the current year greys and stays put, with the reason on
