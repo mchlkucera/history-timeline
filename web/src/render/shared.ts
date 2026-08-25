@@ -473,6 +473,22 @@ const CAT_HUE = 14;               // ± degrees, OKLCH
 const CAT_L_DN = 0.11, CAT_L_UP = 0.09;
 const CAT_C_UP = 0.070, CAT_C_DN_FRAC = 0.10;
 const CAT_L_CLAMP = { light: [0.30, 0.64], dark: [0.55, 0.80] };
+// THE INDEX'S COLOUR IS NOT AVAILABLE TO DATA. Minium means "where you are" and nothing
+// else; iron oxide exists as `war` precisely so the data set has no red of its own. The
+// war token already sits only ΔE 8.1 from the accent, so a ±14° hue swing with the
+// chroma headroom above put a war variant at #bb3d28 — ΔE 1.9 from the accent, i.e. the
+// index colour painted on a rectangle. Candidates inside this radius are dropped. It
+// costs war 6 of its 28 light rungs, nothing in dark, and nothing at all to the other
+// seven categories, whose nearest variant to the accent is ΔE 8–25 away regardless.
+const CAT_ACCENT_KEEP = 8;
+
+/** The chrome accent as a hex, read from the live tokens so a theme change moves it.
+ *  Returns '' where there is no document (SSR) or the token is not a plain hex. */
+function chromeAccent(): string {
+  if (typeof document === 'undefined') return '';
+  const v = getComputedStyle(document.documentElement).getPropertyValue('--tl-accent').trim();
+  return /^#[0-9a-f]{6}$/i.test(v) ? v : '';
+}
 
 const _ladder = new Map<string, string[]>();
 /** The K well-separated steps of one category token, ORDERED so that consecutive
@@ -482,9 +498,19 @@ export function catLadder(token: string, light: boolean): string[] {
   const hit = _ladder.get(key); if (hit) return hit;
   const [L0, C0, h0] = hexOklch(token);
   const [lc, hc] = light ? CAT_L_CLAMP.light : CAT_L_CLAMP.dark;
-  const lo = Math.max(lc, L0 - CAT_L_DN), hi = Math.min(hc, L0 + CAT_L_UP);
+  // The clamp may not INVERT the band. connections.ts calls varyColor without the ground
+  // flag, so a light-theme token can arrive with the dark clamps; without these two
+  // guards lo would land above hi and the ladder would be built backwards, out of a
+  // sliver of volume, on the wrong side of the token.
+  const lo = Math.min(Math.max(lc, L0 - CAT_L_DN), L0);
+  const hi = Math.max(Math.min(hc, L0 + CAT_L_UP), L0);
   const cDn = CAT_C_DN_FRAC * C0;                 // a low-chroma pigment cannot spare much
-  const pts: string[] = [];
+  const accent = chromeAccent();                  // the one colour data may never take
+  // Candidates are carried as hex PLUS their OKLab coordinates. The selection below is
+  // ~10k distance tests; re-deriving OKLab from hex inside that loop meant three cbrt
+  // per colour per test and turned a 2ms build into 20. Convert once.
+  const hexes: string[] = [];
+  const lab: number[] = [];                        // flat [L,a,b, L,a,b, …]
   for (let i = 0; i <= CAT_GRID; i++) {
     const L = lo + (hi - lo) * i / CAT_GRID;
     for (let j = 0; j <= CAT_GRID; j++) {
@@ -493,33 +519,59 @@ export function catLadder(token: string, light: boolean): string[] {
         const w = -1 + 2 * k / CAT_GRID;
         if (L > L0 && w < 0) continue;             // never lighter AND greyer
         const C = Math.min(Math.max(0.05, C0 + w * (w < 0 ? cDn : CAT_C_UP)), maxChroma(L, h) * 0.985);
-        pts.push(oklchHex(L, C, h));
+        const hex = oklchHex(L, C, h);
+        if (accent && deltaE(hex, accent) < CAT_ACCENT_KEEP) continue;   // that is the index
+        const o = oklab(hex);                      // the CLAMPED colour, not the request
+        hexes.push(hex); lab.push(o[0], o[1], o[2]);
       }
     }
   }
-  // farthest-point selection: each new rung is the candidate whose nearest already-
-  // chosen rung is furthest away, so the set's MINIMUM pairwise distance is what is
-  // being maximised — the exact number the plot is judged on.
-  const set = [oklchHex(L0, C0, h0)];
-  while (set.length < CAT_K_MAX) {
-    let best = '', bd = -1;
-    for (const p of pts) {
-      let d = 1e9;
-      for (const c of set) { const t = deltaE(p, c); if (t < d) d = t; }
-      if (d > bd) { bd = d; best = p; }
+  // the unvaried token goes in LAST, so its index is known and it always seeds the set
+  {
+    const hex = oklchHex(L0, C0, h0), o = oklab(hex);
+    hexes.push(hex); lab.push(o[0], o[1], o[2]);
+  }
+  const n = hexes.length;
+  // FARTHEST-POINT SELECTION: each new rung is the candidate whose nearest already-
+  // chosen rung is furthest away, so what is being maximised is the set's MINIMUM
+  // pairwise distance — the exact number the plot is judged on. `near[]` carries each
+  // candidate's distance to the nearest chosen rung, so a round costs one pass, not one
+  // pass per rung already chosen.
+  const near = new Float64Array(n).fill(Infinity);
+  const chosen: number[] = [];
+  const take = (idx: number) => {
+    chosen.push(idx);
+    const L = lab[3 * idx], A = lab[3 * idx + 1], B = lab[3 * idx + 2];
+    for (let i = 0; i < n; i++) {
+      const dl = lab[3 * i] - L, da = lab[3 * i + 1] - A, db = lab[3 * i + 2] - B;
+      const d = 100 * Math.sqrt(dl * dl + da * da + db * db);
+      if (d < near[i]) near[i] = d;
     }
-    if (!best || bd < CAT_FLOOR) break;              // the volume is spent; stop honestly
-    set.push(best);
+  };
+  take(n - 1);                                     // the token itself is always rung 0
+  while (chosen.length < CAT_K_MAX) {
+    let best = -1, bd = -1;
+    for (let i = 0; i < n; i++) if (near[i] > bd) { bd = near[i]; best = i; }
+    if (best < 0 || bd < CAT_FLOOR) break;         // the volume is spent; stop honestly
+    take(best);
   }
   // then re-order into a serpentine, so rung i and rung i+1 are the two most different
   // colours still available: neighbours in time get neighbouring indices, and this is
   // what makes those neighbours look nothing like each other.
-  const left = set.slice(1), out = [set[0]];
+  const left = chosen.slice(1), order = [chosen[0]];
   while (left.length) {
+    const p = order[order.length - 1];
+    const L = lab[3 * p], A = lab[3 * p + 1], B = lab[3 * p + 2];
     let bi = 0, bd = -1;
-    for (let i = 0; i < left.length; i++) { const d = deltaE(left[i], out[out.length - 1]); if (d > bd) { bd = d; bi = i; } }
-    out.push(left.splice(bi, 1)[0]);
+    for (let i = 0; i < left.length; i++) {
+      const q = left[i];
+      const dl = lab[3 * q] - L, da = lab[3 * q + 1] - A, db = lab[3 * q + 2] - B;
+      const d = dl * dl + da * da + db * db;
+      if (d > bd) { bd = d; bi = i; }
+    }
+    order.push(left.splice(bi, 1)[0]);
   }
+  const out = order.map(i => hexes[i]);
   _ladder.set(key, out);
   return out;
 }
