@@ -132,6 +132,37 @@ export function facetOf(cat: string, type: string): string {
 // "when", which is exactly what its `less` step is for.
 const MZ_ANCHOR = 'entity:Wolfgang Amadeus Mozart';
 
+/**
+ * THE CURATED LANE CATALOGUE — every short code the library can offer, and the
+ * KIND its detail dial speaks. A lane arrives as data (data/lanes.json ships a
+ * two-letter `key`; setLanes appends its members to EVENTS under that band), so
+ * the entry itself is built from LANES below. This table says the one thing the
+ * data cannot: which kind's words apply, because "less" means a different thing
+ * for a life than for a set of movements than for a national corpus.
+ *
+ *   MZ  a STUDY OF A PERSON — `less` is the lifespan bar and nothing else.
+ *   CZ  a national history — events, lives and periods together, so it reads
+ *       like a region: `less` is the turning points a one-page history names.
+ *   everything else  movements: `less` is the long periods you can name.
+ *
+ * Codes are listed here even when 'movements' is what a missing entry would
+ * give anyway, so this is the one place to read what the library holds.
+ */
+const LANE_KIND: Record<string, LayerKind> = {
+  MZ: 'person',                                     // Mozart
+  CZ: 'region',                                     // Czech history
+  AR: 'movements', DS: 'movements', MU: 'movements', SC: 'movements',
+  LT: 'movements',                                  // Literature
+  FM: 'movements',                                  // Film
+  RL: 'movements',                                  // Religion
+  PH: 'movements',                                  // Philosophy
+  PI: 'movements',                                  // Political ideologies
+  EC: 'movements',                                  // Economics
+  TE: 'movements',                                  // Technology
+  MD: 'movements',                                  // Medicine
+  EX: 'movements',                                  // Exploration & voyages
+};
+
 let _defs: LayerDef[] | null = null;
 let _byId: Map<string, LayerDef> | null = null;
 
@@ -205,10 +236,11 @@ function build(): LayerDef[] {
     const id = L.key.toLowerCase();
     let count = 0;
     for (const f of ['ess', 'sci', 'war', 'art', 'pol']) count += n.get(L.key + '/' + f) || 0;
-    const person = L.key === 'MZ';
+    const kind = LANE_KIND[L.key] || 'movements';
+    const person = kind === 'person';
     defs.push({
       id, subject: L.key, facet: 'all', name: L.label,
-      kind: person ? 'person' : 'movements', si: L.si, n: count + (person ? 1 : 0),
+      kind, si: L.si, n: count + (person ? 1 : 0),
       ...(person ? { anchors: [MZ_ANCHOR] } : {}),
     });
   }

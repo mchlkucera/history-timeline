@@ -10,7 +10,7 @@
 import {
   $, EVENTS, POLITIES, CATBY, catColor, clamp, fitCanvas, fmtBig, fmtSpan, fmtY, fontMono, fontUI,
   hideTip, reduceMotion, repaintOnFonts, showTip, tokens, yearPill,
-  tv, ty, VFULL, timeTicks, withA, hexHsl, varyColor, mix, clampV, clampDomain,
+  tv, ty, VFULL, timeTicks, withA, hexHsl, varyColor, inkFor, clampV, clampDomain,
   TimeStore, SelStore, evId, LANES, sharpnessOf,
   textW, ellipsize,
 } from './shared';
@@ -263,10 +263,9 @@ const AXIS_TOP = 22;
    rectangle, cross four bands on the way to a chip, and the page underneath does not
    answer. Anything that would make height or level of detail a function of the pointer
    belongs behind an explicit gesture, not under the cursor. */
-// How far a plateau is pre-mixed toward the ground so it can be drawn OPAQUE.
-// See the note on mix() in shared.ts: painting the token at 0.75 alpha over the
-// light film is what turned the indigo empires into grey-lavender mush.
-const GROUND_MIX = 0.12;
+// (A plateau used to be pre-mixed 12% toward the ground before being painted opaque.
+// It is not any more: varyColor bakes that softening into the ladder it picks from, so
+// the fill lands on exactly the colour that was asked for. See the render loop.)
 
 /* ── THE ERA ROW ──────────────────────────────────────────────────────────────
 
@@ -1409,6 +1408,19 @@ export const TL = {
     ctx.fillStyle = g;
     ctx.beginPath(); ctx.roundRect(x0, yC - h / 2, W, h, 3); ctx.fill();
   },
+  /** The envelope's alpha at x — the same ramp drawSpread paints. A label uses it to ask
+   *  what it is ACTUALLY sitting on: an era at sharpness 0.1 ramps over 45% of its width
+   *  each side, so its name starts far out on the fade where the composite is nearly the
+   *  page, not on the plateau. Deciding the ink from the plateau put white on "The
+   *  Atlantic slave trade" at 2.6:1 where its own ink would have given 6.5:1. */
+  spreadAlphaAt(x: number, x0: number, W: number, s: number, alpha: number) {
+    const R = Math.min(0.5 * (1 - s) * W, 96);
+    if (!(R > 0)) return alpha;
+    const d = Math.min(x - x0, x0 + W - x);
+    if (d >= R) return alpha;
+    const lo = alpha * Math.max(s, 0.06);
+    return lo + (alpha - lo) * clamp(d / R, 0, 1);
+  },
 
   render() {
     const dim = this.size(); if (!dim) return;
@@ -1566,21 +1578,25 @@ export const TL = {
           // of TIER_H, so importance still reads as 20:17:14:12:10 at every rung —
           // the sizing ladder is scaled, never re-tuned.
           const h = (TIER_H[it.lvl] || 12) * pD * g;
-          const [col, colL] = varyColor(catColor(it.cat, T), it.id, isLight);
-          // COMPOSITE-AWARE FILL: the plateau is opaque in a colour pre-mixed a
-          // little way toward the ground, so what lands on screen is the category
-          // token rather than the token drained 25% toward the page. The LOD, dim
-          // and search fades still multiply on top, exactly as before.
-          const plate = mix(col, T.panel, GROUND_MIX);
+          const [col, , edge] = varyColor(catColor(it.cat, T), it.id, isLight);
+          // THE PLATEAU *IS* THE INTENDED COLOUR. It used to be pre-mixed 12% toward
+          // the ground before being painted, which cost 10-14% of the fill's chroma
+          // and put every rectangle ΔE 5-7 from what varyColor asked for — the
+          // "softened" that reads as drained. varyColor now bakes the softening into
+          // the ladder's own lightness band, so the fill goes down unmixed and the
+          // per-channel error against the intended colour is ZERO. The LOD, dim and
+          // search fades still multiply on top, exactly as before.
           const fillA = clamp(s.lodA * dimA * fade, 0, 1);
           // a rectangle narrower than 2px is widened to stay visible — but never
           // past its neighbour's left edge, or two ticks in one row overlap
           const nextX0 = i + 1 < rowItems.length ? rowItems[i + 1].x0 : 1e18;
           const W = Math.max(0.5, Math.min(Math.max(s.x1 - s.x0, 2), nextX0 - s.x0));
-          this.drawSpread(ctx, s.x0, s.x1, yC, h, plate, fillA, it.sharpness, W);
+          this.drawSpread(ctx, s.x0, s.x1, yC, h, col, fillA, it.sharpness, W);
           if (it.sharpness >= 0.6) {                   // the stroke is what makes "founded on a date" read
             ctx.globalAlpha = clamp(0.9 * s.lodA * dimA * fade, 0, 1);
-            ctx.strokeStyle = col; ctx.lineWidth = 1;
+            // one OKLCH step AWAY from the ground, same hue: with the fill no longer
+            // pre-mixed, stroking it in its own colour would be no edge at all
+            ctx.strokeStyle = edge; ctx.lineWidth = 1;
             ctx.beginPath(); ctx.roundRect(s.x0, yC - h / 2, W, h, 3); ctx.stroke();
             ctx.globalAlpha = 1;
           }
@@ -1617,12 +1633,19 @@ export const TL = {
           const textA = clamp((s.lodA * dimA * fade - 0.10) / 0.15, 0, 1) * textGate;
           if (textA > 0.02) {
             if (mode === 'in') {
-              // ink from the COMPOSITE lightness — the plateau is darker now that it
-              // is opaque, so this is the rule that flips those labels to white
-              const mixL = colL + (bgL - colL) * GROUND_MIX;
-              const effL = bgL + (mixL - bgL) * fillA;
+              // INK BY MEASURED CONTRAST on the real composite, not by a lightness
+              // threshold. The old `effL > 50 ? ink : white` test picked the WORSE of
+              // the two on 23/160 light variants and 108/160 dark ones — in dark BOTH
+              // candidates are pale, and no lightness threshold can say "this fill is
+              // too bright for either, use the panel colour". inkFor composites the
+              // fill over the ground at its own alpha and takes the higher ratio.
               ctx.globalAlpha = Math.min(1, fillA + 0.2) * textA;
-              ctx.fillStyle = effL > 50 ? T.ink : '#fff';
+              // the word spans a stretch of the envelope, so ask what the fill is doing
+              // at BOTH of its ends and take the ink whose worst end is still legible
+              const inkX0 = visX0 + 6, inkX1 = inkX0 + textW(ctx, inText, inF);
+              ctx.fillStyle = inkFor(col, T.panel,
+                this.spreadAlphaAt(inkX0, s.x0, W, it.sharpness, fillA),
+                this.spreadAlphaAt(inkX1, s.x0, W, it.sharpness, fillA), T.ink, T.panel);
               ctx.fillText(inText, visX0 + 6, yC + 3.5);
             } else if (mode === 'right') {
               ctx.globalAlpha = textA; ctx.fillStyle = T.ink;
@@ -1807,6 +1830,28 @@ export const TL = {
   },
 
   /**
+   * WHICH ELEMENT IS THE SEARCH FIELD.
+   *
+   * One selector list, read at the moment it is needed rather than captured at
+   * boot, because the field is React's markup and this file is not: caching a
+   * node here is how a listener ends up bound to an element that has since been
+   * replaced. '#cmdk' is the single top-bar field ("Keep only one search - one
+   * at the top."); '#searchBox' is the timeline panel's old box, kept in the
+   * list so this file stays correct for whichever input owns the search rather
+   * than for one particular id — losing THAT bet is what silently took the
+   * canvas dim away when the panel box was deleted and nothing rebound.
+   */
+  searchInput(): HTMLInputElement | null {
+    return $<HTMLInputElement>('#cmdk') || $<HTMLInputElement>('#searchBox');
+  },
+  /** The query changed. The only writer of this.q — every input path lands here. */
+  setQuery(v: string) {
+    const q = v.trim();
+    if (q === this.q) return;
+    this.q = q;
+    this.paint();                       // paint() also drives the vertical projection
+  },
+  /**
    * Empty the search. Pressing "In perspective" means "now show me its world",
    * and a live query dims everything that is not a hit to 12% — which is the
    * exact opposite. You searched to FIND the thing; you found it; the box
@@ -1815,8 +1860,9 @@ export const TL = {
   clearSearch() {
     if (!this.q) return;
     this.q = '';
-    const box = $<HTMLInputElement>('#searchBox'); if (box) box.value = '';
+    const box = this.searchInput(); if (box) box.value = '';
     const cnt = $('#searchCnt'); if (cnt) cnt.textContent = '';
+    this.paint();
   },
   /** A hit box in canvas CSS pixels, as a viewport rect the card can dodge. */
   rectOf(b: { x: number; y: number; w: number; h: number }): DOMRect {
@@ -1848,8 +1894,16 @@ export const TL = {
     // all still here for whichever input owns the search. Only the duplicate box in
     // this panel went. Everything below is bound defensively so this file cannot care
     // whether a given piece of chrome is still in the markup.
-    const box = $<HTMLInputElement>('#searchBox');
-    if (box) box.addEventListener('input', (e: any) => { this.q = e.target.value.trim(); this.paint(); });
+    //
+    // THE DIM IS BOUND TO WHATEVER FIELD EXISTS, not to one id. This listener used
+    // to name '#searchBox' — the panel's own box — and when that box was deleted in
+    // favour of the single top-bar field the binding simply found nothing, so this.q
+    // was never written again and the canvas stopped dimming. Nothing threw and
+    // nothing logged; the behaviour just left. searchInput() resolves the field by a
+    // list, and this listener rides ALONGSIDE Lab's own dropdown listener on the same
+    // element (two listeners, one input, no coordination needed).
+    const box = this.searchInput();
+    if (box) box.addEventListener('input', (e: any) => this.setQuery(e.target.value));
     buildGrammarLegend();
     repaintOnFonts(() => this.render());
     if (!this._storesBound) {

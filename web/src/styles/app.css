@@ -406,6 +406,45 @@ body.tl-dragging { cursor: grabbing; }
 /* The gallery is a grid, not prose — it takes the whole stage. */
 .tl-view[data-view="concepts"] .tl-doc { max-width: none; }
 
+/* ── Concept cards: the stretched button ──────────────────────────────────────
+   gallery.ts renders the concept's NAME as a real <button> (see the note there:
+   a <button> may only hold phrasing content, so the card itself cannot be one).
+   These rules are what make that one button behave as the whole card:
+
+     · the button is invisible AS a button — it inherits the h3's type entirely,
+       so the title still reads as a title;
+     · its ::after is stretched over the card, which is what makes the entire
+       surface clickable and carries the cursor;
+     · and the focus ring is drawn on that stretched pseudo-element, so a
+       keyboard reader sees the CARD they are about to open outlined, not four
+       words of it. The ring is suppressed on the button's own box to stop the
+       two from doubling up; §12's global rule is (0,2,1), which is why the
+       override has to carry three classes rather than two. */
+.card.concept { position: relative; }
+.card.concept .concept__go {
+  appearance: none;
+  margin: 0;
+  padding: 0;
+  border: 0;
+  background: none;
+  font: inherit;
+  color: inherit;
+  letter-spacing: inherit;
+  text-align: left;
+  cursor: pointer;
+}
+.card.concept .concept__go::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+  border-radius: var(--tl-radius-md);
+}
+.card.concept .concept__go:focus-visible { outline: none; }
+.card.concept .concept__go:focus-visible::after {
+  outline: 2px solid var(--tl-focus-ring);
+  outline-offset: 2px;
+}
+
 /* ── Top rail: keep the switcher and the seg from colliding ───────────────────
    .tl-switch and .tl-gist both carry min-width:0, so flex shrinkage was being
    split between them and the switcher's items overflowed *visibly* on top of
@@ -711,6 +750,13 @@ body.tl-dragging { cursor: grabbing; }
   .tl-panel__bd .tl-disc__bd { gap: var(--tl-space-3); padding-top: var(--tl-space-3); }
 }
 
+/* The rail is the containing block for the two overflow chevrons below, and
+   they are display:none everywhere the switcher row is NOT a scroller — which
+   is also what keeps them out of the rail's three-column grid, where two extra
+   in-flow children would wrap onto a row of their own. */
+.tl-rail { position: relative; }
+.tl-rail__more { display: none; }
+
 /* shell.css moves .tl-rail__mid onto its own scrolling row at 1023px. These
    two rules are the app-side half of that: the rules above make the switcher
    flex:none with its own overflow so all shrinkage lands on the gist, and a
@@ -725,6 +771,58 @@ body.tl-dragging { cursor: grabbing; }
      scrollIntoView() (Lab.tsx) parks it clear of the fade rather than under
      it. */
   .tl-rail__mid > .tl-seg { margin-right: var(--tl-space-6); scroll-margin-inline-end: 34px; }
+
+  /* ── THE OVERFLOW, MADE LEGIBLE ────────────────────────────────────────────
+     At 390px this row wants 623px and has 390: six group names fill it and the
+     Map group's seg (Borders / People / Horizon) begins 3px past the right
+     edge. It cannot be made to fit — see the note on readOvf() in Lab.tsx — so
+     the row scrolls, and the job of these rules is to make that visible instead
+     of leaving three controls silently amputated.
+
+     shell.css fades the right edge unconditionally. Unconditional is the bug:
+     on the Map view the last group name ends 22px short of the edge, so the
+     28px fade lands on bare rail and says nothing, and once you HAVE scrolled
+     to the end it goes on lying about content that is no longer there. Here the
+     two fade widths are variables Lab.tsx's measured `data-ovf` sets, so a side
+     fades exactly when that side runs on — and never otherwise. */
+  .tl-rail__mid {
+    --tl-ovf-l: 0px;
+    --tl-ovf-r: 0px;
+    mask-image: linear-gradient(90deg,
+        transparent 0, #000 var(--tl-ovf-l),
+        #000 calc(100% - var(--tl-ovf-r)), transparent 100%);
+    -webkit-mask-image: linear-gradient(90deg,
+        transparent 0, #000 var(--tl-ovf-l),
+        #000 calc(100% - var(--tl-ovf-r)), transparent 100%);
+  }
+  .tl-rail__mid[data-ovf~="l"] { --tl-ovf-l: 30px; }
+  .tl-rail__mid[data-ovf~="r"] { --tl-ovf-r: 34px; }
+
+  /* And a fade alone is still only a hint. The chevron is the affordance: a
+     real control, sitting in the faded strip, that scrolls the row when it is
+     pressed — which is what a phone reader needs, because the row is 34px tall
+     and a horizontal drag inside it is easy to miss and easy to mistake for a
+     page swipe. It is shown by the SIBLING selector off the row's own state, so
+     the button's existence and the fade under it can never disagree. */
+  .tl-rail__more {
+    position: absolute;
+    bottom: 0;
+    z-index: 1;
+    display: none;
+    place-items: center;
+    width: 30px;
+    height: var(--tl-switch-row);
+    padding: 0;
+    border: 0;
+    background: none;
+    color: var(--tl-ink-2);
+    cursor: pointer;
+  }
+  .tl-rail__more svg { width: 14px; height: 14px; display: block; }
+  .tl-rail__more--l { left: 0; }
+  .tl-rail__more--r { right: 0; }
+  .tl-rail__mid[data-ovf~="l"] ~ .tl-rail__more--l,
+  .tl-rail__mid[data-ovf~="r"] ~ .tl-rail__more--r { display: grid; }
 }
 
 @media (max-width: 759px) {
@@ -875,6 +973,18 @@ body.tl-dragging { cursor: grabbing; }
 /* A chain link with no geometry in the eighteen snapshots is still part of the
    lineage — shown, but dashed, so "we have no map of it" is visible. */
 #cubeChain .chip[data-empty="true"] { border-style: dashed; color: var(--tl-ink-3); }
+/* The link the volume is actually traced from. cube.ts has always marked it
+   `aria-pressed`, but on a <span> that attribute is inert, and nothing here
+   drew it — so the state existed in the markup and nowhere a reader could see
+   it. The chips are real buttons now, which makes aria-pressed mean something;
+   this is the matching visible half, and it is `.chip.on`'s own declarations
+   rather than a new treatment, so pressed reads the same across every chip in
+   the app. */
+#cubeChain .chip[aria-pressed="true"] {
+  background: var(--tl-selected);
+  border-color: var(--tl-rule-strong);
+  color: var(--tl-ink);
+}
 
 /* The frame meter, flush right in the Reading panel's header. A measurement,
    so mono; tabular figures so the numbers do not jitter at 60 Hz. */

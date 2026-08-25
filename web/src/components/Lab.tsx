@@ -736,6 +736,72 @@ export default function Lab() {
     target?.scrollIntoView({ inline: 'nearest', block: 'nearest' });
   }, [view]);
 
+  /* ═══ THE SWITCHER ROW'S OVERFLOW, SAID OUT LOUD ═══════════════════════════
+
+     At 390px the row wants 623px: six group names are 377 of it and the Map
+     group's seg — Borders / People / Horizon — is another 190, so the seg sits
+     entirely past the right edge. It cannot be made to fit: shortening the
+     padding buys single-digit pixels against a 233px deficit, and the two real
+     alternatives (hiding the seg, or hiding the group names behind icons) each
+     delete a control to avoid admitting the row scrolls.
+
+     So the row scrolls — and now it SAYS SO. It said nothing before: shell.css
+     put an unconditional fade on the right edge, which on the Map view lands on
+     22px of empty rail past "CORE" and is therefore invisible, and there was no
+     other cue anywhere. A reader had no way to learn that three more controls
+     existed 3px past the edge.
+
+     Two changes, and this effect is the first: the row's real scroll state is
+     published as `data-ovf` ("l", "r", or "l r"), which app.css uses to fade
+     only the sides that actually run on and to reveal a chevron the reader can
+     press. Measured rather than assumed — the widths move with the group (a
+     one-member group has no seg at all), with the font, and with the viewport,
+     so a media query could not know this. */
+  const midRef = useRef<HTMLDivElement | null>(null);
+  const [ovf, setOvf] = useState('');
+  const readOvf = useCallback(() => {
+    const el = midRef.current;
+    if (!el) return;
+    /* MEASURED AGAINST THE CONTENT, NOT THE SCROLL BOX. The naive test —
+       scrollLeft > 0 — is wrong here, and visibly so: the row carries 12px of
+       inline padding and `scroll-snap-align: start` on every switcher item, so
+       the browser snaps the resting position to the FIRST ITEM'S left edge,
+       which is scrollLeft 12 with nothing whatever hidden. Reading that as
+       "scrolled" put a left chevron over the M of MAP on a freshly loaded page.
+       So both ends are measured as how much CONTENT the padding boxes are
+       hiding, which is zero at either rest position by construction. 2px of
+       slack absorbs sub-pixel layout. */
+    const cs = getComputedStyle(el);
+    const padL = parseFloat(cs.paddingLeft) || 0;
+    const padR = parseFloat(cs.paddingRight) || 0;
+    const l = el.scrollLeft - padL > 2;
+    const r = (el.scrollWidth - padR) - (el.scrollLeft + el.clientWidth) > 2;
+    setOvf(l && r ? 'l r' : l ? 'l' : r ? 'r' : '');
+  }, []);
+  useEffect(() => {
+    const el = midRef.current;
+    if (!el) return;
+    readOvf();
+    el.addEventListener('scroll', readOvf, { passive: true });
+    // The row's own width AND its children's: the seg appears and disappears
+    // with the group, which changes the overflow without resizing anything else.
+    const ro = new ResizeObserver(readOvf);
+    ro.observe(el);
+    for (const kid of Array.from(el.children)) ro.observe(kid);
+    return () => { el.removeEventListener('scroll', readOvf); ro.disconnect(); };
+  }, [readOvf]);
+  useEffect(() => { readOvf(); }, [view, readOvf]);
+
+  /** The chevron's move: a screenful-ish of the row, in the direction pressed. */
+  const nudgeRow = useCallback((dir: 1 | -1) => {
+    const el = midRef.current;
+    if (!el) return;
+    el.scrollBy({
+      left: dir * Math.max(140, el.clientWidth * 0.6),
+      behavior: matchMedia('(prefers-reduced-motion: reduce)').matches ? 'auto' : 'smooth',
+    });
+  }, []);
+
   // ═══ THE CENTRE-YEAR RULE ════════════════════════════════════════════════
   //
   // "when I move on the timeline the time changes always to be that at the
@@ -979,10 +1045,14 @@ export default function Lab() {
     closeSearch();
     const box = document.getElementById('cmdk') as HTMLInputElement | null;
     if (box) { box.value = ''; box.blur(); }
+    // Any dim comes off BEFORE anything else happens, on both branches: the
+    // framing has to land on a full world rather than on 12% of one, and a row
+    // that navigates to a VIEW would otherwise leave the timeline dimmed by a
+    // query the reader can no longer see in the (now empty) field.
+    TL.clearSearch();
     if (r.k === 'v') { go(r.v); return; }
     const sub = describe(r.h.id);
     SelCard.select(r.h.id, null);
-    TL.clearSearch();                      // any dim comes off before the framing lands
     if (sub) { const [a, b] = perspectiveSpan(sub); TL.frameTo(a, b); }
     go('zoom');
   }, [closeSearch, go]);
@@ -1010,7 +1080,10 @@ export default function Lab() {
         // the selection and the map highlight are never collateral.
         ev.stopPropagation();
         if (rows.length) { ev.preventDefault(); closeSearch(); }
-        else { box.value = ''; box.blur(); }
+        // Emptying the field has to empty the QUERY as well, or the canvas is
+        // left dimmed to 12% by a search whose text is no longer anywhere on
+        // screen — a dim with nothing to explain it.
+        else { box.value = ''; TL.clearSearch(); box.blur(); }
         return;
       }
       if (!rows.length) return;
@@ -1248,7 +1321,7 @@ export default function Lab() {
             <span className="tl-mark__word">Timeline</span>
           </span>
 
-          <div className="tl-rail__mid">
+          <div className="tl-rail__mid" ref={midRef} data-ovf={ovf || undefined}>
             <nav className="tl-switch" role="tablist" aria-label="View">
               {GROUPS.map(g => (
                 <button key={g.id} className="tl-switch__item" role="tab"
@@ -1280,6 +1353,26 @@ export default function Lab() {
             </div>
 
           </div>
+
+          {/* THE SCROLL AFFORDANCE — the second half of the data-ovf work above.
+              Absolutely positioned against the rail rather than placed in its
+              grid, so adding them cannot invent a fourth column; app.css shows
+              each one only while the row is actually scrolled away from that
+              edge, and only on the widths where the row is a scroller at all.
+
+              OUT OF THE TAB ORDER ON PURPOSE. They do nothing a keyboard reader
+              needs — tabbing into the switcher scrolls each item into view by
+              itself — so a focus stop here would be two extra stops that only
+              move pixels. They are a pointer affordance, and a pointer is the
+              only thing that cannot already reach past the edge. */}
+          <button type="button" className="tl-rail__more tl-rail__more--l"
+            tabIndex={-1} aria-hidden="true" onClick={() => nudgeRow(-1)}>
+            <svg viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.6"><path d="M10 3.5L5.5 8L10 12.5" /></svg>
+          </button>
+          <button type="button" className="tl-rail__more tl-rail__more--r"
+            tabIndex={-1} aria-hidden="true" onClick={() => nudgeRow(1)}>
+            <svg viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.6"><path d="M6 3.5L10.5 8L6 12.5" /></svg>
+          </button>
 
           <div className="tl-rail__end">
             {/* THE ONE SEARCH. A real input, not a button that opens a modal:

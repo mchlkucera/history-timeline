@@ -1,0 +1,10 @@
+{
+  "version": "0.0.1",
+  "configurations": [
+    {
+      "name": "timeline-web",
+      "port": 3271,
+      "url": "http://localhost:3271"
+    }
+  ]
+}

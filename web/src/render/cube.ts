@@ -447,10 +447,17 @@ export const Cube = {
     const note = $('#cubeNote'); if (note) note.textContent = t.note || '';
     const chain = $('#cubeChain');
     if (chain) {
+      // A CHIP IS A BUTTON. These were <span>s with a click listener — a mouse-only
+      // control the keyboard could not reach — and they were already being handed
+      // `aria-pressed`, which is meaningless on a span and therefore told a screen
+      // reader nothing about which polity the volume is currently traced from.
+      // globals.css §chips already resets appearance, height, padding, border,
+      // background, colour and font on .chip, so the element swap changes the
+      // semantics and nothing about the look.
       chain.innerHTML = t.chain.map(p =>
-        `<span class="chip" data-pol="${esc(p.id)}"${p.sel ? ' aria-pressed="true"' : ''}` +
+        `<button type="button" class="chip" data-pol="${esc(p.id)}" aria-pressed="${p.sel ? 'true' : 'false'}"` +
         `${p.span ? '' : ' data-empty="true"'} title="${p.span ? p.span + ' snapshots' : 'no geometry in this dataset'}">` +
-        `${esc(p.name)}</span>`).join('');
+        `${esc(p.name)}</button>`).join('');
       chain.querySelectorAll<HTMLElement>('[data-pol]').forEach(c =>
         c.addEventListener('click', () => this.select(c.dataset.pol!)));
     }
