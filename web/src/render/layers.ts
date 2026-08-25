@@ -68,26 +68,46 @@ export const DETAIL_TEXT: Record<LayerKind, [string, string][]> = {
  *
  *   less      the kind's spine: a life's bar, a movement's long periods,
  *             a region's turning points.
- *   normal    importance 4 and up (plus the spine, always).
+ *   normal    the structure in full, but only the FIRST-RANK moments.
  *   detailed  everything — and timeline.ts ALSO drops the zoom gate for this
  *             layer, because "everything we hold" cannot mean "…once you have
  *             zoomed far enough in".
+ *
+ * WHY NORMAL TREATS A DOT DIFFERENTLY FROM A BAR. `normal` used to admit
+ * importance 4 for everything, which sounded like a middle setting and was not
+ * one: of the 179 event dots in the corpus, 170 are level 4 or better. Normal
+ * was showing 95% of them, so the dial's middle notch was `detailed` wearing a
+ * different name, and the event stratum — the densest thing on the board, and
+ * the one whose labels compete hardest for horizontal room — never thinned out
+ * until you turned the dial the whole way down to `less`.
+ *
+ * A dot at normal now needs level 3 or better: 97 dots rather than 170. What
+ * that drops is the genuinely second-rank moment — Stonehenge raised, the first
+ * Olympic games, the Defenestration of Prague — every one of which is still one
+ * notch away at `detailed`, per layer. SPANS keep level 4, because a bar is
+ * structure rather than incident: it says a thing EXISTED for a stretch, it
+ * cannot pile up in a row the way dots do, and thinning it would take the shape
+ * out of the board rather than the clutter.
  */
+/** The importance a MOMENT must reach to survive `normal`. Spans keep 4. */
+const NORMAL_MOMENT = 3;
 export function passesDetail(
   d: Detail, kind: LayerKind, lvl: number, type: string, start: number, end: number,
 ): boolean {
   if (d === 2) return true;
   const isSpan = end !== 0 && end !== start;
+  // Callers pass end === 0 for an event, so isSpan is the dot/bar split.
+  const cap = isSpan ? 4 : NORMAL_MOMENT;
   if (kind === 'person') {
     if (type === 'life') return true;                    // the bar is the spine
-    return d === 1 && lvl <= 4;
+    return d === 1 && lvl <= cap;
   }
   if (kind === 'movements') {
     if (d === 0) return isSpan && lvl <= 3;
-    return lvl <= 4;
+    return lvl <= cap;
   }
   if (d === 0) return lvl <= 2 || (isSpan && (end - start) >= 200 && lvl <= 3);
-  return lvl <= 4;
+  return lvl <= cap;
 }
 
 // ── the catalogue ────────────────────────────────────────────────────────────
