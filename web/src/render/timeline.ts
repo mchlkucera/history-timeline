@@ -55,7 +55,7 @@ interface LaneLayout {
   key: string; label: string; si: number | null; isCur: boolean;
   // ── the layer this band draws ──────────────────────────────────────────────
   // `key` is the LAYER ID ('eu-sci'), or 'g:<groupId>' for a group's header
-  // strip. Everything keyed by lane key elsewhere in this file — _dh, _trimS,
+  // strip. Everything keyed by lane key elsewhere in this file — _dh,
   // expanded, dying — is therefore keyed by layer, which is what makes a
   // reorder move a band's followed height along with it.
   layerId: string | null; detail: Detail; grp: GNode | null; isGroupHead: boolean;
@@ -112,16 +112,15 @@ interface Layout {
       frame for any single row, 2.2px per frame for a whole band. That one clamp
       catches every remaining source of a jump, enumerated or not: a flick pan
       that blows through the pad in two frames, a preset teleport, a lane toggle,
-      the budget trim engaging, a search that re-ranks the corpus. It is NOT an
-      easing curve — there is no timer and no duration. When the input is idle
-      the drawn height equals the target exactly, so nothing breathes.
+      a rung crossing, a search that re-ranks the corpus. It is NOT an easing
+      curve — there is no timer and no duration. When the input is idle the drawn
+      height equals the target exactly, so nothing breathes.
 
-   3. HYSTERESIS ON THE TRIM. The global budget engages at budgetOf()+24 and
-      releases only if restoring a row would leave the total under budgetOf()−24,
-      a 48px dead band against a 24px row, so it cannot oscillate near the cap.
-      (The budget was a flat HMAX when this was written. It is a function of the
-      rung's air now — see budgetOf — but it is still one number per frame and the
-      dead band around it is still 48px, so nothing about this argument changed.)
+   3. THERE IS NO TRIM LEFT TO OSCILLATE. This slot used to describe a hysteresis
+      band around the global height budget. The budget is gone — see the long note
+      where `budgetOf` used to live — because it was the mechanism that deleted
+      marks on the way IN. A band's height is now its content's demand and nothing
+      else, so there is no cap to chatter against and no third guard to keep.
 
    Together they replace the 180ms discrete-moment ease that was on the table:
    ONE mechanism, not two, and it covers cases an enumerated ease would miss. */
@@ -131,20 +130,33 @@ interface Layout {
    zoom and picked B: "Add in the zoom stepping that enlarges rectangles.
    include more then 5 steps."
 
-   So the ZOOM is no longer a continuous layout input. It is a LADDER of 13
+   So the ZOOM is no longer a continuous layout input. It is a LADDER of 26
    rungs, geometric in v-space (shared.ts's one piecewise scale, which is
    literally years for the last ten thousand of them and log-of-years-ago before
-   that), each rung about 2.12× the next. Standing on a rung fixes TWO things at
+   that), each rung about 1.456× the next. Standing on a rung fixes TWO things at
    once, and they are the two the old continuous ramp used to smear:
 
      · WHAT IS VISIBLE — one importance tier, 1..5, a hard gate. The old
        alphaFor() ramp faded a level in across a 1.6× band of spans, which is
        what made every wheel notch a layout event.
      · HOW BIG THE MARKS ARE — a pitch multiplier on the row height, the
-       rectangle heights and the label sizes, 0.62 at the Big Bang to 1.62 at a
-       decade. Zoomed out: many slim rows. Zoomed in: fewer, fatter, readable
+       rectangle heights and the label sizes, 0.60 at the Big Bang to 2.27 at a
+       few years. Zoomed out: many slim rows. Zoomed in: fewer, fatter, readable
        ones. TIER_H is scaled WHOLE, so the importance ratios inside a step are
        exactly the ratios outside it.
+
+   WHY 26 AND NOT 13. The founder, zoomed in: "Add more enlargement steps on
+   zoom, when I zoom in it looks squashed." A 2.12× rung is a big thing to cross
+   — a fifth of a wheel flick lands you a whole tier and a whole pitch away — so
+   the ladder was HALVED IN STRIDE rather than lengthened at one end: every one
+   of the old thirteen doors is still a door (so a tier still opens at exactly
+   the v-span it always did), with a new rung interposed between each pair, one
+   more above the old top (the old `deep time` rung spanned 70000..VFULL=151522,
+   which is a full rung's worth on its own) and one more below the old bottom
+   (zoomBy clamps the v-span at 8, so 12..18 was likewise a whole unused rung).
+   Twice as many crossings per gesture, each moving half as far: the same total
+   travel, delivered in smaller pieces, which is what "less jumpy" means. The
+   hysteresis below is re-sized to match.
 
    BETWEEN RUNGS THE LAYOUT IS BIT-FROZEN. Wheeling inside a rung moves the
    marks along x and changes nothing else: not a height, not a visibility, not
@@ -166,7 +178,7 @@ interface ZStep {
   v: number;                // enter this rung when the v-span falls to or below this
   tier: number;             // importance visible here, 1..5 (before the layer's detail offset)
   pitch: number;            // multiplier on row pitch, rectangle height and label size
-  air: number;              // multiplier on every piece of WHITESPACE (see the note below)
+  air: number;              // multiplier on the whitespace BETWEEN BANDS (see the note below)
   ev: number;               // how many rows the event stratum may open
   name: string;             // what this rung is, in words
 }
@@ -185,38 +197,79 @@ interface ZStep {
    were 12px tall or 32px tall. Measured on the default arrangement, the gap
    between two bands was 14px at EVERY one of the thirteen rungs.
 
-   So a rung now fixes a third number, and it is deliberately NOT `pitch`. Air
-   that merely tracked pitch would keep every ratio in the picture exactly where
-   it is — the same drawing at a bigger size, which is precisely the thing that
-   reads as crowded, because ink area grows as the square of a linear scale while
-   the gaps grow linearly. Air therefore RUNS AHEAD of pitch above the reference
-   rung (roughly pitch^1.75: at the closest rung the marks are 1.62x and the air
-   is 2.28x) and trails a little below it, where slim rows and many of them is
-   the whole point. At `an era` — pitch 1.00, air 1.00 — the geometry is
-   bit-identical to what it was before this existed, so that rung stays the
-   reference every other number in this file was tuned against.
+   So a rung fixes a third number, and it is deliberately NOT `pitch`.
 
-   The cost is height, and it is paid for in FIX 2's scrolling: see `budgetOf`. */
+   ── AND WHY THE EXPONENT WAS RE-DERIVED ─────────────────────────────────────
+   The first answer was ONE number for all whitespace, running AHEAD of pitch
+   (roughly pitch^1.75: marks 1.62×, air 2.28× at the closest rung), on the
+   argument that ink area grows as the square of a linear scale while gaps grow
+   linearly. That argument was made when a lane's height was effectively FIXED —
+   the global height budget clamped the plot to one viewport, so the only way to
+   buy breathing room was to spend it on gaps. With the budget gone (see the note
+   where `budgetOf` used to be) the picture is free to grow, and the founder's
+   next word on it was the opposite complaint: "when I zoom in it looks squashed."
+
+   Squashed is what pitch^1.75 produces once you look at where the air lands. A
+   row's pitch is the MARK plus a GUTTER (SP_PITCH = 20 + 4). At air 2.28 the
+   gutter is 9.1px of a 41.5px row — 22% of the row is nothing, against 16.7% at
+   the reference. The rectangle got 1.62× taller and its row got 1.73× taller, so
+   the mark's SHARE of its own row FELL as the reader zoomed in. That is the
+   squash, and it is arithmetic, not taste.
+
+   The two gaps are therefore split, because they are doing different jobs:
+
+     · THE GUTTER INSIDE A ROW is not a separator between two ideas, it is the
+       leading of a line of type — and leading is the standard case of a gap that
+       must grow SUB-linearly: a 12px face wants 1.5× line height, a 48px face
+       wants 1.2×. So it goes as sqrt(pitch). At the closest rung the mark takes
+       88% of its row instead of 78%, and it takes MORE of it the further in you
+       go, which is the direction "enlarge the rectangles" actually points.
+     · THE WHITESPACE BETWEEN BANDS — HEAD_PAD, GRP_H, GAP_H — is a separator
+       between subjects, and it should scale with the thing it separates, with a
+       little ahead for the area argument, which is real but much weaker than
+       ^1.75 made it: pitch^1.25. That is `air`, the number in this table.
+
+   BELOW THE REFERENCE air is left exactly on the hand-tuned trail it was on
+   (0.805 → 1.00, linear), because slim rows and many of them is the whole point
+   out there and the founder has already signed off on how deep time looks.
+
+   At `an era` — pitch 1.00, air 1.00 — the geometry is still bit-identical to
+   what it was before any of this existed, so that rung stays the reference every
+   other number in this file was tuned against. */
 const STEPS: ZStep[] = [
-  { v: Infinity, tier: 1, pitch: 0.62, air: 0.82, ev: 1, name: 'deep time' },
-  { v: 70000, tier: 1, pitch: 0.68, air: 0.85, ev: 1, name: 'the ice' },
-  { v: 33000, tier: 2, pitch: 0.74, air: 0.88, ev: 2, name: 'prehistory' },
-  { v: 15500, tier: 2, pitch: 0.80, air: 0.91, ev: 2, name: 'civilisations' },
-  { v: 7200, tier: 2, pitch: 0.87, air: 0.94, ev: 2, name: 'the long ages' },
-  { v: 3400, tier: 3, pitch: 0.94, air: 0.97, ev: 3, name: 'an age' },
-  { v: 1600, tier: 3, pitch: 1.00, air: 1.00, ev: 3, name: 'an era' },
-  { v: 760, tier: 4, pitch: 1.08, air: 1.16, ev: 3, name: 'centuries' },
-  { v: 360, tier: 4, pitch: 1.17, air: 1.34, ev: 4, name: 'a century' },
-  { v: 170, tier: 5, pitch: 1.27, air: 1.55, ev: 4, name: 'a lifetime' },
-  { v: 80, tier: 5, pitch: 1.38, air: 1.78, ev: 4, name: 'a generation' },
-  { v: 38, tier: 5, pitch: 1.50, air: 2.02, ev: 5, name: 'a career' },
-  { v: 18, tier: 5, pitch: 1.62, air: 2.28, ev: 5, name: 'a decade' },
+  { v: Infinity, tier: 1, pitch: 0.60, air: 0.805, ev: 1, name: 'all of time' },
+  { v: 103000, tier: 1, pitch: 0.64, air: 0.820, ev: 1, name: 'deep time' },
+  { v: 70000, tier: 1, pitch: 0.68, air: 0.850, ev: 1, name: 'the ice' },
+  { v: 48000, tier: 1, pitch: 0.71, air: 0.865, ev: 1, name: 'the last glaciation' },
+  { v: 33000, tier: 2, pitch: 0.74, air: 0.880, ev: 2, name: 'prehistory' },
+  { v: 22600, tier: 2, pitch: 0.77, air: 0.895, ev: 2, name: 'the first peoples' },
+  { v: 15500, tier: 2, pitch: 0.80, air: 0.910, ev: 2, name: 'civilisations' },
+  { v: 10600, tier: 2, pitch: 0.83, air: 0.925, ev: 2, name: 'the first cities' },
+  { v: 7200, tier: 2, pitch: 0.87, air: 0.940, ev: 2, name: 'the long ages' },
+  { v: 4900, tier: 2, pitch: 0.90, air: 0.955, ev: 2, name: 'millennia' },
+  { v: 3400, tier: 3, pitch: 0.94, air: 0.970, ev: 3, name: 'an age' },
+  { v: 2320, tier: 3, pitch: 0.97, air: 0.985, ev: 3, name: 'ages' },
+  { v: 1600, tier: 3, pitch: 1.00, air: 1.000, ev: 3, name: 'an era' },
+  { v: 1100, tier: 3, pitch: 1.065, air: 1.08, ev: 3, name: 'the long centuries' },
+  { v: 760, tier: 4, pitch: 1.13, air: 1.17, ev: 3, name: 'centuries' },
+  { v: 520, tier: 4, pitch: 1.21, air: 1.27, ev: 3, name: 'half a millennium' },
+  { v: 360, tier: 4, pitch: 1.29, air: 1.38, ev: 4, name: 'a century' },
+  { v: 247, tier: 4, pitch: 1.37, air: 1.48, ev: 4, name: 'three lifetimes' },
+  { v: 170, tier: 5, pitch: 1.46, air: 1.60, ev: 4, name: 'a lifetime' },
+  { v: 116, tier: 5, pitch: 1.55, air: 1.73, ev: 4, name: 'two generations' },
+  { v: 80, tier: 5, pitch: 1.66, air: 1.88, ev: 4, name: 'a generation' },
+  { v: 55, tier: 5, pitch: 1.76, air: 2.03, ev: 4, name: 'half a lifetime' },
+  { v: 38, tier: 5, pitch: 1.88, air: 2.20, ev: 5, name: 'a career' },
+  { v: 26, tier: 5, pitch: 2.00, air: 2.38, ev: 5, name: 'a quarter century' },
+  { v: 18, tier: 5, pitch: 2.13, air: 2.57, ev: 5, name: 'a decade' },
+  { v: 12, tier: 5, pitch: 2.27, air: 2.79, ev: 5, name: 'a few years' },
 ];
-// The dead band at every threshold: enter the next rung at 0.91× its door,
-// leave it again only at 1.09×. Nine percent each way against a 2.12× rung, so
-// a wheel parked on a boundary cannot oscillate, and a deliberate reversal
-// costs about a fifth of a rung's worth of scrolling.
-const HYST = 0.09;
+// The dead band at every threshold: enter the next rung at (1−HYST)× its door,
+// leave it again only at (1+HYST)×. It used to be nine percent each way against
+// a 2.12× rung; the rung is 1.456× now, so the same PROPORTION of a rung is
+// 0.09 × ln(1.456)/ln(2.12) = 0.045. A wheel parked on a boundary still cannot
+// oscillate, and a deliberate reversal still costs about a fifth of a rung.
+const HYST = 0.045;
 // One settle, and the same one whichever way the ladder is climbed.
 const SETTLE_MS = 230;
 /* HOW WIDE THE LIMITER OPENS FOR A SETTLE, and why it opens at all.
@@ -247,7 +300,6 @@ const SETTLE = 0.05;        // closer than this and the follower snaps — idle 
 const IDLE_MS = 400;        // a gap this long is a new look, not a gesture: snap, don't ramp
 const LAB_G0 = 0.60, LAB_G1 = 0.85;    // a row's text fades in between 60% and 85% grown
 const HIT_FLOOR = 0.34;     // below this a row is drawn but NOT hoverable (see hitAt)
-const TRIM_ON = 24, TRIM_OFF = 24;     // the height-budget hysteresis band
 /* ── NO BAND HEADER ON THE CANVAS ANY MORE ───────────────────────────────────
 
    The band name used to be painted at x=20 inside a 118px left gutter, and the
@@ -520,6 +572,14 @@ export const TL = {
     const v0 = tv(this.d0), v1 = tv(this.d1);
     return G + (tv(y) - v0) / ((v1 - v0) || 1) * Wp;
   },
+  /** The same x, read off the LATCHED window instead of the live one. Anything a
+   *  LAYOUT decision depends on has to be measured here or it is a per-frame
+   *  input, which is the one thing the ladder exists to remove — see the event
+   *  packing in layout(), whose row table this coordinate makes bit-frozen. */
+  xLatch(v: number, G: number, Wp: number) {
+    const v0 = this._lwV0, v1 = this._lwV1;
+    return G + (v - v0) / ((v1 - v0) || 1) * Wp;
+  },
   ix(x: number, G: number, Wp: number) {
     const v0 = tv(this.d0), v1 = tv(this.d1);
     return ty(v0 + (x - G) / Wp * (v1 - v0));
@@ -779,12 +839,18 @@ export const TL = {
     if (this._fStep === this.step) return;
     const p = STEPS[Math.max(0, this.step)].pitch;
     const q = (px: number) => Math.round(px * 2) / 2;
-    this._fIn = fontUI(q(10.5 * clamp(p, 0.94, 1.34)), 600);
-    this._fUi = fontUI(q(11.5 * clamp(p, 0.94, 1.24)));
+    // THE CEILINGS MOVED WITH THE LADDER. They were 1.34/1.24 against a top
+    // pitch of 1.62, i.e. type stopped growing four rungs before the marks did —
+    // which is half of what "it looks squashed" was describing, because a 32px
+    // rectangle carrying 14px type reads as a bar with a caption rather than as a
+    // labelled object. The top pitch is 2.27 now; 1.45/1.34 keeps the inner label
+    // at 15px inside a 43px level-1 bar and still fits a level-5 bar's 21px.
+    this._fIn = fontUI(q(10.5 * clamp(p, 0.94, 1.45)), 600);
+    this._fUi = fontUI(q(11.5 * clamp(p, 0.94, 1.34)));
     this._fStep = this.step;
   },
 
-  // ---- pure layout pass: filter, pack, squeeze, budget → per-lane continuous rows ----
+  // ---- pure layout pass: filter, pack, measure → per-lane continuous rows ----
   // size() calls this before fitCanvas; render() paints from the SAME result, so the
   // canvas height and the painted content can never disagree. Read the CONTINUITY note
   // above the constants before touching anything below.
@@ -804,34 +870,49 @@ export const TL = {
   // same thing for the rung's AIR, and the two are eased on the one settle clock,
   // so a row's mark and the space around it arrive together.
   _pDraw: 1, _aDraw: 1,
-  /** A spread row's pitch: the mark scales with the rung, the gutter with its air. */
-  spOf(p: number, a: number) { return (this.SP_PITCH - ROW_AIR) * p + ROW_AIR * a; },
+  /** A spread row's pitch. THE MARK scales with the rung; THE GUTTER inside the
+   *  row scales as sqrt(pitch) — leading, not separation. See the air note above
+   *  STEPS. sqrt(1) === 1, so the reference rung is untouched. */
+  spOf(p: number) { return (this.SP_PITCH - ROW_AIR) * p + ROW_AIR * Math.sqrt(p); },
   /** An event row's pitch, split the same way. */
-  epOf(p: number, a: number) { return (this.EV_PITCH - EV_AIR) * p + EV_AIR * a; },
-  /* ── HOW TALL THE PLOT MAY BE, NOW THAT IT SCROLLS ────────────────────────
-     The budget used to be the stage height flat: whatever did not fit was
-     trimmed away into "+N more", because there was no way to reach anything
-     below the fold. FIX 2 gave the sheet a scroll, so the fold is no longer a
-     wall — and the moment it is not, holding a zoomed-in plot to one viewport
-     is just a way of refusing the air the rung asked for.
+  epOf(p: number) { return (this.EV_PITCH - EV_AIR) * p + EV_AIR * Math.sqrt(p); },
+  /* ── WHERE THE GLOBAL HEIGHT BUDGET USED TO BE, AND WHY IT IS GONE ────────
+     There was a `budgetOf(air)` here and a pair of trim maps under it. The plot
+     was held to a stage-height budget: every frame, the lane with the most rows
+     gave one up until the total fitted, and what it gave up went into "+N more".
 
-     THE HEADROOM IS EXACTLY THE AIR, AND NOTHING ELSE. Measured on the default
-     nine-band arrangement, the air a close rung adds is about 27% of the stage;
-     0.35 of (air − 1) tracks that with a little slack for arrangements with more
-     bands in them. That is a deliberate choice between the two things the extra
-     height could have bought — whitespace or more rows — and it buys whitespace:
-     the reader sees the SAME marks as before, with room around them, rather than
-     a longer list. It also means the far and mid rungs are unchanged (air ≤ 1 ⇒
-     headroom 1), so "the whole arrangement at a glance" still holds everywhere it
-     held before, and only a rung the reader deliberately zoomed to can overflow. */
-  budgetOf(air: number) { return this.HMAX * clamp(1 + (air - 1) * 0.35, 1, 1.6); },
-  _trimS: new Map<string, number>(),        // rows the global budget has taken off a lane
-  _trimE: new Map<string, number>(),
+     THAT MECHANISM WAS THE BUG. A row costs spOf(pitch) pixels and the pitch
+     grows with the rung, so the SAME budget buys FEWER ROWS the further in you
+     zoom — and at the same time the rung's tier gate lets MORE marks qualify, so
+     demand rises while capacity falls. Measured on the corpus at a fixed 1800–
+     2000 window, the old ladder drew 67 marks at `centuries` and 58 nine rungs
+     later; Europe's Essentials went from four spread rows to two, and Winston
+     Churchill — permanently packed on row 2 — was evicted into "+3 more" at the
+     `centuries` crossing and never came back. Twenty-six marks in all vanished
+     ON THE WAY IN across the ladder. The founder, twice, in his own words:
+     "when I zoom more he disappears… zoomed out I see more stuff than zoomed in.
+     Remember? Google Earth, we should be zooming in to see more, adding the space
+     as needed."
+
+     So the budget is not tuned, it is retired. A lane's row cap is now exactly
+     what its content asks for, and `asks` is a NON-DECREASING function of the
+     rung (the tier gate only ever opens, the detail dial is zoom-independent and
+     the window is latched), so the set of rows a lane shows — and therefore the
+     set of marks, since a mark's row is permanent — can only ever GROW as the
+     reader zooms in. That is the invariant, and it now holds by construction
+     rather than by tuning: there is no longer any code path that can take a
+     spread row away on the way in.
+
+     WHAT PAYS FOR IT is the scroll FIX 2 already built. The sheet grows and the
+     one shared scroller absorbs it; HMAX survives as the MINIMUM stage height
+     (see size()), which is what keeps a short arrangement from floating as a slab
+     in the middle of the ground. Measured on the default arrangement at the
+     closest rung the plot is about 3.5 viewports tall, and the reader who zoomed
+     that far in is asking for exactly that. */
   _snap: true,                              // next layout jumps straight to its target
   _noSnap: false,                           // …unless a user-initiated change wants the ramp
   _lastCw: 0,
   _lastLay: -1e9,
-  _rr: 0,
   _raf: 0,
 
 
@@ -864,13 +945,12 @@ export const TL = {
     const pD = this._pDraw = STF.pitch + (pT - STF.pitch) * sp;   // …and the eased DRAWN one
     const aT = ST.air;                                    // the rung's air — the TARGET
     const aD = this._aDraw = STF.air + (aT - STF.air) * sp;       // …and the eased DRAWN one
-    const SP = this.spOf(pT, aT), EP = this.epOf(pT, aT);
-    const SPd = this.spOf(pD, aD), EPd = this.epOf(pD, aD);
-    // the furniture between the marks, at this rung and at the drawn ease of it
+    const SP = this.spOf(pT), EP = this.epOf(pT);
+    const SPd = this.spOf(pD), EPd = this.epOf(pD);
+    // the furniture between the BANDS, at this rung and at the drawn ease of it
     const GAP = GAP_H * aT, GAPd = GAP_H * aD;
     const HEAD = Math.min(MIN_LANE_H, HEAD_PAD * aT);     // never past the empty-lane floor
     const GRP = GRP_H * aT;
-    const HB = this.budgetOf(aT);                         // the height budget, in pixels
     this.fonts();
     const uiF = this._fUi;
     // The latch. A frame that moved the window without changing its v-span is a
@@ -980,7 +1060,7 @@ export const TL = {
          and it is exactly the kind of input the ladder exists to remove. So
          existence is decided first, by the rung and the latch alone, and the
          packer is handed a fixed number of rows to fill. */
-      const qual: { ev: any[]; id: string; title: string; x0: number; a: number; on: boolean; isMatch: boolean }[] = [];
+      const qual: { ev: any[]; id: string; title: string; x0: number; xp: number; a: number; on: boolean; isMatch: boolean }[] = [];
       let nOn = 0;
       for (const ev of evs) {
         const id = evId(ev);
@@ -999,41 +1079,70 @@ export const TL = {
         const a = (isLit ? 1 : on ? (was || sp >= 1 ? 1 : sp) : (was ? 1 - sp : 0)) * wA;
         if (a <= 0.02) continue;
         if (on || isLit) nOn++;
-        qual.push({ ev, id, title, x0: this.x(ev[0], G, Wp), a, on: on || isLit, isMatch });
+        qual.push({
+          ev, id, title, a, on: on || isLit, isMatch,
+          x0: this.x(ev[0], G, Wp),                 // LIVE — drawing only
+          xp: this.xLatch(tv(ev[0]), G, Wp),        // LATCHED — everything the packing decides
+        });
       }
-      // THE STRATUM'S HEIGHT IS THE RUNG'S: as many rows as the rung allows, and
-      // never more than the lane has marks to put in them. While a settle runs,
-      // the rung BEFORE is packable too, so a dot on its way out has somewhere to
-      // stand while the limiter closes the row under it. Deliberately NOT read off
-      // the drawn heights: that would make the packing table a function of the
-      // follower's state, which lags a frame behind and would put a change of
-      // layout on the first wheel notch after every close.
-      const evRows = Math.min(eventCap, nOn);
-      const packRows = Math.max(1, Math.min(EV_BOUND,
-        sp < 1 ? Math.max(evRows, Math.min(STF.ev, qual.length)) : evRows));
-      const laneEnd = new Array(packRows).fill(-1e18);
+      /* ── THE PACKING, AND WHY NOTHING FALLS OUT OF IT ANY MORE ────────────
+         The table used to be a FIXED number of rows — the rung's `ev` — and a dot
+         that found no free row in it was dropped into "+N more". That is the same
+         disappearance the row budget used to cause, arriving by a different door,
+         and it is the one the ladder makes WORSE the further in you go: a label's
+         width is a function of the rung's font, so at a fixed window the same dots
+         claim more and more x as the reader zooms in, and one by one they stop
+         fitting. Measured on the corpus, that alone deleted 44 dots on the way in.
+
+         So the table GROWS. Three placements, tried in order, and only the third
+         can fail:
+           1. a row whose last committed label ends left of this dot,
+           2. failing that, A NEW ROW — the stratum is one row taller and the sheet
+              scrolls, which is the founder's "adding the space as needed",
+           3. failing that (the table is at EV_BOUND), a row whose last DOT is
+              clear, placed WITHOUT its label. The mark survives; the word is what
+              is spent. That is the right thing to lose, and it is reversible —
+              zoom on and the window widens the gaps back out.
+         Only when the DOTS themselves collide is one dropped, which is an honest
+         statement that two marks are at the same pixel.
+
+         AND IT IS PACKED IN LATCHED COORDINATES. The stratum's height is read off
+         the packing now, so the packing may not be a per-frame number: xp comes
+         from the latched window, which moves on a pan and on a rung crossing and
+         at no other time. Between rungs the event rows are therefore bit-frozen,
+         exactly as the spread rows have always been. */
+      const laneEnd: number[] = [];               // rightmost committed x per row (label included)
+      const dotEnd: number[] = [];                // …and the same counting DOTS only
+      const evSpare: boolean[] = [];
       const events: LEvent[] = [];
-      const evRaw = new Array<number>(packRows).fill(0);
-      const evSpare = new Array<boolean>(packRows).fill(false);
-      for (let r = 0; r < evRows && r < packRows; r++) evRaw[r] = 1;
       let more = 0;
       for (const Q of qual) {
-        const { ev, id, title, x0, a: lodA, isMatch } = Q;
+        const { ev, id, title, x0, xp, a: lodA, isMatch } = Q;
         const labelW = textW(ctx, title, uiF);
-        let lane = laneEnd.findIndex(le => le < x0 - 4);
         let mode: 'right' | 'left' | 'none' = 'right';
+        let lane = laneEnd.findIndex(le => le < xp - 4);
+        if (lane < 0 && laneEnd.length < EV_BOUND) {
+          lane = laneEnd.length; laneEnd.push(-1e18); dotEnd.push(-1e18); evSpare.push(false);
+        }
         if (lane < 0) {
-          if (!isMatch) { more++; continue; }         // dropped, never double-stacked…
-          // …except a search match, which packs dot-only into the least-crowded row
-          lane = 0; let mMin = 1e18; laneEnd.forEach((le, i2) => { if (le < mMin) { mMin = le; lane = i2; } });
+          lane = dotEnd.findIndex(de => de < xp - 4);
+          if (lane < 0) { more++; continue; }
           mode = 'none';
         }
         const prevEnd = laneEnd[lane];
-        if (mode === 'right' && x0 + 7 + labelW >= cw - 4) mode = (x0 - 9 - labelW > Math.max(G, prevEnd + 4)) ? 'left' : 'none';
-        laneEnd[lane] = Math.max(prevEnd, x0 + 8 + (mode === 'right' ? labelW : 0));
+        if (mode === 'right' && xp + 7 + labelW >= cw - 4) mode = (xp - 9 - labelW > Math.max(G, prevEnd + 4)) ? 'left' : 'none';
+        laneEnd[lane] = Math.max(prevEnd, xp + 8 + (mode === 'right' ? labelW : 0));
+        dotEnd[lane] = Math.max(dotEnd[lane], xp + 8);
         if (isMatch || id === sel) evSpare[lane] = true;
         events.push({ ev, id, x0, row: lane, lodA, mode, labelW, isMatch });
       }
+      // THE STRATUM'S HEIGHT is the rung's allowance or the packing's demand,
+      // whichever is larger. The rung's floor is what keeps an empty-ish stratum
+      // from collapsing as the reader wheels; the packing's demand is what keeps
+      // every dot it placed on a row that has height to stand in.
+      const evRows = Math.max(Math.min(eventCap, nOn), laneEnd.length);
+      const evRaw = new Array<number>(evRows).fill(1);
+      while (evSpare.length < evRows) evSpare.push(false);
       if (foldedMatch.size) for (const v of vis) if (foldedMatch.has(v.it.id)) v.isMatch = true;
       // era-row candidates, gathered from everything VISIBLE (not just what
       // survived the budget) — whether they are already drawn is decided after
@@ -1070,29 +1179,22 @@ export const TL = {
       });
     }
 
-    // ══ PHASE B — the budget. Caps stay INTEGER; the slew limiter is what makes a
-    // cap change smooth, so there is one mechanism here and not two. ═══════════
-    // A lane's floor, in rows the budget may never take. It is a function of the
-    // rung, because a row is not a fixed height any more: three rows per band at
-    // the closest rungs is 28-33px each, and nine bands of that is a third of a
-    // screen past the budget with nothing left for the trim to take. Measured at
-    // the default nine-band arrangement, holding the floor at three ran the plot
-    // to 905px against a 791px budget; two brings it back inside and lets the
-    // budget spend the difference where there is something to show. Fewer,
-    // fatter rows IS the instruction.
-    // It is kept at two even though budgetOf() now gives a close rung half a
-    // viewport of headroom, because a FLOOR is not a target: with the headroom in
-    // place the trim rarely reaches it at all (measured: the default arrangement
-    // trims ten rows at the closest rung, none of them off a two-row band), and
-    // raising it would spend the new height on rows rather than on the air it was
-    // borrowed for.
-    const SPREAD_FLOOR = pT >= 1.05 ? 2 : 3;
-    // THE CUMULATIVE SQUEEZE, which replaces the old integer row cap. Rows spend a
-    // shared budget of `cap` row-heights in permanent order. A row only 40% faded in
-    // spends 0.4 of it, so a row BELOW the cap opens at exactly the rate a row above
-    // it closes and the band's height does not move at all. Rows holding a search hit
-    // or the selection are spared and spend their full demand, exactly as the integer
-    // cap spared them.
+    // ══ PHASE B — how tall each band is. NOTHING IS TAKEN AWAY HERE ══════════
+    // This used to be the global height budget: a trim loop that took a row off
+    // the tallest band until the plot fitted a viewport. It is gone, and the note
+    // where budgetOf() used to live says why in full. What is left is the
+    // measurement — a band's height is its content's demand, and its cap IS that
+    // demand, so the only number that can lower a row's height is the row's own
+    // LOD alpha.
+    //
+    // WHY THAT MAKES THE ZOOM MONOTONE. `asks` counts the permanent rows holding
+    // something visible. Every input to it is either zoom-independent (the detail
+    // dial, the category mutes, the search) or NON-DECREASING in the rung (the
+    // tier gate), and the window it is measured against is the LATCH. So
+    // asks(rung N+1) >= asks(rung N) at a fixed window, a mark's row index is
+    // permanent, and gS[row] > 0 for every row up to the cap. Zooming in can
+    // therefore only ever ADD marks. There is no tuning constant in that sentence.
+    //
     // A band's header height, as a continuous function of how much content it
     // holds. See the note on HEAD_PAD / MIN_LANE_H above the constants.
     const headTarget = (L: LaneLayout, cum: number) =>
@@ -1100,31 +1202,26 @@ export const TL = {
         : L.isGroupHead ? GRP
           : solo ? MIN_LANE_H                        // room for the name the canvas draws
             : MIN_LANE_H - (MIN_LANE_H - HEAD) * Math.min(1, cum);
-    const squeeze = (raw: number[], spare: boolean[], cap: number) => {
+    // Rows spend their demand in permanent order and nothing caps them. The
+    // signature keeps its shape — the callers below still ask for the cumulative
+    // height, and a future cap (an explicit per-lane one, say) has a place to go.
+    const spend = (raw: number[]) => {
       const g = new Array<number>(raw.length).fill(0);
       let cum = 0;
       for (let r = 0; r < raw.length; r++) {
         const want = raw[r];
         if (want <= 0) continue;
-        const v = spare[r] ? want : Math.min(want, Math.max(0, cap - cum));
-        g[r] = v; cum += v;
+        g[r] = want; cum += want;
       }
       return { g, cum };
     };
-    // WHAT A LANE ASKS FOR. The old caps were flat constants — six spread rows
-    // and three event rows for every band, for ever — so "+7 more" meant "the
-    // policy stopped at six", not "the screen ran out". The founder's rule is
-    // the other way round: the DETAIL DIAL states the intent and the renderer
-    // honours it, so a lane's ceiling is exactly what its content asked for and
-    // the ONLY thing that can lower it is the global height budget, whose trims
-    // are counted in _trimS/_trimE below.
     const asks = (raw: number[]) => { let n = 0; for (const g of raw) if (g > 0.02) n++; return n; };
     const measure = (d: Draft) => {
       const L = d.L;
-      d.capS = L.exp ? 999 : Math.max(SPREAD_FLOOR, asks(d.gRaw) - (this._trimS.get(L.key) || 0));
-      d.capE = L.exp ? EV_BOUND : Math.max(1, asks(d.evRaw) - (this._trimE.get(L.key) || 0));
-      const s = squeeze(d.gRaw, d.spare, d.capS); d.gS = s.g; d.cumS = s.cum;
-      const e = squeeze(d.evRaw, d.evSpare, d.capE); d.gE = e.g; d.cumE = e.cum;
+      d.capS = asks(d.gRaw);
+      d.capE = asks(d.evRaw);
+      const s = spend(d.gRaw); d.gS = s.g; d.cumS = s.cum;
+      const e = spend(d.evRaw); d.gE = e.g; d.cumE = e.cum;
       // an empty lane is a bare MIN_LANE_H strip — big enough that its panel row
       // can still hold a name and an eye, which is what makes "hide" reversible —
       // and it narrows CONTINUOUSLY to HEAD_PAD as its first row grows in, so even
@@ -1136,74 +1233,9 @@ export const TL = {
         + GAP * Math.min(1, d.cumS + d.cumE);
       return d.hT;
     };
-    const total = () => drafts.reduce((a, d) => a + d.hT, 0) + 34 + AXIS_TOP;
-
     for (const d of drafts) measure(d);
-    const lastSolid = (g: number[]) => { let last = -1; for (let r = 0; r < g.length; r++) if (g[r] > 0.02) last = r; return last; };
-    // trim candidates: never an expanded lane (the reader opened it), never a dying
-    // one, and never a lane whose lowest row is holding a search hit or the selection.
-    const canTrim = (d: Draft) => {
-      if (d.L.exp || d.L.dying || d.capS <= SPREAD_FLOOR) return false;
-      const last = lastSolid(d.gS);
-      return last >= 0 && !d.spare[last];
-    };
-    let guard = 400;
-    while (total() > HB + TRIM_ON && guard-- > 0) {
-      const cands = drafts.filter(canTrim);
-      if (cands.length) {
-        let m = -1; for (const d of cands) if (d.cumS > m) m = d.cumS;
-        const tied = cands.filter(d => d.cumS > m - 0.01);
-        const pick = tied[(this._rr++) % tied.length];
-        this._trimS.set(pick.L.key, (this._trimS.get(pick.L.key) || 0) + 1);
-        measure(pick);
-        continue;
-      }
-      const ec = drafts.filter(d => !d.L.exp && !d.L.dying && d.capE > 1 && d.cumE > 0.001);
-      if (ec.length) {
-        let m = -1; for (const d of ec) if (d.cumE > m) m = d.cumE;
-        const tied = ec.filter(d => d.cumE > m - 0.01);
-        const pick = tied[(this._rr++) % tied.length];
-        this._trimE.set(pick.L.key, (this._trimE.get(pick.L.key) || 0) + 1);
-        measure(pick);
-        continue;
-      }
-      break;      // the floor (3 spread rows + 1 event row) — the canvas may exceed
-                  // HMAX slightly and the section scrolls; never loop on an
-                  // unsatisfiable target
-    }
-    // HYSTERESIS. A row comes back only if the result would sit under HMAX−TRIM_OFF.
-    // Engage at +24, release under −24: a 48px dead band around a 24px row, so the
-    // trim cannot chatter while a zoom drifts past the cap. Event rows come back
-    // first because they went last.
-    guard = 400;
-    while (guard-- > 0) {
-      const ec = drafts.filter(d => (this._trimE.get(d.L.key) || 0) > 0);
-      const sc = drafts.filter(d => (this._trimS.get(d.L.key) || 0) > 0);
-      const map = ec.length ? this._trimE : sc.length ? this._trimS : null;
-      const pool = ec.length ? ec : sc;
-      if (!map) break;
-      pool.sort((a, b) => (a.cumS + a.cumE) - (b.cumS + b.cumE));
-      // TRY THE WHOLE POOL, not just its smallest member. It used to give up the
-      // moment the FIRST candidate failed the hysteresis test, so a lane that
-      // could have taken its row back had to wait for a frame in which it
-      // happened to sort first — the budget converged one row per FRAME. That was
-      // invisible while the layout moved continuously; against a ladder it is
-      // very visible, because it lands in the middle of a settle and drags the
-      // target out from under it. Measured, a crossing that made the budget
-      // redistribute took 580ms to arrive instead of the settle's 230. Now the
-      // budget finishes inside the frame it started, and the settle is the only
-      // clock left in a crossing.
-      let did = false;
-      for (const pick of pool) {
-        const k = pick.L.key, was = map.get(k)!;
-        map.set(k, was - 1); measure(pick);
-        if (total() < HB - TRIM_OFF) { did = true; break; }
-        map.set(k, was); measure(pick);
-      }
-      if (!did) break;
-    }
 
-    // ══ PHASE C — what survives the budget, and THE ERA ROW ══════════════════
+    // ══ PHASE C — the era row ═══════════════════════════════════════════════════════════════
     const clash = (c: LSpread, arr: LSpread[]) =>
       arr.filter(o => c.it.start < o.it.end && o.it.start < c.it.end);
     for (const d of drafts) {
@@ -1214,10 +1246,18 @@ export const TL = {
       for (let r = 0; r < d.gS.length; r++) if (d.gS[r] >= 0.35) { nsSolid++; victim = r; }
       for (let r = 0; r < d.gE.length; r++) if (d.gE[r] >= 0.35) neSolid++;
       L.ns = nsSolid; L.ne = neSolid;
-      // ---- THE ERA ROW (see the note above the constants) ------------------
-      // After the budget, because "is it already drawn" is only finally true here.
-      // The victim is the lane's lowest row that is actually A ROW — a 5%-grown
-      // ghost is not somewhere to promote a world war into.
+      /* ---- THE ERA ROW (see the note above the constants) ------------------
+         IT NO LONGER FIRES, AND THAT IS THE POINT. The era row existed to rescue
+         a world war that biggest-first packing had buried in row seven, BELOW THE
+         ROW CAP. With the cap gone (Phase B) every visible mark is drawn on its
+         own permanent row, so `already` contains the whole of `vis`, `era` is a
+         subset of `vis`, and `fresh` is empty at every settled frame — the loop
+         falls out two lines below without trading anything. It is kept, whole,
+         because it is the ONLY thing standing between the reader and that burial
+         if a row cap is ever reintroduced, and because during a settle a mark on
+         its way out can still leave a row half-open. The victim is the lane's
+         lowest row that is actually A ROW — a 5%-grown ghost is not somewhere to
+         promote a world war into. */
       if (!L.isRegion || nsSolid < 2 || !L.era.length || victim < 0) continue;
       const already = new Set(L.spreads.map(v => v.it.id));
       const fresh = L.era.filter(v => !already.has(v.it.id));
@@ -1719,8 +1759,11 @@ export const TL = {
     // it), so both are this frame's — the pitch eased if a settle is in flight,
     // the fonts fixed by the rung so a name's truncation is computed once per rung
     // and re-used for every frame spent on it.
-    const pD = this._pDraw, aD = this._aDraw;
-    const SPd = this.spOf(pD, aD), EPd = this.epOf(pD, aD);
+    // (_aDraw is not read here any more: the row gutter is a function of pitch
+    // alone now — see spOf — and the only air left is BETWEEN bands, which
+    // layout() has already baked into the geometry it hands over.)
+    const pD = this._pDraw;
+    const SPd = this.spOf(pD), EPd = this.epOf(pD);
     const uiF = this._fUi, inF = this._fIn;
 
     for (const L of lanes) {
