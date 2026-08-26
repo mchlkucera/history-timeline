@@ -1709,6 +1709,7 @@ export const TL = {
   _thumb: null as HTMLElement | null,
   _cue: null as HTMLElement | null,
   _railDrag: null as null | { y: number; top: number },
+  _railHold: null as null | { y: number; t: number; raf: number },
   /* THE RAIL IS A STICKY FLEX ITEM, and both halves of that matter. STICKY
      because an absolutely-positioned child of a scroll container is part of the
      scrolled content and would travel away with the plot it is supposed to be
@@ -1751,8 +1752,8 @@ export const TL = {
         + 'opacity:0;transition:opacity .16s ease;cursor:pointer;touch-action:none;'
         + 'pointer-events:none;';
       track.title = coarse
-        ? 'The plot is taller than the window — drag this, or drag the plot itself up.'
-        : 'The plot is taller than the window — drag this, or hold Shift and scroll.';
+        ? 'The plot is taller than the window — drag this, press and hold to travel, or drag the plot itself up.'
+        : 'The plot is taller than the window — drag this, press and hold to travel, or hold Shift and scroll.';
       const bar = document.createElement('div');
       bar.style.cssText = 'position:absolute;right:4px;top:0;bottom:0;width:9px;'
         + 'border-radius:5px;background:var(--tl-surface-2);';
@@ -1779,16 +1780,66 @@ export const TL = {
         const scr = this.scroller(); if (scr) scr.scrollTop = at * st.over;
         this.onScroll();
       };
+      /* PRESS AND HOLD TO TRAVEL. The founder: "Make it possible to go up and
+         down by click and holding." Pressing the track away from the thumb used
+         to TELEPORT the thumb under the pointer — one press, one jump, and to
+         cross a 3,800px sheet you pressed repeatedly and guessed. Now it walks:
+         hold and the sheet travels at a screenful a second, in the direction the
+         thumb has to go to reach your finger, and it STOPS THE MOMENT IT
+         ARRIVES. That last part is what makes it a control rather than a fling —
+         the finger is a destination, not a throttle, so holding past the arrival
+         does nothing and you can steer by sliding rather than re-pressing.
+         Direction is recomputed every frame from the live thumb, so dragging
+         across the thumb mid-hold reverses without a second press.
+         A screenful a second is the rate: fast enough to cross the deepest sheet
+         in about four seconds, slow enough that the band names stay readable
+         while it moves, which is the whole point of travelling rather than
+         jumping. */
+      const stopHold = () => {
+        if (!this._railHold) return;
+        cancelAnimationFrame(this._railHold.raf);
+        this._railHold = null;
+        if (!this._railDrag) thumb.style.opacity = '.5';
+      };
+      const holdStep = () => {
+        const h = this._railHold; if (!h) return;
+        const scr = this.scroller(), st = this.scrollState();
+        if (!scr || !st.over) { stopHold(); return; }
+        const tb = thumb.getBoundingClientRect();
+        const dir = h.y > tb.bottom ? 1 : h.y < tb.top ? -1 : 0;
+        if (!dir) { stopHold(); return; }          // the thumb is under the finger: arrived
+        const now = performance.now();
+        const dt = Math.min(64, now - h.t); h.t = now;   // a backgrounded tab may hand back seconds
+        const was = scr.scrollTop;
+        this._yAnchor = null;                      // the reader is driving; the anchor yields
+        scr.scrollTop = was + dir * st.view * 1.1 * (dt / 1000);
+        if (scr.scrollTop === was) { stopHold(); return; }   // clamped at an end
+        this.onScroll();
+        h.raf = requestAnimationFrame(holdStep);
+      };
       track.addEventListener('pointerdown', e => {
         const tb = thumb.getBoundingClientRect();
         const inside = e.clientY >= tb.top && e.clientY <= tb.bottom;
-        this._railDrag = { y: e.clientY, top: inside ? e.clientY - tb.top : thumb.offsetHeight / 2 };
         thumb.style.opacity = '.85';
         try { track.setPointerCapture(e.pointerId); } catch { /* synthetic pointer */ }
-        to(e); e.preventDefault();
+        e.preventDefault();
+        if (inside) {                              // grabbing the thumb: drag, as before
+          this._railDrag = { y: e.clientY, top: e.clientY - tb.top };
+          to(e);
+          return;
+        }
+        stopHold();
+        this._railHold = { y: e.clientY, t: performance.now(), raf: 0 };
+        this._railHold.raf = requestAnimationFrame(holdStep);
       });
-      track.addEventListener('pointermove', e => { if (this._railDrag) to(e); });
-      const up = () => { if (this._railDrag) { this._railDrag = null; thumb.style.opacity = '.5'; } };
+      track.addEventListener('pointermove', e => {
+        if (this._railDrag) { to(e); return; }
+        if (this._railHold) this._railHold.y = e.clientY;   // the destination follows the finger
+      });
+      const up = () => {
+        stopHold();
+        if (this._railDrag) { this._railDrag = null; thumb.style.opacity = '.5'; }
+      };
       track.addEventListener('pointerup', up);
       track.addEventListener('pointercancel', up);
       track.addEventListener('mouseenter', () => { thumb.style.opacity = '.8'; });
