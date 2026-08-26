@@ -40,7 +40,7 @@
 
 /* ── 01  The card ─────────────────────────────────────────────────────────────
 
-   320px. Wide enough that the four destination cells sit on ONE row and a note
+   320px. Wide enough that the three destination cells sit on ONE row and a note
    runs ~44 characters; narrow enough that at 1280x800 it leaves 960px of canvas
    (and 688px even with the 264px control column docked). It is a card and not a
    dialog: no backdrop, no focus trap, no scroll lock. selcard.ts places it and
@@ -196,11 +196,13 @@
 }
 .tl-selcard__ends b { font-weight: var(--tl-w-medium); color: var(--tl-ink-2); }
 
-/* THE PRESENCE LINE. Stated, never flagged: an absence is data, not an error,
-   so it gets no box, no tint, no icon and no accent — just the distance, in
-   mono, because it is a measurement. It sits inside the strip because it is
-   the caption of the strip, and directly above the destinations because the
-   destination group is the answer to it. */
+/* WHAT THE MAP IS DRAWING, or the coordinate of a nameless patch of the atlas.
+   It used to also print the distance from the current year to the subject's
+   span ("ended 30 yrs before 1851"); the founder cut that, and rightly — both
+   dates and the year are already on the line directly above, so it was
+   arithmetic the reader had done. What is left is stated, never flagged: an
+   absence is data, not an error, so no box, no tint, no icon, no accent. Mono,
+   because it is a measurement. */
 .tl-selcard__present {
   margin-top: var(--tl-space-1);
   font-family: var(--tl-font-mono);
@@ -249,20 +251,26 @@
 
 /* ── 06  The destinations ─────────────────────────────────────────────────────
 
-   NOT four commands. ONE command — look at this — through the app's own four
+   NOT three commands. ONE command — look at this — through the app's own three
    instruments, named with the words the top rail already prints, in the top
    rail's own typography. The subject's name never appears in an action label,
    which is what "Zoom to Polish-Lithuanian Commonwealth" was a symptom of.
 
-   ORDER IS FIXED: Timeline, Map, Cube, Core. Always. A missing destination
-   leaves a shorter group; it never lets the others slide left. Position is
-   worth more than compactness in a control you use hundreds of times.
+   ORDER IS FIXED: Timeline, Map, Cube. Always. A missing destination leaves a
+   shorter group; it never lets the others slide left. Position is worth more
+   than compactness in a control you use hundreds of times.
 
-   PRIMARY is Timeline, on every view, because framing the era is the core loop
-   and it is the one destination that exists for every object in the corpus. It
-   is expressed with position (always first), an ink block (DESIGN.md §7:
-   "Primary button: solid ink. The accent is not for buttons") and a mono
-   keycap advertising Enter. Not one drop of hue.
+   ONE SIGNAL, ONE MEANING. The inverted cell — solid ink, inverted label
+   (DESIGN.md §7: "solid ink. The accent is not for buttons") — means WHERE YOU
+   ARE, and nothing else. It follows aria-current, so on the Map view it is MAP
+   and on the Timeline view it is TIMELINE; on a view that is not a destination
+   at all it is none of them. Not one drop of hue.
+
+   The strip used to carry two ideas: this same ink block meaning "do this
+   first", hard-coded to TIMELINE on every view, plus a 2px bottom bar meaning
+   "you are here". The louder signal was the wrong one — Timeline looked
+   permanently active — so the bar and the primary concept are both gone and
+   Timeline keeps only its first slot.
 */
 .tl-selcard__go { display: flex; flex-direction: column; gap: var(--tl-space-3); }
 
@@ -304,7 +312,9 @@
 .tl-selcard__dest:hover { background: var(--tl-surface-3); border-color: var(--tl-rule-strong); color: var(--tl-ink); z-index: 1; }
 .tl-selcard__dest:active { background: var(--tl-press); }
 
-.tl-selcard__dest--primary {
+/* YOU ARE HERE — the inverted cell, and the strip's only state. The cell stays
+   live: clicking it re-frames the view you are already on. */
+.tl-selcard__dest[aria-current="true"] {
   background: var(--tl-ink);
   border-color: var(--tl-ink);
   color: var(--tl-ink-invert);
@@ -312,19 +322,8 @@
 }
 /* Neutral overlay: darkens a light block, lightens a dark one. Theme-agnostic,
    and it cannot introduce a second hue. */
-.tl-selcard__dest--primary:hover  { background: var(--tl-ink); border-color: var(--tl-ink); color: var(--tl-ink-invert); box-shadow: inset 0 0 0 999px rgba(128, 128, 128, .16); }
-.tl-selcard__dest--primary:active { box-shadow: inset 0 0 0 999px rgba(128, 128, 128, .26); }
-
-/* YOU ARE ALREADY HERE. Same 2px ink underline the top-rail switcher uses for
-   the active view, so it can never be misread as "primary" — the shell has
-   already spent a different signal on that meaning. currentColor makes it an
-   ink bar on a surface cell and an inverted bar on the ink block, from one
-   declaration. The cell stays live: clicking it re-frames the current view. */
-.tl-selcard__dest[aria-current="true"] {
-  color: var(--tl-ink);
-  box-shadow: inset 0 -2px 0 0 currentColor;
-}
-.tl-selcard__dest--primary[aria-current="true"] { color: var(--tl-ink-invert); }
+.tl-selcard__dest[aria-current="true"]:hover  { background: var(--tl-ink); border-color: var(--tl-ink); color: var(--tl-ink-invert); box-shadow: inset 0 0 0 999px rgba(128, 128, 128, .16); }
+.tl-selcard__dest[aria-current="true"]:active { box-shadow: inset 0 0 0 999px rgba(128, 128, 128, .26); }
 
 /* NOT NOW, as opposed to NEVER. A destination that is real for this KIND of
    thing but empty at the current year greys and stays put, with the reason on
@@ -347,24 +346,6 @@
   background-color: var(--tl-surface-2);
   border-color: var(--tl-rule);
   color: var(--tl-ink-3);
-}
-
-/* The default-action keycap. Enter acts on the selection while the card is
-   open and no field has focus. */
-.tl-selcard__cap {
-  flex: none;
-  display: inline-grid;
-  place-items: center;
-  min-width: 15px; height: 15px;
-  padding: 0 3px;
-  border: var(--tl-border) solid currentColor;
-  border-radius: var(--tl-radius-xs);
-  font-family: var(--tl-font-mono);
-  font-size: var(--tl-text-2xs);
-  font-weight: var(--tl-w-regular);
-  line-height: 1;
-  letter-spacing: 0;
-  opacity: .55;
 }
 
 
@@ -559,4 +540,17 @@
   }
   .tl-selcard__dest { height: var(--tl-tap); }
   .tl-selcard__rel { min-height: var(--tl-tap); }
+  /* THE ONLY WAY OUT OF THE SHEET. On a phone Escape does not exist, so the ×
+     is the whole dismissal, and at its desktop 20px it is smaller than a
+     fingertip. It grows to the tap floor here — the glyph stays 12px, only the
+     hit area grows — and the negative margins pull it back to the same optical
+     edge so the top row does not get taller. */
+  .tl-selcard__x {
+    width: var(--tl-tap); height: var(--tl-tap);
+    margin: calc((var(--tl-tap) - 20px) / -2);
+    margin-right: calc((var(--tl-tap) - 20px) / -2 - 2px);
+  }
+  /* "All N →" is 18.5px tall at rest — the same fingertip problem, and the same
+     fix: the label is unchanged, the box around it reaches the floor. */
+  .tl-selcard__all { min-height: var(--tl-tap); padding-inline: var(--tl-space-3); }
 }

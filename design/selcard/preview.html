@@ -114,12 +114,15 @@ function esc(s) { return String(s).replace(/&/g, '&amp;').replace(/</g, '&lt;').
 
 /* ── the card template — this is the markup contract the integration must emit ── */
 function destBtn(d) {
-  var cls = 'tl-selcard__dest' + (d.primary ? ' tl-selcard__dest--primary' : '');
-  var a = ['class="' + cls + '"', 'type="button"', 'title="' + esc(d.title) + '"'];
+  /* ONE STATE ON THIS STRIP. aria-current means "you are looking at this view
+     right now" and draws the inverted ink block. There is no --primary any
+     more: an ink block hard-wired to Timeline on every view read as "active"
+     and drowned out the real active marker, so the two ideas were collapsed
+     into the louder one. Timeline keeps its first slot and nothing else. */
+  var a = ['class="tl-selcard__dest"', 'type="button"', 'title="' + esc(d.title) + '"'];
   if (d.current) a.push('aria-current="true"');
   if (d.off) a.push('aria-disabled="true"');
   return '<button ' + a.join(' ') + '>' + esc(d.label)
-    + (d.primary ? '<kbd class="tl-selcard__cap">↵</kbd>' : '')
     + (d.off ? '<span class="tl-selcard__sr">unavailable — ' + esc(d.title) + '</span>' : '')
     + '</button>';
 }
@@ -203,10 +206,9 @@ var STATES = [
     dates: '1707 – 1997', year: '1783', a: 8, b: 92, i: 30, present: null,
     note: 'the largest empire in history, ruling a quarter of the world’s land at its height',
     dests: [
-      { label: 'Timeline', primary: true, title: 'Frame the timeline on 1417 – 2287 — what else was going on' },
+      { label: 'Timeline', title: 'Frame the timeline on 1417 – 2287 — what else was going on' },
       { label: 'Map',  title: T_MAP },
-      { label: 'Cube', title: T_CUBE },
-      { label: 'Core', title: 'Core sample where it stood — every sovereign that ever held that ground' }
+      { label: 'Cube', title: T_CUBE }
     ],
     total: 7,
     rels: [
@@ -231,10 +233,9 @@ var STATES = [
     present: '3 territories shown at 1880',
     note: 'the largest empire in history, ruling a quarter of the world’s land at its height',
     dests: [
-      { label: 'Timeline', primary: true, title: 'Frame the timeline on 1417 – 2287 — what else was going on' },
+      { label: 'Timeline', title: 'Frame the timeline on 1417 – 2287 — what else was going on' },
       { label: 'Map', current: true, title: 'Re-fit the map on its territory at 1880' },
-      { label: 'Cube', title: T_CUBE },
-      { label: 'Core', title: 'Core sample at the point you clicked — every sovereign that ever held that ground' }
+      { label: 'Cube', title: T_CUBE }
     ],
     total: 7,
     rels: [
@@ -251,14 +252,13 @@ var STATES = [
   ctx: ['view <em>timeline</em>', 'year <em>1783</em>', 'id <em>entity:Wolfgang Amadeus Mozart</em>'],
   why: '<b>Map and Cube are absent, not greyed.</b> A life can never have a territory, so a disabled cell '
      + 'would teach the user the app is broken and would sit there on all thirty-nine lives forever. '
-     + 'Timeline stays first and stays primary; Core survives because PLACEMAP has a point for him. '
+     + 'Timeline stays first; it is inverted only when you are actually on the timeline. '
      + 'The corpus carries no note for a life, so the card simply has none.',
   s: {
     name: 'Wolfgang Amadeus Mozart', cat: 'art', domain: 'Art & culture', type: 'life', band: 'Music',
     dates: '1756 – 1791', year: '1783', a: 8, b: 92, i: 73, present: null, note: null,
     dests: [
-      { label: 'Timeline', primary: true, title: 'Frame the timeline on 1721 – 1826 — what else was going on' },
-      { label: 'Core', title: 'Core sample at Salzburg — every sovereign that ever held that ground' }
+      { label: 'Timeline', title: 'Frame the timeline on 1721 – 1826 — what else was going on' }
     ],
     total: 2,
     rels: [
@@ -281,8 +281,7 @@ var STATES = [
     dates: '1907 – 1922', year: '1910', a: 8, b: 92, i: 25, present: null,
     note: 'Picasso and Braque shatter the single viewpoint',
     dests: [
-      { label: 'Timeline', primary: true, title: 'Frame the timeline on 1875 – 1955 — what else was going on' },
-      { label: 'Core', title: 'Core sample at Paris — every sovereign that ever held that ground' }
+      { label: 'Timeline', title: 'Frame the timeline on 1875 – 1955 — what else was going on' }
     ],
     total: 0, rels: []
   }
@@ -292,7 +291,7 @@ var STATES = [
   h: 'A bare moment',
   ctx: ['view <em>timeline</em>', 'year <em>1783</em>', 'id <em>event:Cambrian explosion</em>'],
   why: '<b>The floor of the design.</b> No note, no place, no territory, no links — one destination survives, '
-     + 'and a lone cell renders as a plain full-width primary rather than a one-cell segmented control. '
+     + 'and a lone cell renders full-width rather than as a one-cell segmented control. '
      + 'A moment has no extent, so the strip shows a pip at one end and the index at the other, and the '
      + 'ruled gap between them is the whole statement. The presence line is suppressed here because the '
      + 'date label is already relative — “541 million yrs ago” and “541 million yrs before 1783” are one '
@@ -301,7 +300,7 @@ var STATES = [
     name: 'Cambrian explosion', cat: 'nature', domain: 'Nature & catastrophe', type: 'moment', band: 'Deep time',
     kind: 'moment', dates: '541 million yrs ago', year: '1783', a: 8, b: 8, i: 92,
     present: null, note: null,
-    dests: [ { label: 'Timeline', primary: true, title: 'Frame the timeline on the 80 years around it' } ],
+    dests: [ { label: 'Timeline', title: 'Frame the timeline on the 80 years around it' } ],
     total: 0, rels: []
   }
 },
@@ -312,7 +311,7 @@ var STATES = [
   why: '<b>Absence is a picture first and a sentence second.</b> The index sits in the empty margin past the '
      + 'end of the bar; the line under it gives the distance in mono and nothing else — no box, no tint, '
      + 'no icon, because an absence is data, not an error. Only <em>one</em> of the four destinations is '
-     + 'year-sensitive: Map hatches out with its reason on the button, while Cube and Core stay live because '
+     + 'year-sensitive: Map travels to the first snapshot it is drawn in, while Cube stays live because '
      + 'neither depends on the year. The old card let you press “See on map” and land on an empty map.',
   s: {
     name: 'Roman Empire', cat: 'power', domain: 'Power & states', type: 'polity', band: 'Europe',
@@ -320,10 +319,9 @@ var STATES = [
     present: 'ended 1,388 yrs before 1783',
     note: 'the whole Mediterranean world under one state, and the model every later European empire claimed',
     dests: [
-      { label: 'Timeline', primary: true, title: 'Frame the timeline on 449 BCE – 817 — what else was going on' },
+      { label: 'Timeline', title: 'Frame the timeline on 449 BCE – 817 — what else was going on' },
       { label: 'Map', off: true, title: 'Nothing to highlight — no Roman borders at 1783' },
-      { label: 'Cube', title: T_CUBE },
-      { label: 'Core', title: 'Core sample where it stood — every sovereign that ever held that ground' }
+      { label: 'Cube', title: T_CUBE }
     ],
     total: 2,
     rels: [
@@ -349,10 +347,9 @@ var STATES = [
     note: 'Manchu conquerors who doubled China’s territory and ruled a third of humanity before collapsing under Western pressure',
     folds: [ { role: 'Founded', title: 'Qing dynasty takes China', year: '1644' } ],
     dests: [
-      { label: 'Timeline', primary: true, title: 'Frame the timeline on 1376 – 2180 — what else was going on' },
+      { label: 'Timeline', title: 'Frame the timeline on 1376 – 2180 — what else was going on' },
       { label: 'Map', current: true, title: 'Re-fit the map on its territory at 1783' },
-      { label: 'Cube', title: T_CUBE },
-      { label: 'Core', title: 'Core sample at the point you clicked — every sovereign that ever held that ground' }
+      { label: 'Cube', title: T_CUBE }
     ],
     total: 3,
     rels: [

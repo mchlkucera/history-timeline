@@ -287,31 +287,6 @@ input[type=range]::-moz-range-thumb {
 .grammar svg { overflow: visible; }
 
 
-/* ── Core sample — core.ts writes .stratum rows ──────────────────────────── */
-.presetrow { display: flex; flex-wrap: wrap; gap: var(--tl-space-3); }
-.strata { display: flex; flex-direction: column; }
-.stratum {
-  display: grid;
-  grid-template-columns: 122px 14px 1fr;
-  gap: var(--tl-space-5);
-  align-items: center;
-  padding: var(--tl-space-4) var(--tl-space-2);
-  border-bottom: var(--tl-border) solid var(--tl-rule-soft);
-}
-.stratum:last-child { border-bottom: none; }
-.stratum:hover { background: var(--tl-hover); }
-.stratum .era {
-  font-family: var(--tl-font-mono);
-  font-size: var(--tl-text-2xs);
-  color: var(--tl-ink-3);
-  text-align: right;
-  font-variant-numeric: tabular-nums;
-}
-.stratum .sw { width: 14px; height: 14px; border-radius: 2px; border: var(--tl-border) solid var(--tl-coast); }
-.stratum .who b { font-size: var(--tl-text-base); font-weight: var(--tl-w-semi); color: var(--tl-ink); }
-.stratum .who .of { color: var(--tl-ink-3); font-size: var(--tl-text-xs); margin-left: var(--tl-space-3); }
-
-
 /* ── Information horizon feed — horizon.ts writes .newsitem rows ─────────── */
 .newsfeed { display: flex; flex-direction: column; }
 .newsitem { padding: var(--tl-space-4) 0; border-bottom: var(--tl-border) solid var(--tl-rule-soft); }

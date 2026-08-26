@@ -156,34 +156,31 @@ Three structural decisions make it hold:
 
 ### 3.2 Is one action primary? Which, and how is that expressed?
 
-**Yes: Timeline. On every view, without exception.**
+**No. Superseded — the strip now carries exactly one idea.**
 
-- It is the founder's stated core loop: *"I want to see Cubism in perspective —
-  what did the world look like, what wars, what technology…"*
-- It is the only destination that exists for **every object in the corpus**. A
-  moment with no note, no place, no territory and no links still has a span to
-  frame. Map, Cube and Core all fail for some kinds of subject; Timeline never
-  does. A primary that can disappear is not a primary.
-- It is the only one that is the *answer* to a card in the "outside its span"
-  state (§3.5) — framing the era is what carries you to the object.
+This section used to answer *yes: Timeline, on every view*, expressed as a solid
+ink block, while `aria-current` — *you are standing here* — was a 2px bottom
+bar. The claim was that fill and underline could never collide because the shell
+spends different signals on the two meanings. In use they collided anyway, and
+the louder one was wrong: Timeline was the ink block on all eleven views, so it
+*read* as the active cell everywhere, while the real active marker was the
+quieter of the two. Founder: *"right now it looks like 'Timeline' is always
+active … keep inverted background as active state."*
 
-It is expressed with **three non-chromatic signals stacked**, because the house
-rule is absolute: *the accent means "where you are" and may not be spent on a
-button.*
+**The inverted cell now means WHERE YOU ARE, and nothing else.** One signal, one
+meaning:
 
-| signal | how |
+| view you are on | inverted cell |
 |---|---|
-| **position** | always first, always leftmost — and never reordered (§3.4) |
-| **weight** | a solid ink block with an inverted label, which is exactly what DESIGN.md §7 already specifies for a primary button. No hue is involved |
-| **default key** | a mono `↵` keycap inside the cell. The card *is* the selection; Enter acts on it. `.tl-kbd` already exists in the shell and DESIGN.md §6 argues for real keycaps by name |
+| Timeline (`zoom`) | TIMELINE |
+| Map | MAP |
+| Cube | CUBE |
+| anything else (Flow, Braid, Vertical, …) | none — you are not standing in the strip |
 
-**Why a filled cell inside a segmented group cannot be misread as "you are
-here":** the shell has already spent a *different* signal on that meaning — the
-top rail marks the active view with a **2px ink underline**, never a fill. The
-card reuses that underline, verbatim, for `aria-current="true"`, drawn in
-`currentColor` so it renders as an ink bar on a surface cell and an inverted bar
-on the ink block from one declaration. Fill = *do this first*. Underline =
-*you are standing here*. The two never collide.
+The bottom bar is gone. The `--primary` modifier and the `↵` keycap are gone
+with it. Timeline keeps only what §3.4 already gave it: the first slot, always.
+The accent is still never spent on a button — minium means *where you are*, and
+on this card the focus ring is its only appearance.
 
 ### 3.3 Row of buttons, icon cluster, menu, or list?
 
@@ -216,15 +213,17 @@ between _never_ and _not now_**.
 | The action applies to this kind of thing but is **empty at the current year** — the Roman Empire has territory, just not in 1783 | **Rendered, greyed, reason on the button** | Hiding it here would be a *lie*: it implies Rome never had a map presence. The user must be able to see that the door exists and is shut. |
 | The action's data is missing entirely (no `PLACEMAP` point, no polity centroid) | **Not rendered** | Same as row 1 — for this object there is no such thing as a place, so there is nothing to be shut. |
 
-**Order is never touched.** Timeline, Map, Cube, Core — always, in that order. If
+**Order is never touched.** Timeline, Map, Cube — always, in that order. If
 Map is missing, Cube does **not** slide left into its slot; the group just gets
 shorter and Timeline is still the first cell. Reordering by relevance makes each
 card individually optimal and the set of cards unlearnable. In a control you hit
 hundreds of times, position stability beats per-instance optimisation.
 
 **One cell is a button, not a control.** When only Timeline survives (a bare
-moment), the group renders as a plain full-width primary — `:only-child` gets
-all four corners rounded. A one-cell segmented control looks like a bug.
+moment), `:only-child` rounds all four corners and the cell goes full width. A
+one-cell segmented control looks like a bug. **Zero cells is not a control
+either:** a bare border feature has no destination at all now that Core is cut,
+so the whole `__go` block — lead included — is not rendered.
 
 The floor of the design, in full — **Cambrian explosion**, specimen D:
 
@@ -259,20 +258,22 @@ button; on a scale.
 So "you are outside its span" is a **picture**: the index simply sits in the
 empty margin past the end of the bar. You see it before you read anything.
 
-Underneath, one line of mono gives the magnitude and nothing else:
+Underneath, one line of mono. **Superseded in part:** it used to also print the
+DISTANCE from the year you are standing on to the subject's span — `ended 1,388
+yrs before 1783`, `begins 139 yrs after 1783`. The founder cut those, and he was
+right: both dates and the current year are already on the line directly above,
+so the sentence was arithmetic the reader had already done. What is left is the
+one thing the dates cannot give you —
 
 ```
-ended 1,388 yrs before 1783
-begins 139 yrs after 1783
-541 million yrs before 1783        ← a moment: a distance, not a fault
-3 territories shown at 1880        ← the same slot, stating a presence
+3 territories shown at 1880        ← map view: what is actually on screen
+not on the map at 1776 (nearest snapshot 1783)
+48.20°N · 16.37°E                  ← a nameless patch of the atlas: where it is
 ```
 
-**Suppressed when it would repeat the date.** Beyond 20,000 years `fmtBig`
-already renders the date itself as a relative string ("541 million yrs ago"), so
-the presence line would say the same thing twice. It is emitted only when the
-date label is absolute — which covers every subject inside recorded history and
-none of the seven deep-time moments.
+— because the map draws one of eighteen atlas snapshots, and which one, and
+whether anything of this subject is in it, is derivable from nothing else on the
+card. The line is emitted on the map view only, plus the coordinate case.
 
 **Deliberately: no box, no tint, no icon, no accent.** Today's version sits in a
 grey well, and a well reads as exception handling. An absence in a historical
@@ -288,7 +289,7 @@ that button because it was the one control that wrote the year, and the
 centre-year rule made it a second, contradictory way to say the same thing. That
 deletion stands. Framing the era moves the window; the year follows the window.
 
-**And the absence does not gut the card.** Exactly one of the four destinations
+**And the absence does not gut the card.** Exactly one of the three destinations
 is year-sensitive:
 
 | destination | year-sensitive? |
@@ -296,9 +297,8 @@ is year-sensitive:
 | Timeline | no — it *moves* the year |
 | **Map** | **yes** — it draws the nearest of eighteen snapshots |
 | Cube | no — it traces the whole life as a solid |
-| Core | no — it shows every sovereign that ever held that ground |
 
-So the Roman Empire at 1783 keeps three live destinations and greys one, with
+So the Roman Empire at 1783 keeps two live destinations and greys one, with
 its reason on the button. The old card let you press "See on map" and land on a
 map with nothing highlighted.
 
@@ -454,12 +454,10 @@ listed does not exist.
   <div class="tl-selcard__go">
     <span class="tl-selcard__lead" id="showin">Show this in</span>
     <div class="tl-selcard__dests" role="group" aria-labelledby="showin">
-      <button type="button" class="tl-selcard__dest tl-selcard__dest--primary"
-              data-act="persp" title="Frame the timeline on 1417 – 2287 — what else was going on">
-        Timeline<kbd class="tl-selcard__cap">↵</kbd></button>
-      <button type="button" class="tl-selcard__dest" data-act="map"   aria-current="true" title="…">Map</button>
-      <button type="button" class="tl-selcard__dest" data-act="cube"  title="…">Cube</button>
-      <button type="button" class="tl-selcard__dest" data-act="drill" title="…">Core</button>
+      <button type="button" class="tl-selcard__dest" data-act="persp"
+              title="Frame the timeline on 1417 – 2287 — what else was going on">Timeline</button>
+      <button type="button" class="tl-selcard__dest" data-act="map"  aria-current="true" title="…">Map</button>
+      <button type="button" class="tl-selcard__dest" data-act="cube" title="…">Cube</button>
     </div>
   </div>
 
@@ -518,50 +516,42 @@ the index is always on the strip and the gap between them is always to scale.
 
 ## 7. Behaviour the integration must change in `selcard.ts`
 
-1. **Action labels become destination names.** `Timeline`, `Map`, `Cube`,
-   `Core`. Delete the map-view verb flip (`See on timeline` / `Zoom to view`)
-   and the `Drill down` / `Drill down here` split. The drill still uses
-   `this.point ?? placeOf(s)`, exactly as now; only the *label* stops changing.
-   The file's own argument for "here" — that it "is a promise about a pixel, so
-   it is only made when there is one" — is correct and is kept: the promise
-   moves into the `title`, which is where a per-instance detail belongs, while
-   the cell stays `CORE` so the group has the same shape on every card. So the
-   title reads `Core sample at <place.label> — every sovereign that ever held
-   that ground` when `this.point` exists, and `…where it stood…` when it does
-   not.
-2. **Order is fixed and never sorted.** Build the array
-   `[timeline, map, cube, core]` and filter it; never re-sort it.
+> **Amended twice since it was written.** Core is cut — the founder removed the
+> view: *"lets remove the 'Detail'/'Core' altogether, it complicates things."*
+> And `--primary` is cut with it (§3.2). Items 1–4, 6 and 8 below are restated
+> to match; the rest stand.
+
+1. **Action labels are destination names.** `Timeline`, `Map`, `Cube`. No verb
+   flip per view, and the subject's name never appears in a label.
+2. **Order is fixed and never sorted.** Build the array `[timeline, map, cube]`
+   and filter it; never re-sort it.
 3. **Hide vs grey, precisely:**
    - `map`: rendered only when `s.polity` is truthy. `aria-disabled="true"`
-     when `territoryAt(s.polity, mapYear()).size === 0`, with
-     `title="Nothing to highlight — no <name> borders at <year>"`.
+     only when the polity is drawn in **no** atlas snapshot at all; when it is
+     drawn in some other snapshot the cell travels there instead of shutting.
    - `cube`: rendered only when `s.polity` is truthy. **Never** disabled by the
      year — the cube traces the whole life.
-   - `core`: rendered only when `this.point ?? placeOf(s)` is non-null. Never
-     disabled by the year.
-   - `timeline`: always rendered, always `--primary`, always first.
-   - `s.minimal` (a bare border feature): Timeline and Cube are suppressed as
-     they are today; Core survives on the clicked point.
-4. **`aria-current="true"`** on the cell matching `this.view`. It stays
-   clickable and re-frames the current view on the subject.
+   - `timeline`: rendered for everything that is not `s.minimal`, always first.
+   - `s.minimal` (a bare border feature): no destinations at all, so the whole
+     `__go` block stands down.
+4. **`aria-current="true"`** on the cell matching `this.view` — and that
+   attribute is now the *only* state on the strip: it draws the inverted ink
+   block. The cell stays clickable and re-frames the current view.
 5. **A disabled cell keeps `aria-disabled`, not `[disabled]`**, so it stays
    focusable and its reason is reachable by keyboard; `act()` must no-op when
    `aria-disabled === 'true'`.
-6. **`honestLine()` becomes `presence()`**, returning the mono string for the
-   `__present` slot, using the templates in §3.5. It emits `null` when the year
-   is inside the span on a non-map view, and also when `fmtBig` has already
-   rendered the date relatively (beyond 20,000 years) — otherwise the card says
-   "541 million yrs" twice. It keeps naming both the year and
-   the nearest snapshot when the map's snapshot differs from the global year —
-   that honesty is the existing code's, and it is right.
+6. **`presence()`** returns the mono string for the `__present` slot, using the
+   templates in §3.5. It emits a line in exactly two cases: the coordinate of a
+   bare border feature, and — on the map view only — what the map is drawing for
+   this polity. It keeps naming both the year and the nearest snapshot when the
+   map's snapshot differs from the global year. Everywhere else it returns
+   `null`. The distance sentences it used to emit are deleted.
 7. **The span strip is new state to compute** on `paint()`: three percentages
    from §6. It must be recomputed on every `TimeStore` tick, which `paint()`
    already is.
-8. **Enter triggers the primary** while a selection exists, the card is open,
-   and focus is not in an `input` / `textarea` / `select` and no modal owns the
-   key (the same guard `Escape` already uses). If that binding is not wired,
-   drop the `↵` keycap — a printed shortcut that does nothing is worse than no
-   shortcut.
+8. **No default-action key.** There is no primary any more, so there is nothing
+   for Enter to be the shortcut *to*; the `↵` keycap and `.tl-selcard__cap` are
+   deleted.
 9. **`data-side`** must be written by `place()` from the branch it took, so the
    card animates out of its anchor rather than out of nowhere.
 10. **Escape and the × are unchanged.** Escape clears the card *and* the

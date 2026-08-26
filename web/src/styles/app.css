@@ -8,7 +8,7 @@
    app.css — the classes SHELL adds on top of the Survey system.
    tokens.css owns every colour. shell.css owns the chrome. This file owns only
    what the *application* needs and the design system could not know about:
-   the eleven mounted views, the canvas wrapper, the rail's per-view stacks,
+   the ten mounted views, the canvas wrapper, the rail's per-view stacks,
    the snapshot engraving, and the ⌘K palette.
 
    Nothing here declares a raw colour. If you need one, it belongs in tokens.css.
@@ -490,6 +490,12 @@ body.tl-dragging { cursor: grabbing; }
    (panelOn / GUT_SOLO) — the identical path, and the identical picture, the
    phone had before any of this. */
 @media (max-width: 759px) {
+  /* THE LAYERS SWITCH SITS ABOVE THE SHEET, NOT UNDER IT. Both objects want
+     the stage's bottom-left corner on a phone and the sheet is on the higher
+     layer, so the bar is lifted by exactly the sheet's measured height
+     (Lab.tsx sizeRenderers publishes --tl-sheet-h). Zero everywhere else, so
+     this rule costs nothing at any other width. */
+  .tl-layers__bar { bottom: calc(var(--tl-sheet-h, 0px) + var(--tl-space-3)); }
   .tl-view[data-view="zoom"][data-active="true"] { flex-direction: column; }
   .tl-view[data-view="zoom"] > .tl-canvasbox { flex: 1 1 auto; }
   .tl-layers {
@@ -514,8 +520,8 @@ body.tl-dragging { cursor: grabbing; }
   --tl-font-mark: var(--font-tl-mark), "Iowan Old Style", Charter, Georgia, serif;
 }
 
-/* ── The eleven views ─────────────────────────────────────────────────────────
-   All eleven are mounted at boot — every renderer resolves its ids by
+/* ── The ten views ────────────────────────────────────────────────────────────
+   All ten are mounted at boot — every renderer resolves its ids by
    querySelector once and never again. Visibility is CSS only.
 
    WARNING: a display:none view has clientWidth 0, so fitCanvas() returns null
@@ -538,7 +544,7 @@ body.tl-dragging { cursor: grabbing; }
 
 /* The two views with no canvas are documents, not chart film: the graticule
    under running prose reads as a spreadsheet. */
-.tl-view[data-view="core"], .tl-view[data-view="concepts"] { background: var(--tl-ground); }
+.tl-view[data-view="concepts"] { background: var(--tl-ground); }
 
 /* Canvases live in a block wrapper, NOT shell.css's .tl-canvas.
    fitCanvas() writes an inline style.height that beats .tl-canvas>canvas
@@ -716,45 +722,60 @@ body.tl-dragging { cursor: grabbing; }
   .tl-field--cmdk .tl-kbd { display: none; }
 }
 
+/* ═════════════════════════════════════════════════════════════════════════════
+   THE PANEL COLUMN CLEARS THE VIEW'S OWN FURNITURE.
+
+   Controls sits top-left and Reading bottom-left on every view, because the
+   founder asked for one frame rather than ten — "make sure the whole page is as
+   one, it flows." What "top-left" means, though, is the top-left of the WORKING
+   AREA, and on a chart the working area does not start at the stage's corner:
+   there is an axis there, and an axis is furniture the renderer cannot move.
+
+   The rule the dock was invented on is the same one (shell.css §04): a floating
+   panel may cover some plot, but it may never cover the legend. So the column is
+   inset by exactly what the active view has parked in that corner, measured off
+   the renderers rather than guessed:
+
+     · the HORIZONTAL timeline — the tick-label masthead is the top 22px of the
+       canvas (timeline.ts AXIS_TOP), and the LAYER COLUMN is the left strip
+       whenever it is open. That column is the instrument the whole board is
+       steered with, so it is read from its own data-open — the single flag
+       layerpanel.ts and timeline.ts already share, which means the panel can
+       never disagree with the canvas about where the plot begins;
+     · the VERTICAL timeline — a quarter turn of the same thing: the year axis
+       is the left 96px and the column heads the top 44px (vertical.ts GX/GY);
+     · everything else — Map, People, Horizon, Cube have nothing in that corner
+       (verified sitting over ocean and over empty projection space), and the
+       three docked views take a strip of their own instead.
+*/
+@media (min-width: 760px) {
+  .tl-stage { --tl-work-l: 0px; --tl-work-t: 0px; }
+  .tl-stage:has(.tl-view[data-view="zoom"][data-active="true"]) { --tl-work-t: 22px; }
+  .tl-stage:has(.tl-view[data-active="true"] .tl-layers[data-open="true"]) { --tl-work-l: var(--tl-layers-w); }
+  .tl-stage:has(.tl-view[data-view="vertical"][data-active="true"]) { --tl-work-l: 96px; --tl-work-t: 44px; }
+  .tl-col { top: calc(var(--tl-gutter) + var(--tl-work-t)); }
+  .tl-col--l { left: calc(var(--tl-gutter) + var(--tl-work-l)); }
+}
+
+/* A FOLDED PANEL IS A HEADER, NOT A PANEL. shell.css gives a secondary panel a
+   floor of "a header plus two lines" so prose never collapses to a sliver while
+   it is open — but once it is folded that floor is 62px of empty glass under a
+   30px header. Collapsed, it takes exactly its header and gives the rest of the
+   column back to whatever is still open. */
+.tl-col > .tl-panel[data-collapsed="true"] { min-height: 0; flex: none; }
+
 /* ── Rail: per-view stacks ────────────────────────────────────────────────────
-   "Time" means three different things across eleven views, so each rail cell
-   holds a stack of per-view children, all present from boot, with only the
-   active one shown. That is what lets #yearLabel / #yearSlider / #btnPlay keep
-   working untouched while other views drive the same rail differently. */
+   "Time" means three different things across ten views, so the year readout and
+   the scale each hold a stack of per-view children, all present from boot, with
+   only the active one shown. That is what lets #yearLabel and #yearSlider keep
+   working untouched while other views drive the same rail differently.
+
+   THE TRANSPORT STACK IS GONE. Play, the two steppers and the projection switch
+   were the rail's third cell; they are rows in the Controls panel now, on every
+   view that has them, so the rail is the time index and nothing else. */
 [data-railcell] { display: none; }
 [data-railcell][data-on="true"] { display: var(--tl-railcell-display, block); }
 .tl-timerail__year > [data-railcell][data-on="true"] { display: contents; }
-.tl-transport > [data-railcell][data-on="true"] { display: flex; align-items: center; gap: var(--tl-space-4); }
-
-/* ── Rail: THE PROJECTION SWITCH ───────────────────────────────────────────────
-   The per-view control that used to sit in the application header. The header
-   carries navigation and global chrome and nothing else — so the two-button
-   switch between the vertical and horizontal projections of ONE timeline state
-   came down here, into the cluster that already holds every view's controls.
-
-   It is the only occupant of this cluster that is not playback, which is why it
-   is the only one that wears a name: without the caps label a seg standing
-   where Play stands reads as a playback mode. mono/2xs/caps is the same micro
-   label the panel already uses for a group heading, so this introduces no new
-   voice — and the label is a readout, so it takes no pointer events. */
-.tl-tplabel {
-  flex: none;
-  font-family: var(--tl-font-mono);
-  font-size: var(--tl-text-2xs);
-  letter-spacing: var(--tl-track-caps);
-  text-transform: uppercase;
-  color: var(--tl-ink-3);
-  white-space: nowrap;
-  user-select: none;
-  pointer-events: none;
-}
-#projSeg .tl-seg__item { display: inline-flex; align-items: center; justify-content: center; gap: var(--tl-space-3); }
-#projSeg .tl-projseg__glyph { display: none; width: 13px; height: 13px; flex: none; }
-/* The label is the first thing to go. Under ~900px the scale is down to ~470px
-   and its ruling starts to crowd, and by then the reader has met this control
-   on a wider window; the two words still say what it is. (The words themselves
-   go at 760 — see the phone block below.) */
-@media (max-width: 899px) { .tl-tplabel { display: none; } }
 
 /* ── Rail: the scale is the drag surface ──────────────────────────────────────
    The founder: "make it possible to drag bottom line. Cursor changes now but
@@ -770,9 +791,6 @@ body.tl-dragging { cursor: grabbing; }
    fixed shell: without it the first few pixels are eaten by scroll detection. */
 .tl-scale { cursor: ew-resize; touch-action: none; }
 .tl-scale .tl-range { pointer-events: none; }
-
-/* A transport with nothing in it still draws its hairline and its padding. */
-.tl-transport[data-empty="true"] { display: none; }
 
 /* The rail hides outright in the two views where time means nothing. */
 .tl-app[data-rail="off"] { grid-template-rows: auto minmax(0, 1fr) 0; }
@@ -802,6 +820,55 @@ body.tl-dragging { cursor: grabbing; }
   pointer-events: none;
   z-index: 1;
 }
+
+/* ── THE SELECTED THING'S SPAN ────────────────────────────────────────────────
+   "When an entity is selected in Map, show its span on the timeline down below
+   so that we can know when it existed."
+
+   It is a SECOND bracket on the same ruler and it had to be told apart from the
+   first at a glance, in half a second, without reading:
+
+     · the WINDOW (.tl-scale__span) is a tall translucent pane with two hairline
+       walls — it is a region of the ruler you are inside of;
+     · the LIFE (this) is a low solid bar sitting UNDER the engraved rule with a
+       riser at each end — it is a measurement laid against the ruler.
+
+   Neither is minium. The accent means "where you are in time" and belongs to
+   the index alone. This one quotes the subject's own domain hue, which is the
+   crossing DESIGN.md §3 sanctions for a legend key or a chip dot — and it is
+   the same hue the selection chip is showing at the other end of the screen at
+   that exact moment, so the two read as one statement about one thing.
+
+   AN OPEN EDGE MEANS "PAST THE END OF THE RULER". railPos clamps at 3000 BCE
+   and 2060, so the Cambrian would otherwise be drawn as beginning exactly where
+   the scale begins — a date it does not have. The riser goes and the bar fades
+   out instead, which says "it carries on past here" in the only vocabulary a
+   4px-tall object has. */
+.tl-scale__sel {
+  position: absolute;
+  bottom: 5px;
+  height: 4px;
+  min-width: 2px;
+  background: var(--tl-sel-hue, var(--tl-ink-3));
+  border-radius: 1px;
+  pointer-events: none;
+  z-index: 2;
+}
+.tl-scale__sel::before,
+.tl-scale__sel::after {
+  content: "";
+  position: absolute;
+  bottom: 0;
+  width: 1px;
+  height: 11px;
+  background: var(--tl-sel-hue, var(--tl-ink-3));
+}
+.tl-scale__sel::before { left: 0; }
+.tl-scale__sel::after { right: 0; }
+.tl-scale__sel[data-open~="l"]::before { display: none; }
+.tl-scale__sel[data-open~="r"]::after { display: none; }
+.tl-scale__sel[data-open~="l"] { mask-image: linear-gradient(90deg, transparent, #000 24px); }
+.tl-scale__sel[data-open~="r"] { mask-image: linear-gradient(270deg, transparent, #000 24px); }
 
 /* Cube's rail is a legend, not a control: no thumb, no index, no transport.
    It must look inert rather than like a control that ignores you — including
@@ -1102,21 +1169,6 @@ body.tl-dragging { cursor: grabbing; }
      stacking four sheets on a phone would bury the canvas entirely. */
   .tl-panel--bl, .tl-panel--tr, .tl-panel--br { display: none; }
   .tl-cmdk { grid-template-rows: 6vh auto 1fr; }
-  /* The rail is only ~150px of scale on a phone once the readout and the
-     transport have taken their share. The scale itself is the drag surface, so
-     the step buttons are the ones that go. */
-  #railPrev, #railNext, #railPrevP, #railNextP { display: none; }
-  .tl-transport .btn { height: var(--tl-ctl-sm); padding: 0 var(--tl-space-3); font-size: var(--tl-text-2xs); }
-  /* THE PROJECTION SWITCH GOES TO GLYPHS. Same trade as the step buttons above,
-     for the same reason: at 390px the caps label plus "Vertical | Horizontal"
-     is ~190px of a rail that has ~200px to give, and the scale — which IS the
-     drag surface here — collapsed to a 20px sliver with "Horizontal" hanging
-     off the screen. The two glyphs cost ~50px, i.e. what Play costs next door,
-     and the words survive as each button's accessible name. */
-  .tl-tplabel { display: none; }
-  #projSeg .tl-projseg__w { display: none; }
-  #projSeg .tl-projseg__glyph { display: block; }
-  #projSeg .tl-seg__item { padding: 0 var(--tl-space-3); }
 }
 
 /* ── The cube: the one WebGL view ─────────────────────────────────────────────
@@ -1415,6 +1467,23 @@ body.tl-dragging { cursor: grabbing; }
   .tl-lx   { width: 26px; }
   .tl-lchev { width: 22px; }
   .tl-ldetail { padding: 0 var(--tl-space-3); }
+}
+
+/* ── 7b. THE PANEL CHEVRON IS A THUMB TARGET ──────────────────────────────────
+   Controls and Reading now BOTH fold, with the same chevron in the same corner
+   of the same 30px header — which is the one gesture in this frame a reader has
+   to be able to reach on a phone, because on a phone a panel is a sheet over the
+   canvas and folding it is how you get the canvas back. The painted control
+   stays 24px: the header is 30px tall and a 36px button inside it would push the
+   header, and the header's height is what makes a folded panel read as a chip.
+   So it grows a hit area instead, the same trick and the same reasoning as the
+   layers switch above — 44px of target, zero pixels of layout. */
+@media (pointer: coarse) {
+  .tl-panel__hd .tl-iconbtn::after {
+    content: "";
+    position: absolute;
+    inset: -10px -8px;
+  }
 }
 
 /* ── 8. A KEYBOARD HINT ON A DEVICE WITH NO KEYBOARD ──────────────────────────

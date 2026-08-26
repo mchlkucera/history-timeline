@@ -238,11 +238,11 @@ html:has(body.tl-body) { height: 100%; overflow: hidden; }
        content-sized, so the chip's arrival is absorbed by the 1fr track of
        empty rail to its left and the field does not move by a pixel;
      · it cannot displace the nav — the nav is left-aligned in that same 1fr;
-     · it is in the same place on all eleven views, because the top rail is,
+     · it is in the same place on all ten views, because the top rail is,
        and it is a sibling of the search rather than a thing inside it.
    It never changes the rail's HEIGHT, which matters more than it looks: the
    stage is the 1fr row of .tl-app and the renderers size their canvases from
-   its box, so a chip that grew the rail would silently mis-size eleven
+   its box, so a chip that grew the rail would silently mis-size ten
    canvases until the next window resize.
 
    THE DOT QUOTES THE DATA PALETTE, and that is the one crossing the design
@@ -1246,13 +1246,18 @@ html:has(body.tl-body) { height: 100%; overflow: hidden; }
   white-space: nowrap;
 }
 
-/* Transport */
+/* Transport — a ROW IN A PANEL now, not a cell in the time rail.
+   Play, step-back and step-forward moved into Controls with every other control
+   of a view ("Controls (unify projection settings, play/go forward/backward,
+   reset view) … on all pages, to keep it unified"), so the rail-side chrome this
+   used to carry — the hairline against the scale and the cell padding — went
+   with the cell. What is left is what a transport actually is: three controls on
+   one line. The cube's slice stepper already used this class inside a panel and
+   was wearing that stray hairline; it is the same row as the map's now. */
 .tl-transport {
   display: flex;
   align-items: center;
   gap: var(--tl-space-4);
-  padding: 0 var(--tl-space-5);
-  border-left: var(--tl-border) solid var(--tl-rule-soft);
 }
 
 
@@ -1543,14 +1548,6 @@ html:has(body.tl-body) { height: 100%; overflow: hidden; }
 @media (max-width: 1023px) {
   :root { --tl-panel-w: 232px; --tl-switch-row: 34px; }
   .tl-switch__item { padding: 0 var(--tl-space-4); }
-  /* A seg in the transport TIGHTENS here; it does not go. This rule used to
-     read `display: none`, which was safe only while nothing was ever put
-     there. The projection switch now is, and it is the one control of the
-     timeline views — hiding it below 1024 would leave the second projection
-     with nothing on screen to say it exists, which is exactly the failure the
-     switcher row above was built to fix. */
-  .tl-transport .tl-seg__item { padding: 0 var(--tl-space-3); }
-
   .tl-rail {
     grid-template-columns: auto minmax(0, 1fr) auto auto;
     grid-template-rows: var(--tl-rail-top) var(--tl-switch-row);
@@ -1666,7 +1663,7 @@ html:has(body.tl-body) { height: 100%; overflow: hidden; }
   /* Only two anchors survive; the year readout carries the rest. */
   .tl-scale__label[data-minor], .tl-scale__label[data-edge] { display: none; }
   .tl-index__flag { display: none; }
-  .tl-transport { padding: 0 var(--tl-space-3); gap: var(--tl-space-2); }
+  .tl-transport { gap: var(--tl-space-2); }
 
   .tl-pop {
     left: var(--tl-space-4) !important;

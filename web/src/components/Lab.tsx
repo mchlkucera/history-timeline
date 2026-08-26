@@ -10,15 +10,15 @@
    HARD RULES this file obeys, because renderers in src/render/* are owned by
    other agents right now and resolve their DOM by querySelector exactly once:
      · every canvas id and every renderer init call site survives;
-     · all eleven views are MOUNTED AT BOOT — visibility is CSS only;
+     · all ten views are MOUNTED AT BOOT — visibility is CSS only;
      · containers a renderer appendChild()s into (#catRow, #lensRow,
-       #flowRegionRow, #corePresets) ship EMPTY;
+       #flowRegionRow) ship EMPTY;
      · legacy class names (.chip/.on, .btn/.hero, .card, .caption, .note …) are
        frozen vocabulary — re-skinned in globals.css, never renamed here.
 
    And the one that bites hardest: a display:none view has clientWidth 0, so
    fitCanvas() returns null and the renderer no-ops in silence. renderTab()
-   below therefore covers all eleven ids.
+   below therefore covers all ten ids.
    ============================================================================= */
 
 import { type CSSProperties, useCallback, useEffect, useRef, useState, useSyncExternalStore } from 'react';
@@ -35,7 +35,6 @@ import { LayerPanel } from '@/render/layerpanel';
 import { VT } from '@/render/vertical';
 import { Flow, initFlow } from '@/render/flow';
 import { Cube } from '@/render/cube';
-import { Core } from '@/render/core';
 import { Braid, initBraid } from '@/render/braid';
 import { Horizon } from '@/render/horizon';
 import { Pop, loadPopulation } from '@/render/population';
@@ -46,8 +45,13 @@ import { Layers, planReveal, reveal, type RevealPlan } from '@/render/layers';
 import { describe, perspectiveSpan, setPolityAliases } from '@/render/subject';
 import { railPos, railYear, railNum, railEraOf, SNAPSHOTS } from './rail';
 
+// The extent the engraved scale actually covers (rail.ts's first and last stop).
+// A subject that runs past either end is drawn with an OPEN edge there rather
+// than a cap, because railPos clamps and a cap would claim a date it does not have.
+const RAIL_FLOOR = -3000, RAIL_CEIL = 2060;
+
 // ── The information architecture ────────────────────────────────────────────
-// Eleven flat tabs do not fit a 44px rail: eleven uppercase items is ~800px of
+// Ten flat tabs do not fit a 44px rail: ten uppercase items is ~700px of
 // switcher and .tl-rail__end alone is ~450px. So the IA is two levels — six
 // groups in .tl-switch, and a .tl-seg sub-switcher for the two groups that
 // still show one (the Timeline group's moved into its own panel). Views
@@ -58,17 +62,22 @@ type ViewId =
   | 'map' | 'pop' | 'horizon'
   | 'vertical' | 'zoom'
   | 'flow' | 'braid'
-  | 'conn' | 'cube' | 'core' | 'concepts';
+  | 'conn' | 'cube' | 'concepts';
 
 type RailMode = 'live' | 'span' | 'legend' | 'off';
 
+// THE TIMELINE COMES FIRST, because the timeline is what this product IS. The
+// map led the rail for as long as it was the only view with real data behind
+// it; that stopped being true two rounds ago, and a rail that opens on MAP
+// tells a first visitor the product is an atlas. Order here IS the reading
+// order of the switcher, and the first group is where an empty localStorage
+// and a bare URL land.
 const GROUPS: { id: string; label: string; members: ViewId[] }[] = [
-  { id: 'g-map', label: 'Map', members: ['map', 'pop', 'horizon'] },
   { id: 'g-time', label: 'Timeline', members: ['vertical', 'zoom'] },
+  { id: 'g-map', label: 'Map', members: ['map', 'pop', 'horizon'] },
   { id: 'g-flow', label: 'Flow', members: ['flow', 'braid'] },
   { id: 'g-conn', label: 'Connections', members: ['conn'] },
   { id: 'g-cube', label: 'Cube', members: ['cube'] },
-  { id: 'g-core', label: 'Core', members: ['core'] },
 ];
 
 // Per-group landing member. Timeline lands on 'zoom': the horizontal projection is
@@ -76,13 +85,22 @@ const GROUPS: { id: string; label: string; members: ViewId[] }[] = [
 // the piecewise deep-time zoom. Vertical keeps its seat in the seg, and coming back
 // to the group returns you to whichever you last used.
 const GROUP_DEFAULT: Record<string, ViewId> = {
-  'g-map': 'map', 'g-time': 'zoom', 'g-flow': 'flow', 'g-conn': 'conn', 'g-cube': 'cube', 'g-core': 'core',
+  'g-time': 'zoom', 'g-map': 'map', 'g-flow': 'flow', 'g-conn': 'conn', 'g-cube': 'cube',
 };
-const DEFAULT_VIEW: ViewId = 'map';
+// A first-ever visitor — empty localStorage, no ?v= — lands on the horizontal
+// timeline. Read off GROUP_DEFAULT via the first group so the landing view and
+// the first tab in the rail can never drift apart.
+const DEFAULT_VIEW: ViewId = GROUP_DEFAULT[GROUPS[0].id];
 
 // The Timeline group's two members, read straight off GROUPS so the projection
 // switch in the time rail can never drift from the group it projects.
 const TIME_MEMBERS: ViewId[] = GROUPS.find(g => g.id === 'g-time')!.members;
+
+// "Reset view" on the timeline means the whole RECORDED span, not the Big Bang:
+// timeline.ts boots on [-3000, 2026] and that is the framing the reader arrived
+// on. Deep time is a place you go on purpose, never a place a reset drops you.
+const TL_HOME: [number, number] = [-3000, 2026];
+
 
 // Concepts is deliberately NOT in the switcher: it is documentation about the
 // tool, not a view of history. It stays reachable from ⌘K and from the
@@ -146,11 +164,6 @@ const VIEWS: Record<ViewId, ViewMeta> = {
     gist: 'Latitude × longitude × time as one solid block — an empire is a volume you can cut.',
     meta: '18 sheets · WebGL · orbit what you look at',
   },
-  core: {
-    seg: 'Core', name: 'Core sample', rail: 'off',
-    gist: 'Fix a place, show me every moment — strata of sovereigns under your feet.',
-    meta: '18 strata · newest on top',
-  },
   concepts: {
     seg: 'Concepts', name: 'Concepts, rated', rail: 'off',
     gist: 'The divergent set, scored and pruned. Every good view is a slice of one block.',
@@ -158,7 +171,7 @@ const VIEWS: Record<ViewId, ViewMeta> = {
   },
 };
 
-const ORDER: ViewId[] = ['map', 'pop', 'horizon', 'vertical', 'zoom', 'flow', 'braid', 'conn', 'cube', 'core', 'concepts'];
+const ORDER: ViewId[] = ['zoom', 'vertical', 'map', 'pop', 'horizon', 'flow', 'braid', 'conn', 'cube', 'concepts'];
 
 // ── Which views dock the panel column instead of floating it ────────────────
 // A floating panel is honest over a MAP — it sits on ocean, and the map has no
@@ -257,13 +270,6 @@ const NOTES: Record<ViewId, Notes> = {
     </>,
     src: <>What is data and what is inference: the <strong>bright rules</strong> around the solid are the eighteen dates somebody actually mapped; everything between them is a signed-distance blend and the material is deliberately darker there. <strong>Cut through time</strong> is capped with a lighter section face, the way a technical drawing distinguishes a cut from a surface. In <strong>single slice</strong> the ghost world cross-fades between two real snapshots and never invents a map for an in-between date &mdash; the readout says &ldquo;interpolated&rdquo; for exactly as long as that is what you are seeing. The rail below is a legend for the block&rsquo;s third axis, not a control.</>,
   },
-  core: {
-    body: <>
-      <p>The map asks <em>&ldquo;fix a moment, show me everywhere.&rdquo;</em> The core sample asks the opposite: <strong>fix a place, show me every moment.</strong></p>
-      <p>Like a geological drill &mdash; newest layer on top, dig down into the past. Click anywhere on the world map, or pick a famous drill site.</p>
-    </>,
-    src: <>The time rail is hidden here on purpose: the eighteen strata <em>are</em> the time axis, running down the page. A rail that cannot be operated is noise.</>,
-  },
   concepts: {
     body: <>
       <p>The divergent set, scored and pruned. The unlock: they aren&rsquo;t competitors. <strong>History is one 3-D block (place × place × time), and every good view is a slice or projection of it.</strong></p>
@@ -283,7 +289,7 @@ function boot() {
   // LayerPanel.init() goes between the two timeline projections: it needs TL's
   // canvas bound (it subscribes to TL.onLayout) and VT reads the layer model
   // through TL, so the model has to be loaded before VT's first render.
-  WorldMap.init(); TL.init(); LayerPanel.init(); VT.init(); initFlow(); Cube.init(); Core.init(); initBraid(); Horizon.init(); Pop.init(); buildGallery();
+  WorldMap.init(); TL.init(); LayerPanel.init(); VT.init(); initFlow(); Cube.init(); initBraid(); Horizon.init(); Pop.init(); buildGallery();
   initConn();
   WorldMap.render();
   // diagnostic handle for acceptance probes and console debugging — reads only
@@ -324,10 +330,21 @@ function sizeRenderers() {
   // columns you are looking at. So it alone gets a canvas short enough to clear the
   // sheet, measured rather than assumed so it also tracks the sheet being opened.
   let vH = H;
+  // HOW TALL THE SHEET IS, PUBLISHED. Two things sit in the stage's bottom-left
+  // corner on a phone and only one of them is fixed to the viewport: the
+  // Controls sheet, and the layers switch at the foot of the layer bar. The
+  // sheet is on the higher layer, so without this the switch — the ONLY evidence
+  // on a phone that layers exist at all — was underneath it. Measured rather
+  // than assumed, because the sheet's height changes when it is opened.
+  let sheetH = 0;
   if (typeof matchMedia !== 'undefined' && matchMedia(NARROW).matches) {
     const sheet = document.querySelector<HTMLElement>('.tl-panel--tl:not([hidden])');
-    if (sheet) vH = Math.max(320, H - Math.min(sheet.offsetHeight + 6, Math.round(H * 0.45)));
+    if (sheet) {
+      sheetH = Math.min(sheet.offsetHeight, Math.round(H * 0.45));
+      vH = Math.max(320, H - (sheetH + 6));
+    }
   }
+  document.getElementById('app')?.style.setProperty('--tl-sheet-h', sheetH + 'px');
   VT.H = vH;
   Horizon.H = geoH; Pop.H = geoH;
 }
@@ -344,7 +361,6 @@ function renderTab(v: ViewId) {
     case 'braid': Braid.render(); break;
     case 'conn': Conn.dirty = true; Conn.render(); break;
     case 'cube': Cube.render(); break;
-    case 'core': break;                           // no canvas
     case 'concepts': break;                       // no canvas
   }
 }
@@ -394,7 +410,7 @@ function paintUnread(seen: Set<string>, view: string) {
    URL query?)" — yes, and it makes a link shareable rather than merely
    refresh-proof.
 
-   replaceState, NEVER pushState: eleven views one keystroke apart would turn
+   replaceState, NEVER pushState: ten views one keystroke apart would turn
    the back button into a tab-history stepper, and the way out of the app would
    be forty presses deep.
 
@@ -424,7 +440,7 @@ function paintUnread(seen: Set<string>, view: string) {
      l  WHERE IT LIVES   the lanes themselves: Literature, Religion, Czech
                          history. On the board → locate it; not on the board →
                          add it. The founder's second ask.
-     v  WHERE TO LOOK    the eleven views.
+     v  WHERE TO LOOK    the ten views.
 */
 type SRow =
   | { k: 'c'; h: Hit; p: RevealPlan }
@@ -555,14 +571,6 @@ const I = {
   prev: <svg viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.5" aria-hidden="true"><path d="M10 3.5L5.5 8l4.5 4.5" /></svg>,
   next: <svg viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.5" aria-hidden="true"><path d="M6 3.5L10.5 8 6 12.5" /></svg>,
   close: <svg viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.5" aria-hidden="true"><path d="M4 4l8 8M12 4l-8 8" /></svg>,
-  // The two projections, drawn as what they are: lanes running down the page,
-  // and lanes running across it. Shown only where the words will not fit.
-  projV: <svg className="tl-projseg__glyph" viewBox="0 0 14 14" fill="currentColor" aria-hidden="true">
-    <rect x="2" y="2" width="2.4" height="10" rx="1" /><rect x="5.8" y="2" width="2.4" height="7" rx="1" /><rect x="9.6" y="2" width="2.4" height="10" rx="1" />
-  </svg>,
-  projH: <svg className="tl-projseg__glyph" viewBox="0 0 14 14" fill="currentColor" aria-hidden="true">
-    <rect x="2" y="2" width="10" height="2.4" rx="1" /><rect x="2" y="5.8" width="7" height="2.4" rx="1" /><rect x="2" y="9.6" width="10" height="2.4" rx="1" />
-  </svg>,
 };
 
 export default function Lab() {
@@ -570,13 +578,23 @@ export default function Lab() {
   const [ready, setReady] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [notesOpen, setNotesOpen] = useState(false);
+  // TWO PANELS, TWO ANSWERS. "you might want to hide/show both" — so Controls
+  // and Reading each keep their own, and each wears the same chevron in the
+  // same corner of its own header. Null means "nobody has said", which resolves
+  // to the width: a column on a desktop, a folded sheet on a phone.
   const [collapsedBy, setCollapsedBy] = useState<boolean | null>(null);
+  const [readCollapsedBy, setReadCollapsedBy] = useState<boolean | null>(null);
   // THE DOCKED "RELATED" PANEL IS CLOSED BY DEFAULT. The selection card carries
   // the top three or four relations already; the dock exists for the moment you
   // want the whole ranked list, and it is reached from the card's
   // "All connections →". Opening it costs 92px of a shared column otherwise.
   const [relOpen, setRelOpen] = useState(false);
   const booted = useRef(false);
+  // WHERE CONNECTIONS OPENS. Conn computes its own default span from the corpus
+  // (connections.ts, "default span: everything the spreads cover"), so the only
+  // honest reset is the framing it actually arrived at — read once, after init,
+  // rather than a second copy of those numbers written down here.
+  const connHome = useRef<[number, number] | null>(null);
   // Coming back to a group should return you to where you were in it. Seeded
   // from GROUP_DEFAULT; the vertical port flips that seed, not this.
   const lastMember = useRef<Record<string, ViewId>>({ ...GROUP_DEFAULT });
@@ -586,6 +604,7 @@ export default function Lab() {
   const seen = useRef<Set<string>>(new Set());
   const narrow = useSyncExternalStore(subNarrow, () => matchMedia(NARROW).matches, () => false);
   const collapsed = collapsedBy ?? narrow;
+  const readCollapsed = readCollapsedBy ?? narrow;
   // WHAT IS SELECTED — read straight off the global store, so the chip below
   // re-renders on every selection and on nothing else. describe() is a pure
   // lookup over the loaded corpus, hence the `ready` guard: nothing can be
@@ -721,7 +740,7 @@ export default function Lab() {
           TimeStore.set(u0.y, 'ui');
         }
         // WHAT THE SELECTION CARD CAN DO. Lab is the only module that knows all
-        // eleven views, so the card's verbs are injected from here rather than
+        // ten views, so the card's verbs are injected from here rather than
         // imported — which is also why selcard.ts can be imported BY the
         // renderers without a cycle.
         SelCard.wire({
@@ -758,19 +777,20 @@ export default function Lab() {
             go('map');
           },
           traceInCube: (pid) => { Cube.select(pid); go('cube'); },
-          // Fix a place, show every moment. This is where the map's old
-          // click-to-drill went: it is now a named action on the card, at the
-          // point the user actually pointed at.
-          drillAt: (lon, lat, label) => { Core.drill(lon, lat, label); go('core'); },
           allConnections: () => setRelOpen(true),
           mapYear: () => (WorldMap as any).year(),
           anchorOf: (id) => {
             const v = viewRef.current;
             if (v === 'zoom') return TL.anchorOf(id);
             if (v === 'vertical') return VT.anchorOf(id);
+            // Connections draws the same marks as the timeline now, so it can
+            // say where they are — without this the card opened there but had
+            // nowhere to point, and fell back to its parked corner.
+            if (v === 'conn') return Conn.anchorOf(id);
             return null;
           },
         });
+        connHome.current = [Conn.d0, Conn.d1];
         SelCard.setView(viewRef.current);
         setReady(true);
       } catch (e: any) {
@@ -808,6 +828,30 @@ export default function Lab() {
     const index = document.getElementById('railIndex');
     const line = document.getElementById('indexLine');
     const generic = document.getElementById('railRange') as HTMLInputElement | null;
+
+    /* THE SELECTED THING'S SPAN. Runs before every mode branch below, because
+       it is true in all of them: the map has no time axis of its own and the
+       cube's rail is a legend, but "when did this exist" has the same answer on
+       both. Clamped to the scale's extent, and a subject that begins before
+       3000 BCE says so with an open edge rather than by pretending to start
+       exactly where the ruler does. */
+    const selEl = document.getElementById('railSel');
+    if (selEl) {
+      const sub = SelStore.id ? describe(SelStore.id) : null;
+      if (!sub || !Number.isFinite(sub.start) || !Number.isFinite(sub.end)) selEl.hidden = true;
+      else {
+        const a0 = railPos(Math.min(sub.start, sub.end));
+        const b0 = railPos(Math.max(sub.start, sub.end));
+        selEl.hidden = false;
+        selEl.style.left = a0 + '%';
+        // A MOMENT IS NOT A ZERO-WIDTH SPAN ON A 5,000-YEAR RULER. Anything
+        // narrower than this is invisible, so an event gets a mark rather than
+        // nothing at all — the same floor #railSpan uses.
+        selEl.style.width = Math.max(0.5, b0 - a0) + '%';
+        selEl.style.setProperty('--tl-sel-hue', dotVar(sub.cat));
+        selEl.dataset.open = (Math.min(sub.start, sub.end) < RAIL_FLOOR ? 'l' : '') + (Math.max(sub.start, sub.end) > RAIL_CEIL ? 'r' : '');
+      }
+    }
 
     if (mode === 'off') return;
 
@@ -893,13 +937,13 @@ export default function Lab() {
 
   // Opening or closing the bottom sheet changes how much canvas is left under it,
   // which sizeRenderers() measures — so the canvases have to re-fit when it moves.
-  useEffect(() => { if (ready) renderTab(viewRef.current); }, [collapsed, ready]);
+  useEffect(() => { if (ready) renderTab(viewRef.current); }, [collapsed, readCollapsed, ready]);
 
   // Below 760px the selection chip takes a rail row of its own (shell.css), so
   // its arrival and departure change the height of the stage — and the stage is
   // the 1fr row of .tl-app, which no resize event ever reports. Same failure as
   // the sheet above, same fix: re-fit on the transition, and only at the widths
-  // where the transition exists. Without it eleven canvases would keep drawing
+  // where the transition exists. Without it ten canvases would keep drawing
   // at their pre-chip height until the next window resize.
   const hasSel = !!sel;
   useEffect(() => { if (ready && narrow) renderTab(viewRef.current); }, [hasSel, narrow, ready]);
@@ -1227,7 +1271,7 @@ export default function Lab() {
    * Content comes from search.ts (the same corpus the canvas dims); views come
    * from the VIEWS table, which only this file has. They are ranked as one list
    * with content first — because "what happened" is the question this app is
-   * for, and the eleven views are a fixed set the user learns once.
+   * for, and the ten views are a fixed set the user learns once.
    *
    * The exception is a query that NAMES a view outright — "cube", "connections",
    * "horizon", whatever is written on the rail. Someone who typed the whole word
@@ -1542,7 +1586,19 @@ export default function Lab() {
      a hydration mismatch. */
   useEffect(() => {
     const box = document.getElementById('cmdk') as HTMLInputElement | null;
-    if (box && matchMedia('(pointer: coarse)').matches) box.placeholder = 'Search…';
+    if (!box) return;
+    // …AND ON ANY NARROW WINDOW, not only a coarse one. Below 760px the field is
+    // 124px wide whatever is pointing at it, and "Search anything…" renders as
+    // "Search anytl" — which reads as a broken layout rather than as a hint.
+    // Re-read on resize, because the field crosses that width by being dragged
+    // as often as by being loaded.
+    const set = () => {
+      box.placeholder = matchMedia('(pointer: coarse), (max-width: 759px)').matches
+        ? 'Search…' : 'Search anything…';
+    };
+    set();
+    addEventListener('resize', set);
+    return () => removeEventListener('resize', set);
   }, []);
 
   // ── ⌘K ────────────────────────────────────────────────────────────────────
@@ -1585,10 +1641,7 @@ export default function Lab() {
     ? (view === 'map' ? 'yearSlider' : view === 'pop' ? 'popSlider' : 'railRange')
     : meta.rail === 'span' ? 'railRange' : 'none';
   const yearCell = view === 'map' ? 'map' : view === 'pop' ? 'pop' : 'rail';
-  const tpCell = view === 'map' ? 'map'
-    : view === 'pop' ? 'pop'
-      : view === 'vertical' || view === 'zoom' ? 'time'
-        : 'none';
+
   // THE HEADER CARRIES NAVIGATION AND GLOBAL CHROME, NOTHING ELSE.
   //
   // Two of the three multi-member groups are genuinely navigation: Map's seg
@@ -1598,21 +1651,14 @@ export default function Lab() {
   // sharing one span, one selection, one search and one set of layers. That is
   // a CONTROL of the view, not a way to another one, and a control of the view
   // does not belong in the application header. So the Timeline group shows no
-  // seg up here and the projection switch lives in the time rail (see the
-  // tp-time cell in the transport, below).
+  // seg up here — it is the first row of the Controls panel instead, which is
+  // where every view now says how it is being drawn.
   //
-  // WHY THE RAIL AND NOT THE TOP OF THE LAYER PANEL — the other candidate:
-  //   · the layer panel exists in the HORIZONTAL projection only (#layerPanel
-  //     is a child of the zoom section; the vertical projection has no panel at
-  //     all and takes the full stage width). A switch parked there would be a
-  //     one-way door: you could leave horizontal and never come back;
-  //   · below 760px the panel stands down entirely (app.css) — same trap;
-  //   · and every row in that panel is positioned from the canvas's own lane
-  //     geometry, every frame. A control row would be the one element in it
-  //     with a height of its own, against the geometry lock it is built on.
-  // The rail already IS the per-view control cluster: it carries the transport
-  // for the live views and the span readout for these two, and it is where the
-  // founder asked for the controls to be — beside play.
+  // NOT THE TOP OF THE LAYER PANEL, the other candidate: every row in that
+  // panel is positioned from the canvas's own lane geometry, every frame, and a
+  // control row would be the one element in it with a height of its own —
+  // against the 0.000px lock the whole panel is built on. It is also absent in
+  // the vertical projection, which would make the switch a one-way door.
   const seg = members.length > 1;
   const segInHeader = seg && group !== 'g-time';
   // The engraving on the scale: the 18 world snapshots for Map and Cube, the
@@ -1632,24 +1678,40 @@ export default function Lab() {
     // The collapse control belongs to the PRIMARY panel only. Connections now
     // stacks a secondary panel at the top of the same column, and without this
     // the chevron on Controls would fold "Related" away with it.
-    'data-collapsed': corner === 'tl' && !(extra || '').includes('secondary') && collapsed ? 'true' : undefined,
+    // WHICH PANEL THIS CHEVRON OWNS. Reading answers to its own switch on every
+    // view; the collapse control on a --tl panel belongs to the PRIMARY panel
+    // only, or the chevron on Controls would fold Connections' "Related" — which
+    // stacks in the same column — away with it.
+    'data-collapsed': (title === 'Reading' ? readCollapsed
+      : corner === 'tl' && !(extra || '').includes('secondary') && collapsed) ? 'true' : undefined,
     hidden: !forViews.includes(view),
     'aria-label': title,
   });
 
-  // The primary panel's header, with the collapse control shell.css already
-  // styles. On a phone this is the difference between a canvas and a sheet.
-  const hd = (title: string) => (
-    <div className="tl-panel__hd">
-      <span className="tl-panel__title">{title}</span>
-      <button className="tl-iconbtn" style={{ width: 24, height: 24 }}
-        aria-label={collapsed ? 'Expand panel' : 'Collapse panel'} aria-expanded={!collapsed}
-        onClick={() => setCollapsedBy(!collapsed)}>
-        <svg viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.5" aria-hidden="true"
-          style={collapsed ? { transform: 'rotate(180deg)' } : undefined}><path d="M4 6.5L8 10.5L12 6.5" /></svg>
-      </button>
-    </div>
-  );
+  /* ONE HEADER, ONE AFFORDANCE, BOTH PANELS.
+     Controls and Reading are the same object in two roles, so they wear the
+     same 30px header, the same caps title and the same chevron in the same
+     corner — the reader learns the gesture once and it works on every panel of
+     every view. Collapsed, .tl-panel keeps its glass, its rule and its shadow
+     and shrinks to that header, which is the same "the thing is here, folded
+     into a chip" shape the layers switch takes when its column is away. */
+  const hd = (title: string, extra?: React.ReactNode) => {
+    const reading = title === 'Reading';
+    const off = reading ? readCollapsed : collapsed;
+    const set = reading ? setReadCollapsedBy : setCollapsedBy;
+    return (
+      <div className="tl-panel__hd">
+        <span className="tl-panel__title">{title}</span>
+        {extra}
+        <button className="tl-iconbtn" style={{ width: 24, height: 24 }}
+          aria-label={`${off ? 'Show' : 'Hide'} ${title.toLowerCase()}`} aria-expanded={!off}
+          onClick={() => set(!off)}>
+          <svg viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.5" aria-hidden="true"
+            style={off ? { transform: 'rotate(180deg)' } : undefined}><path d="M4 6.5L8 10.5L12 6.5" /></svg>
+        </button>
+      </div>
+    );
+  };
 
   return (
     <>
@@ -1878,15 +1940,6 @@ export default function Lab() {
             </div>
           </section>
 
-          {/* ── Core — no canvas; the strata ARE the time axis ────────────── */}
-          <section {...sect('core')}>
-            <div className="tl-doc">
-              <div className="caption" id="coreWhere" />
-              <div className="presetrow" id="corePresets" />
-              <div className="strata" id="strata" />
-            </div>
-          </section>
-
           {/* ── Concepts — documentation about the tool ───────────────────── */}
           <section {...sect('concepts')}>
             <div className="tl-doc">
@@ -1908,11 +1961,51 @@ export default function Lab() {
               height budget they cannot exceed. Corner classes stay — they are
               what the column reads to decide which panel hugs the bottom. */}
           <div className="tl-col tl-col--l">
+            {/* THE TIMELINE GROUP'S CONTROLS — one panel for both projections,
+                because vertical and horizontal are two drawings of ONE state:
+                the same span, the same lanes, the same selection, the same
+                search. The PROJECTION switch came back up from the time rail,
+                where it was the odd occupant of a strip that is otherwise about
+                the moment rather than about the view. It is the first row here
+                for the same reason Play is the first row on the map: the top of
+                Controls is where a view says how it is being drawn. */}
+            <aside {...panel('tl', ['zoom', 'vertical'], 'Controls')}>
+              <div className="tl-panel__grip" aria-hidden="true" />
+              {hd('Controls')}
+              <div className="tl-panel__bd">
+                <div className="tl-field-group">
+                  <span className="tl-label">Projection</span>
+                  <div className="tl-seg" id="projSeg" role="group" aria-label="Projection">
+                    {TIME_MEMBERS.map(m => (
+                      <button key={m} className="tl-seg__item" aria-pressed={m === view}
+                        aria-label={`${VIEWS[m].seg} projection`}
+                        title={`Draw the same timeline ${m === 'vertical' ? 'down the page' : 'across the page'}`}
+                        onClick={() => leaveSearch(m)}>
+                        {VIEWS[m].seg}
+                      </button>
+                    ))}
+                  </div>
+                </div>
+                <div className="tl-cluster">
+                  <button className="btn" id="tlReset" title="Frame the whole recorded span"
+                    onClick={() => { TL.clearSearch(); frameSettled(TL_HOME[0], TL_HOME[1]); }}>Reset view</button>
+                </div>
+                <p className="note">Scroll to zoom · drag to pan · click anything to select it.</p>
+              </div>
+            </aside>
             {/* map */}
             <aside {...panel('tl', ['map'], 'Controls')}>
               <div className="tl-panel__grip" aria-hidden="true" />
               {hd('Controls')}
               <div className="tl-panel__bd">
+                {/* map.ts overwrites #btnPlay's textContent, so it must stay a TEXT button. */}
+                <div className="tl-cluster tl-transport">
+                  <button className="tl-iconbtn" id="railPrev" aria-label="Previous snapshot" title="Previous  ←"
+                    onClick={() => step(-1)}>{I.prev}</button>
+                  <button className="btn" id="btnPlay" aria-label="Play through time">▶ Play</button>
+                  <button className="tl-iconbtn" id="railNext" aria-label="Next snapshot" title="Next  →"
+                    onClick={() => step(1)}>{I.next}</button>
+                </div>
                 <div className="tl-cluster">
                   <button className="btn" id="btnReset" title="Reset zoom and pan">Reset view</button>
                 </div>
@@ -1923,8 +2016,18 @@ export default function Lab() {
             <aside {...panel('tl', ['pop'], 'Controls')}>
               <div className="tl-panel__grip" aria-hidden="true" />
               {hd('Controls')}
-              {/* population.ts appendChild()s its own controls into #popPanel. */}
-              <div className="tl-panel__bd" id="popPanel" />
+              {/* population.ts appendChild()s its own rows into #popPanel, and writes
+                  #popPlay's label — so that one must stay a TEXT button. The
+                  transport is the FIRST child, before anything appended. */}
+              <div className="tl-panel__bd" id="popPanel">
+                <div className="tl-cluster tl-transport">
+                  <button className="tl-iconbtn" id="railPrevP" aria-label="Previous slice" title="Previous  ←"
+                    onClick={() => step(-1)}>{I.prev}</button>
+                  <button className="btn" id="popPlay" aria-label="Play through time" aria-pressed="false">Play</button>
+                  <button className="tl-iconbtn" id="railNextP" aria-label="Next slice" title="Next  →"
+                    onClick={() => step(1)}>{I.next}</button>
+                </div>
+              </div>
             </aside>
             {/* horizon */}
             <aside {...panel('tl', ['horizon'], 'Controls')}>
@@ -1965,11 +2068,17 @@ export default function Lab() {
               <div className="tl-panel__grip" aria-hidden="true" />
               {hd('Controls')}
               <div className="tl-panel__bd">
+                {/* THE SAME FIRST ROW AS EVERY OTHER VIEW: reset, then the
+                    controls this view alone needs. #flowAll already framed the
+                    whole span — it was called "Whole span", which is the same
+                    verb the map spells "Reset view". One word for one act. */}
+                <div className="tl-cluster">
+                  <button className="btn" id="flowAll" title="Frame the whole span">Reset view</button>
+                  <button className="btn" id="flowMode">Absolute scale</button>
+                </div>
                 <div className="tl-cluster">
                   <button className="btn hero" id="flowRome">Follow Rome</button>
                   <button className="btn" id="flowSplit">The great split</button>
-                  <button className="btn" id="flowAll">Whole span</button>
-                  <button className="btn" id="flowMode">Absolute scale</button>
                 </div>
                 <div className="searchwrap">
                   <input type="text" id="flowSearch" style={{ width: '100%' }}
@@ -1990,10 +2099,17 @@ export default function Lab() {
               {hd('Controls')}
               <div className="tl-panel__bd">
                 <div className="tl-cluster">
+                  {/* Braid's framing belongs to whichever system is showing —
+                      religions open on 1000 BCE, ideologies on 1650 — so the
+                      reset is the active preset pressed again rather than a
+                      second, disagreeing copy of those two numbers here. */}
+                  <button className="btn" title="Frame the whole span of the system showing"
+                    onClick={() => document.querySelector<HTMLElement>('[data-braid].hero')?.click()}>Reset view</button>
+                </div>
+                <div className="tl-cluster">
                   <button className="btn hero" data-braid="religion">Religions</button>
                   <button className="btn" data-braid="ideology">Political ideologies</button>
                 </div>
-                <span className="note" id="braidNote" />
               </div>
             </aside>
             {/* conn — every id and class from the old #tab-conn subtree, intact.
@@ -2006,25 +2122,31 @@ export default function Lab() {
               <div className="tl-panel__grip" aria-hidden="true" />
               {hd('Controls')}
               <div className="tl-panel__bd">
+                {/* THE FIVE RANDOM CONTROLS ARE GONE — connections.ts asked for
+                    this deletion in Lab.tsx and here it is. Two guided-tour
+                    jumps and a zoom preset are what the ONE search box is for;
+                    "Share of lane" normalised ribbon thickness and there are no
+                    ribbons left; and nothing else in the app carries a
+                    clear-selection button (empty canvas clears, so does Escape,
+                    so does the card's ✕).
+
+                    RESET VIEW IS NOT ONE OF THEM. It is the row every view
+                    carries, and it is the reason a reader can get lost here and
+                    come back. It is wired from this file — a new id, so the
+                    hiding loop in connections.ts cannot mistake it for the
+                    "Whole span" preset it retired. */}
                 <div className="tl-cluster">
-                  <button className="btn hero" id="connIR">Click the Industrial Revolution</button>
-                  <button className="btn" id="connPrint">Printing, from Mainz outward</button>
-                  <button className="btn" id="connAll">Whole span</button>
-                  <button className="btn" id="connMode">Share of lane</button>
-                  <button className="btn" id="connClear">Clear selection</button>
+                  <button className="btn" id="connReset" title="Back to the framing this view opens on"
+                    onClick={() => { const h = connHome.current; if (h) Conn.animTo(h[0], h[1]); }}>Reset view</button>
                 </div>
                 <span className="note">scroll to zoom · drag to pan</span>
-                {/* #connCap is not a reading of the selection — connections.ts
-                    writes one fixed block of prose into it that explains the
-                    view, plus a live counts line. It had a panel of its own on
-                    the bottom left, which meant three panels sharing one 667px
-                    column and a per-selection list starved down to a 60px
-                    window. As standing explanation it folds, and "Related" —
-                    the one thing here that answers a click — gets the column. */}
-                <details className="tl-disc">
-                  <summary>Reading<span className="tl-disc__v">how to read this</span></summary>
-                  <div className="tl-disc__bd"><div className="caption" id="connCap" /></div>
-                </details>
+                {/* #connCap WENT BACK TO A READING PANEL. It was folded in here
+                    to stop three panels starving one column — but "Reading" is
+                    furniture the reader is entitled to find in the same corner
+                    on every view, and a fold is not that corner. It is
+                    collapsible now, like every Reading panel, so the reader can
+                    have the column back with the same gesture. Grammar stays
+                    folded: it is a legend, not a reading. */}
                 <details className="tl-disc">
                   <summary>Grammar<span className="tl-disc__v">shape &amp; weight</span></summary>
                   <div className="tl-disc__bd"><div className="grammar" id="connGrammar" /></div>
@@ -2064,6 +2186,30 @@ export default function Lab() {
               <div className="tl-panel__grip" aria-hidden="true" />
               {hd('Controls')}
               <div className="tl-panel__bd">
+                {/* THE UNIFIED HEAD — projection, then reset, then the view's own
+                    subject. Both rows came up out of "View & detail": the cube's
+                    projection IS the projection switch every other view puts at
+                    the top of Controls, and "Home" is what every other view
+                    calls "Reset view". The fold loses exactly what it gave up,
+                    so the three summary rows sit where they sat.
+                    cube.ts binds #cubeViews' children by data-v at init, which
+                    happens after React has mounted this — so moving the element
+                    keeps every binding and renaming a label costs nothing. */}
+                <div className="tl-field-group">
+                  <span className="tl-label">Projection</span>
+                  <div className="tl-seg" id="cubeProj" role="group" aria-label="Projection">
+                    <button className="tl-seg__item" data-v="persp">Perspective</button>
+                    <button className="tl-seg__item" data-v="ortho">Isometric</button>
+                  </div>
+                </div>
+                <div className="tl-cluster" id="cubeViews">
+                  <button className="btn" data-v="home" title="Fly the camera home">Reset view</button>
+                  <button className="chip" data-v="focus">Frame the trace</button>
+                  <button className="chip" data-v="top">Top</button>
+                  <button className="chip" data-v="front">Front</button>
+                  <button className="chip" data-v="side">Side</button>
+                  <button className="chip" data-v="low">Low</button>
+                </div>
                 <div className="tl-field-group">
                   <span className="tl-label">Trace a polity</span>
                   <div className="searchwrap">
@@ -2142,24 +2288,6 @@ export default function Lab() {
                   <summary>View &amp; detail<span className="tl-disc__v" id="cubeDiscViewV" /></summary>
                   <div className="tl-disc__bd">
                     <div className="tl-field-group">
-                      <span className="tl-label">Fly to</span>
-                      <div className="tl-cluster" id="cubeViews">
-                        <button className="chip" data-v="home">Home</button>
-                        <button className="chip" data-v="top">Top</button>
-                        <button className="chip" data-v="front">Front</button>
-                        <button className="chip" data-v="side">Side</button>
-                        <button className="chip" data-v="low">Low</button>
-                        <button className="chip" data-v="focus">Frame the trace</button>
-                      </div>
-                    </div>
-                    <div className="tl-field-group">
-                      <span className="tl-label">Projection</span>
-                      <div className="tl-seg" id="cubeProj" role="group" aria-label="Projection">
-                        <button className="tl-seg__item" data-v="persp">Perspective</button>
-                        <button className="tl-seg__item" data-v="ortho">Isometric</button>
-                      </div>
-                    </div>
-                    <div className="tl-field-group">
                       <span className="tl-label">Mesh detail</span>
                       <div className="tl-seg" id="cubeRes" role="group" aria-label="Mesh detail">
                         <button className="tl-seg__item" data-v="draft">Draft</button>
@@ -2196,21 +2324,30 @@ export default function Lab() {
               </div>
             </aside>
             <aside {...panel('bl', ['map'], 'Reading', 'tl-panel--secondary')}>
-              <div className="tl-panel__hd"><span className="tl-panel__title">Reading</span></div>
+              {hd('Reading')}
               <div className="tl-panel__bd"><div className="caption" id="capsule" /></div>
             </aside>
             <aside {...panel('bl', ['pop'], 'Reading', 'tl-panel--secondary')}>
-              <div className="tl-panel__hd"><span className="tl-panel__title">Reading</span></div>
+              {hd('Reading')}
               <div className="tl-panel__bd"><div className="caption" id="popCap" /></div>
             </aside>
             <aside {...panel('bl', ['horizon'], 'Reading', 'tl-panel--secondary')}>
-              <div className="tl-panel__hd"><span className="tl-panel__title">Reading</span></div>
+              {hd('Reading')}
               <div className="tl-panel__bd"><div className="caption" id="hzCap" /></div>
             </aside>
             <aside {...panel('bl', ['flow'], 'Reading', 'tl-panel--secondary')}>
-              <div className="tl-panel__hd"><span className="tl-panel__title">Reading</span></div>
+              {hd('Reading')}
               <div className="tl-panel__bd"><div className="caption" id="flowCap" /></div>
             </aside>
+            {/* braid.ts writes #braidNote with a non-null assertion, so the id
+                has to exist — it just stopped being a stray .note at the foot
+                of Controls and became this view's reading, in the corner every
+                other view keeps its reading in. */}
+            <aside {...panel('bl', ['braid'], 'Reading', 'tl-panel--secondary')}>
+              {hd('Reading')}
+              <div className="tl-panel__bd"><div className="caption" id="braidNote" /></div>
+            </aside>
+
             {/* CONNECTIONS' "RELATED" LIST CAME OVER FROM THE RIGHT EDGE.
                 The dock (shell.css §04) was invented because a floating panel
                 is honest over a map and a lie over a chart — and Connections
@@ -2226,6 +2363,10 @@ export default function Lab() {
               <div className="tl-panel__hd"><span className="tl-panel__title">Related</span></div>
               <div className="tl-panel__bd"><div className="relpanel" id="connPanel" /></div>
             </aside>
+            <aside {...panel('bl', ['conn'], 'Reading', 'tl-panel--secondary')}>
+              {hd('Reading')}
+              <div className="tl-panel__bd"><div className="caption" id="connCap" /></div>
+            </aside>
             {/* The frame meter lives in the HEADER, not the body. shell.css §
                 .tl-col gives a secondary panel a floor of "a header plus two
                 lines" and lets the controls take the rest — so anything in the
@@ -2234,10 +2375,7 @@ export default function Lab() {
                 carries margin-right:auto, so a second header child sits flush
                 right without a new rule. Full build detail is in its title. */}
             <aside {...panel('bl', ['cube'], 'Reading', 'tl-panel--secondary')}>
-              <div className="tl-panel__hd">
-                <span className="tl-panel__title">Reading</span>
-                <span className="tl-cube-stats" id="cubeStats" />
-              </div>
+              {hd('Reading', <span className="tl-cube-stats" id="cubeStats" />)}
               <div className="tl-panel__bd"><div className="caption" id="cubeCap" /></div>
             </aside>
           </div>
@@ -2340,7 +2478,7 @@ export default function Lab() {
         </main>
 
         {/* ══ TIME RAIL ════════════════════════════════════════════════════
-            Shared chrome, but "time" means three things across eleven views, so
+            Shared chrome, but "time" means three things across ten views, so
             each cell holds a stack of per-view children, all present from boot.
             That is what lets #yearLabel, #yearSlider and #btnPlay keep working
             untouched while other views drive the same rail differently. */}
@@ -2389,7 +2527,23 @@ export default function Lab() {
               <i key={y} className="tl-scale__stop" data-year={y} style={{ left: railPos(y) + '%' }} aria-hidden="true" />
             ))}
 
+            {/* TWO BRACKETS, TWO DIFFERENT FACTS, AND THEY MUST NOT BE THE SAME
+                INK. #railSpan is the WINDOW — how much of time the canvas is
+                showing — and it exists only where the canvas axis is time.
+                #railSel is the SELECTED THING'S OWN LIFE: "When an entity is
+                selected in Map, show its span on the timeline down below so
+                that we can know when it existed." It is drawn on EVERY view,
+                because the selection is global and "one place, many
+                perspectives" means the rail answers the same question wherever
+                you are standing.
+
+                Neither of them spends the accent. Minium means WHERE YOU ARE IN
+                TIME and belongs to the index alone; a span is a different fact,
+                so this one quotes the subject's own domain hue — the same
+                crossing the selection chip's dot already makes, and the same
+                one it makes right above this. */}
             <div className="tl-scale__span" id="railSpan" aria-hidden="true" hidden />
+            <div className="tl-scale__sel" id="railSel" aria-hidden="true" hidden />
             <div className="tl-index" id="railIndex" aria-hidden="true"><span className="tl-index__flag" id="railFlag" /></div>
 
             <input className="tl-range" type="range" id="yearSlider" min="0" max="17" step="1" defaultValue="11"
@@ -2401,57 +2555,19 @@ export default function Lab() {
               onInput={onRailRange} />
           </div>
 
-          <div className="tl-transport" id="railTransport" data-empty={String(tpCell === 'none')}>
-            <div data-railcell="tp-map" data-on={String(tpCell === 'map')}>
-              <button className="tl-iconbtn" id="railPrev" aria-label="Previous snapshot" title="Previous  ←"
-                onClick={() => step(-1)}>{I.prev}</button>
-              {/* map.ts overwrites #btnPlay's textContent, so it must stay a TEXT button. */}
-              <button className="btn" id="btnPlay" aria-label="Play through time">▶ Play</button>
-              <button className="tl-iconbtn" id="railNext" aria-label="Next snapshot" title="Next  →"
-                onClick={() => step(1)}>{I.next}</button>
-            </div>
-            <div data-railcell="tp-pop" data-on={String(tpCell === 'pop')}>
-              <button className="tl-iconbtn" id="railPrevP" aria-label="Previous slice" title="Previous  ←"
-                onClick={() => step(-1)}>{I.prev}</button>
-              {/* population.ts writes this button's label, but only while it has no
-                  element child — so it must stay a TEXT button, never an icon. */}
-              <button className="btn" id="popPlay" aria-label="Play through time" aria-pressed="false">Play</button>
-              <button className="tl-iconbtn" id="railNextP" aria-label="Next slice" title="Next  →"
-                onClick={() => step(1)}>{I.next}</button>
-            </div>
-            {/* THE PROJECTION SWITCH — the per-view control that used to sit in
-                the application header. It is a third kind of transport: the map
-                views step through moments, and the two timeline projections
-                switch which way the same moment-span is drawn. Same cluster,
-                same stack mechanism, so it appears and leaves with the views it
-                belongs to and costs the other nine nothing.
+          {/* THE TRANSPORT TRACK IS GONE, and its three occupants with it.
 
-                It carries its own caps label because this cluster's other
-                occupants are playback: an unlabelled two-button seg sitting
-                where Play sits would read as a playback mode.
+              "I am thinking we have Controls (unify projection settings,
+              play/go forward/backward, reset view) / Reading / Card on all
+              pages, to keep it unified."
 
-                EACH ITEM CARRIES BOTH A GLYPH AND ITS WORD. On a phone the rail
-                is ~390px of year readout + scale + this, and the words alone are
-                150px of it — measured, the scale collapsed to a 20px sliver and
-                "Horizontal" ran off the screen. Below 760px the label and the
-                words stand down and the glyphs — bars down the page, bars across
-                it — carry the meaning in ~50px, which is what the Play button
-                next door costs. The words are still the accessible name. */}
-            <div data-railcell="tp-time" data-on={String(tpCell === 'time')}>
-              <span className="tl-tplabel">Projection</span>
-              <div className="tl-seg" id="projSeg" role="group" aria-label="Projection">
-                {TIME_MEMBERS.map(m => (
-                  <button key={m} className="tl-seg__item" aria-pressed={m === view}
-                    aria-label={`${VIEWS[m].seg} projection`}
-                    title={`Draw the same timeline ${m === 'vertical' ? 'down the page' : 'across the page'}`}
-                    onClick={() => leaveSearch(m)}>
-                    {m === 'vertical' ? I.projV : I.projH}
-                    <span className="tl-projseg__w">{VIEWS[m].seg}</span>
-                  </button>
-                ))}
-              </div>
-            </div>
-          </div>
+              Play and the two steppers were the map's and People's; the
+              PROJECTION switch was the two timeline projections'. All three
+              were the same kind of thing — a control of the VIEW — parked in
+              the one strip that is not about the view but about the MOMENT.
+              They are all in Controls now, in the same two rows, on every view
+              that has them. The rail is the time index and nothing else, which
+              is why it can look identical on all ten. */}
         </footer>
       </div>
 
