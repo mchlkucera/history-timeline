@@ -4,7 +4,13 @@
 import { $, BELIEFS } from './shared';
 import { Ribbons } from './flow';
 
-export const Braid = Ribbons({ canvas: '#braidCanvas', d0: -1000, d1: 2026, height: 440, mode: 'norm', colorBy: 'root' });
+// selKind 'belief': a braid stream is a belief, not a polity, and the card already
+// describes 'belief:<id>'. Everything else — the fixed absolute reference, the click
+// that writes the global selection, the highlight that answers one made elsewhere —
+// is the shared Ribbons engine, so the two views cannot drift apart.
+export const Braid = Ribbons({
+  canvas: '#braidCanvas', d0: -1000, d1: 2026, height: 440, mode: 'norm', colorBy: 'root', selKind: 'belief',
+});
 
 export function initBraid() {
   Braid.init();

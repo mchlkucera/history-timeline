@@ -3,12 +3,66 @@
 // Ported from prototypes/partB.html. Ribbons() is shared with ⑥a braid.ts, exactly as in
 // the original. Only change: `cv` is resolved in init().
 import {
-  $, POLITIES, clamp, fitCanvas, fmtY, fontMono, fontUI, hideTip, reduceMotion, repaintOnFonts, showTip,
-  tokens, yearPill, type Tokens,
+  $, POLITIES, SelStore, clamp, fitCanvas, fmtY, fontMono, fontUI, hideTip, reduceMotion, repaintOnFonts,
+  showTip, tokens, yearPill, type Tokens,
 } from './shared';
+import { SelCard } from './selcard';
 import {
   bindPinch, slopFor, armSafariGestureGuard, refuseSafariGestures,
 } from './gesture';
+
+/** A polity's weight at one year: linear between the curve's control points, 0 outside
+ *  its span, 1 for anything that carries no curve at all. Module-level because the
+ *  absolute scale's reference (refMaxTotal) has to read the same curve flowLayout does. */
+function wAt(p: any, y: number): number {
+  if (y < p.start || y > p.end) return 0;
+  const Wt = p.weight;
+  if (!Wt || !Wt.length) return 1;
+  if (y <= Wt[0][0]) return Wt[0][1];
+  if (y >= Wt[Wt.length - 1][0]) return Wt[Wt.length - 1][1];
+  for (let i = 1; i < Wt.length; i++) {
+    if (y <= Wt[i][0]) {
+      const [ya, wa] = Wt[i - 1], [yb, wb] = Wt[i]; const t = (y - ya) / ((yb - ya) || 1); return wa + (wb - wa) * t;
+    }
+  }
+  return 0;
+}
+
+/* ── THE ABSOLUTE SCALE'S REFERENCE ────────────────────────────────────────────
+   "I would like to keep the size same when panning left/right — now it normalizes so
+   that the biggest piece of current view takes up 100%."
+
+   It did: the absolute mode divided by the tallest stack IN THE WINDOW, so a pan
+   re-scaled the whole picture. Rome at year 100 measured 128px in one 800-year window
+   and 75px in the next one along — and Bronze Age Egypt, alone in its own window, drew
+   as thick as Rome. That destroys the one thing this view is for.
+
+   The reference is now the tallest stack the CORPUS ever reaches, so px-per-weight-unit
+   is a constant: two polities of equal weight are equally thick in any century, at any
+   pan, at any zoom. It is computed exactly rather than sampled — the total is a sum of
+   piecewise-linear curves, so its maximum sits on one of their control points — and
+   cached per item set, because it is the same number for every frame of a drag.
+
+   It follows the VISIBLE set (region chips filter `items` before we get here). That is
+   a click, not a pan, so the picture is allowed to re-scale there; and without it,
+   isolating Africa would draw the continent as a 5%-tall sliver of empty plate. */
+const REF_CACHE = new Map<string, number>();
+
+export function refMaxTotal(items: any[]): number {
+  let sig = String(items.length);
+  for (const it of items) { let h = 0; for (let i = 0; i < it.id.length; i++) h = (h * 31 + it.id.charCodeAt(i)) >>> 0; sig += ',' + h; }
+  const hit = REF_CACHE.get(sig); if (hit !== undefined) return hit;
+  const ys = new Set<number>();
+  for (const p of items) {
+    ys.add(p.start); ys.add(p.end);
+    if (Array.isArray(p.weight)) for (const kv of p.weight) if (kv[0] > p.start && kv[0] < p.end) ys.add(kv[0]);
+  }
+  let max = 0;
+  for (const y of ys) { let t = 0; for (const p of items) t += wAt(p, y); if (t > max) max = t; }
+  if (REF_CACHE.size > 64) REF_CACHE.clear();          // region chips can only mint so many sets
+  REF_CACHE.set(sig, max);
+  return max;
+}
 
 // Lineage-ordered stacked ribbons: children sit next to their parent, so a split
 // renders as a fork. Thickness = weight. This is the Histomap mechanic.
@@ -34,19 +88,7 @@ export function flowLayout(items: any[], W: number, H: number, d0: number, d1: n
   roots.forEach(r => visit(r.id));
   items.slice().sort((a, b) => a.start - b.start).forEach(i => visit(i.id));
   const ord = [...items].sort((a, b) => order.get(a.id)! - order.get(b.id)!);
-  const wAt = (p: any, y: number) => {
-    if (y < p.start || y > p.end) return 0;
-    const Wt = p.weight;
-    if (!Wt || !Wt.length) return 1;
-    if (y <= Wt[0][0]) return Wt[0][1];
-    if (y >= Wt[Wt.length - 1][0]) return Wt[Wt.length - 1][1];
-    for (let i = 1; i < Wt.length; i++) {
-      if (y <= Wt[i][0]) {
-        const [ya, wa] = Wt[i - 1], [yb, wb] = Wt[i]; const t = (y - ya) / ((yb - ya) || 1); return wa + (wb - wa) * t;
-      }
-    }
-    return 0;
-  };
+  const REF = mode === 'norm' ? 0 : refMaxTotal(items);
   const STEP = Math.max(2, (d1 - d0) / Math.max(W, 1) * 2);
   const cols: any[] = []; let maxTotal = 0;
   for (let y = d0; y <= d1; y += STEP) {
@@ -57,7 +99,7 @@ export function flowLayout(items: any[], W: number, H: number, d0: number, d1: n
   }
   const paths = new Map<string, any>();
   for (const c of cols) {
-    const scale = mode === 'norm' ? (c.tot > 0 ? H / c.tot : 0) : (maxTotal > 0 ? H * 0.94 / maxTotal : 0);
+    const scale = mode === 'norm' ? (c.tot > 0 ? H / c.tot : 0) : (REF > 0 ? H * 0.94 / REF : 0);
     let acc = mode === 'norm' ? 0 : (H - c.tot * scale) / 2;
     for (const [p, w] of c.act) {
       const h = w * scale;
@@ -66,7 +108,7 @@ export function flowLayout(items: any[], W: number, H: number, d0: number, d1: n
       acc += h;
     }
   }
-  return { paths, cols, order, kids, pars, set, maxTotal };
+  return { paths, cols, order, kids, pars, set, maxTotal, ref: REF };
 }
 
 // great traditions / ideological trunks → a stable hue each, matched against stream ids
@@ -90,6 +132,8 @@ export const TRUNKS: [RegExp, number][] = [
 
 export interface RibbonCfg {
   canvas: string; d0: number; d1: number; height?: number; mode?: string; colorBy?: string;
+  /** SelStore's namespace for what THIS instance draws: empires are polities, braids are beliefs. */
+  selKind?: string;
   onRender?: (r: any) => void;
 }
 
@@ -98,6 +142,7 @@ export function Ribbons(cfg: RibbonCfg) {
     cv: null as unknown as HTMLCanvasElement, items: [] as any[], lay: null as any, d0: cfg.d0, d1: cfg.d1, mode: cfg.mode || 'norm',
     hover: null as string | null, hoverX: null as number | null, q: '', off: new Set<string>(), H: cfg.height || 560, colorBy: cfg.colorBy || 'region',
     bands: null as any[] | null,
+    selKind: cfg.selKind || 'polity',
     // Side inset, in px. This used to be a bare 10 and the canvas used to sit inside a
     // padded card that supplied the rest; full-bleed, 10px put centred axis labels and
     // edge-most ribbon names half off the plate. Paint, hit-test, wheel and drag all read
@@ -126,6 +171,36 @@ export function Ribbons(cfg: RibbonCfg) {
       let s = 0; for (let i = 0; i < fam.length; i++) s = (s * 31 + fam.charCodeAt(i)) >>> 0;
       return `hsl(${(s * 47) % 360} 30% ${44 + Math.min(chain.length, 5) * 5}%)`;
     },
+    /** This instance's SelStore id for a ribbon — 'polity:rome', 'belief:sunni-islam'. */
+    selIdOf(id: string) { return this.selKind + ':' + id; },
+    /** The global selection, back as a LOCAL ribbon id — or null when what is selected
+     *  app-wide is not a thing this canvas draws (an event, a person, a spread). */
+    localSel(): string | null {
+      const g = SelStore.id;
+      if (!g) return null;
+      const pre = this.selKind + ':';
+      return g.startsWith(pre) ? g.slice(pre.length) : null;
+    },
+    /** Where a ribbon is on screen — the rect the card is placed beside. A ribbon can be
+     *  a metre wide, so the anchor is the slice UNDER THE POINTER when there was one, and
+     *  the thickest slice otherwise (a selection arriving from another view). Anchoring a
+     *  1500-year-long empire at its peak would open the card half a screen from the finger
+     *  that asked for it. */
+    rectOf(b: any, mx?: number): DOMRect {
+      const r = this.cv.getBoundingClientRect();
+      const G = this.PAD, Wp = this.cv.clientWidth - G * 2, TOP = 26, a = b.a, n = a.top.length;
+      let bi = 0;
+      if (mx !== undefined) {
+        const x0 = G + (a.top[0][0] - this.d0) / (this.d1 - this.d0) * Wp;
+        const x1 = G + (a.top[n - 1][0] - this.d0) / (this.d1 - this.d0) * Wp;
+        bi = clamp(Math.round((mx - x0) / Math.max(x1 - x0, 1) * (n - 1)), 0, n - 1);
+      } else {
+        let bt = -1;
+        for (let i = 0; i < n; i++) { const t = a.bot[i][1] - a.top[i][1]; if (t > bt) { bt = t; bi = i; } }
+      }
+      const x = G + (a.top[bi][0] - this.d0) / (this.d1 - this.d0) * Wp;
+      return new DOMRect(r.left + x - 4, r.top + TOP + a.top[bi][1], 8, Math.max(a.bot[bi][1] - a.top[bi][1], 2));
+    },
     kin(id: string) {
       const out = new Set([id]); if (!this.lay) return out;
       const up = [id], dn = [id];
@@ -152,20 +227,34 @@ export function Ribbons(cfg: RibbonCfg) {
       this.lay = flowLayout(vis, Wp, PH, this.d0, this.d1, this.mode);
       const X = (y: number) => G + (y - this.d0) / (this.d1 - this.d0) * Wp;
       const q = this.q.toLowerCase();
-      const kin = this.hover ? this.kin(this.hover) : null;
+      // THE SELECTION IS GLOBAL. A ribbon picked here, a mark picked on the timeline and a
+      // country picked on the map are one act, so the ribbon lights up whichever view made
+      // the choice. Emphasis is ink and alpha only — never the accent, which means "where
+      // you are in time" and nothing else — and it never moves the layout.
+      // ...but only while the selected ribbon is actually ON THIS SCREEN. Dimming the
+      // whole picture for a polity that has been panned off the window, or whose region
+      // is switched off, leaves a view where everything is faded and nothing is lit —
+      // which reads as broken rather than as focused.
+      const sel = this.localSel();
+      const selId = sel && this.lay.paths.has(sel) ? sel : null;
+      const kin = this.hover ? this.kin(this.hover) : (selId ? this.kin(selId) : null);
+      // a hover is a passing glance and may dim hard; a selection is a standing state and
+      // has to leave the rest of the picture readable underneath it
+      const DIM = this.hover ? 0.13 : 0.34;
       this.bands = [];
       const labels: { text: string; x: number; y: number; min: number; max: number; size: number }[] = [];
       for (const [id, a] of this.lay.paths) {
         if (a.top.length < 2) continue;
         const p = a.p, col = this.colorOf(p, T);
         const dim = (kin && !kin.has(id)) || (q && !p.name.toLowerCase().includes(q));
-        ctx.globalAlpha = dim ? 0.13 : (kin && kin.has(id) ? 0.98 : 0.86);
+        ctx.globalAlpha = dim ? DIM : (kin && kin.has(id) ? 0.98 : 0.86);
         ctx.beginPath();
         ctx.moveTo(X(a.top[0][0]), TOP + a.top[0][1]);
         for (let i = 1; i < a.top.length; i++) ctx.lineTo(X(a.top[i][0]), TOP + a.top[i][1]);
         for (let i = a.bot.length - 1; i >= 0; i--) ctx.lineTo(X(a.bot[i][0]), TOP + a.bot[i][1]);
         ctx.closePath(); ctx.fillStyle = col; ctx.fill();
-        if (kin && kin.has(id)) { ctx.strokeStyle = T.ink; ctx.lineWidth = 1.1; ctx.globalAlpha = .5; ctx.stroke(); }
+        if (id === selId) { ctx.strokeStyle = T.ink; ctx.lineWidth = 2; ctx.globalAlpha = .95; ctx.stroke(); }
+        else if (kin && kin.has(id)) { ctx.strokeStyle = T.ink; ctx.lineWidth = 1.1; ctx.globalAlpha = .5; ctx.stroke(); }
         // label inside the ribbon at its thickest point
         let bi = 0, bt = 0;
         for (let i = 0; i < a.top.length; i++) { const t = a.bot[i][1] - a.top[i][1]; if (t > bt) { bt = t; bi = i; } }
@@ -324,16 +413,31 @@ export function Ribbons(cfg: RibbonCfg) {
       /* THIS VIEW HAD NO TAP AT ALL. Every fact it holds — the polity's name, its
          dates, what it came from and what it became — lived in a hover tooltip,
          and there is no hover on a finger, so on an iPad the Flow was a picture
-         with no readable content whatsoever. It has no selection model to fall
-         back on either (there is no SelCard here), so the tap opens the tooltip
-         the mouse would have got, and a tap on empty ground dismisses it. */
+         with no readable content whatsoever. The tap opens the tooltip the mouse
+         would have got, and a tap on empty ground dismisses it.
+
+         AND NOW IT SELECTS, on a finger and on a mouse alike. "When we click one
+         space across map/timeline/flow/connections/cube — this should be possible.
+         All should have clickeable details — showing the card." A ribbon is a
+         polity (a braid stream is a belief), both of which the card already knows
+         how to describe, so a click here is the same act as a click on the
+         timeline: write the global selection, and let the card open beside the
+         thing that was clicked. Empty canvas clears it, exactly as the timeline
+         and the map do. The tooltip stays for the finger only — the mouse has
+         hover, and a tooltip AND a card for one mouse click is two answers to one
+         question. */
       cv.addEventListener('pointerup', e => {
         const wasDrag = drag && drag.moved; drag = null;
-        if (wasDrag || P.tapBlocked || e.pointerType === 'mouse') return;
+        if (wasDrag || P.tapBlocked) return;
         const r = cv.getBoundingClientRect();
-        const b = this.at(e.clientX - r.left, e.clientY - r.top);
-        this.hover = b ? b.id : null; this.render();
-        if (b) showTip(e.clientX, e.clientY, this.tipFor(b)); else hideTip();
+        const mx = e.clientX - r.left;
+        const b = this.at(mx, e.clientY - r.top);
+        if (e.pointerType !== 'mouse') {
+          if (b) showTip(e.clientX, e.clientY, this.tipFor(b)); else hideTip();
+        }
+        // the SelStore subscriber below repaints — no render() here, or the card
+        // would be anchored against a canvas the store is about to redraw anyway
+        SelCard.select(b ? this.selIdOf(b.id) : null, b ? this.rectOf(b, mx) : null);
       });
       cv.addEventListener('pointermove', e => {
         if (!drag || P.multi) return;
@@ -343,6 +447,10 @@ export function Ribbons(cfg: RibbonCfg) {
         const dy = dx / Wp * (drag.d1 - drag.d0);
         this.d0 = drag.d0 - dy; this.d1 = drag.d1 - dy; this.render();
       });
+      // A selection made ANYWHERE — the timeline, the map, the cube, search — lights
+      // up its ribbon here, and one made here survives leaving the view, because
+      // both directions are the same one global store.
+      SelStore.subscribe(() => this.render());
       repaintOnFonts(() => this.render());
     },
     animTo(a: number, b: number) {
