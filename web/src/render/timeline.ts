@@ -511,17 +511,25 @@ export const TL = {
     return out;
   },
   /* ── WHEN THERE IS NO PANEL, THE CANVAS NAMES ITS OWN BANDS ────────────────
-     Below 760px every panel in this app becomes a bottom sheet over the canvas,
-     and the layer panel cannot: its whole nature is to be a column locked to the
-     lane geometry. Squeezed to a phone it becomes 132px of "D..", "E...", "M." —
-     a chart with no band names, which is the exact failure the left dock was
-     invented to prevent.
+     The panel can be away for two different reasons and this file deliberately
+     cannot tell them apart:
 
-     So app.css hides it under that breakpoint, and the moment it is not showing
-     the canvas takes its own names back: the 118px gutter returns, each band
-     draws its swatch and its label, and the header pad grows to a full strip to
-     hold them. ONE test decides it — does the panel element have any width —
-     so the two can never disagree about who is labelling the bands. */
+       · the reader pressed the switch on the layer bar and put it away, to get
+         the plot's width back on a tablet or to clear a phone screen; or
+       · it was never up — below 760px a fresh visit starts with a clear canvas
+         (layerpanel.ts, THE SWITCH), because a 232px drawer over a 390px phone
+         is not a first sight of anything.
+
+     Either way the canvas takes its own names back the moment it is not
+     showing: the 118px gutter returns, each band draws its swatch and its
+     label, and the header pad grows to a full strip to hold them.
+
+     ONE TEST DECIDES IT — does the panel element have any width. Not a flag,
+     not a media query read twice, not a copy of the switch's state: the panel
+     is measured, here, on the frame that is being drawn. That is what makes it
+     impossible for the two to disagree about who is labelling the bands, and it
+     is why app.css closes the panel with `display:none` and nothing else —
+     anything that left the element measurable would leave this test lying. */
   panelOn() {
     const el = $<HTMLElement>('#layerPanel');
     return !!(el && el.clientWidth > 0);

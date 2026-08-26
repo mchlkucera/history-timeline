@@ -61,6 +61,21 @@
   overflow: hidden;                 /* clips a row mid-transition; never scrolls */
   user-select: none;
 }
+/* ── THE SWITCH'S ONE EFFECT ─────────────────────────────────────────────────
+   The panel is taken out of the picture by DISPLAY, and that is deliberate and
+   load-bearing: display:none is what makes clientWidth 0, and clientWidth is
+   the single question timeline.ts asks to decide whether the canvas has to name
+   its own bands (panelOn / GUT_SOLO, the 118px gutter). Width 0, or opacity, or
+   visibility, or a transform would each leave the element measurable and the
+   canvas would go on believing the panel is labelling lanes that no longer have
+   a label anywhere. There is one notion of "is the panel there" in this app and
+   this line is it.
+
+   AND THERE IS NO WIDTH TRANSITION. An eased collapse would hand the canvas a
+   different width on every frame of it, and cw is precisely what layout() reads
+   as "a new look, arrive whole" — so a 200ms slide would be 12 consecutive new
+   looks, each one snapping the whole board. The panel is there or it is not. */
+.tl-layers[data-open="false"] { display: none; }
 /* the top strip is the canvas's axis masthead — the panel keeps it clear */
 .tl-layers::before {
   content: "";
@@ -277,6 +292,103 @@
    which is the part that is a measurement, stays. */
 @media (max-width: 1180px) { .tl-lcount__w { display: none; } }
 
+/* ═════════════════════════════════════════════════════════════════════════════
+   THE SWITCH — "could we somehow show/hide the layers".
+
+   It is the first thing on the bar and the last thing left on it, which is the
+   whole design: the reader never has to learn a second place. Bottom-left of
+   the stage, at the foot of the column, in every state at every width.
+
+   TWO PROBLEMS, ONE CONTROL. On a tablet the column is present and eating the
+   plot, so the switch takes it away. On a phone the column was never there, so
+   the switch summons it — and there is nowhere else in the app to hide a lane,
+   add one, group them, or move a detail dial, so before this the phone simply
+   did not have those verbs. Both readings are the same sentence: "the layers,
+   on or off".
+
+   OPEN, IT IS THE GLYPH ALONE. The column standing beside it is a better label
+   than any word, and 232px will not seat a fourth worded control — the count
+   already drops "shown" at that width to fit three. CLOSED, the glyph takes the
+   word and the float-over-the-canvas chip treatment (--tl-surface-over, blur,
+   the panel shadow) that .tl-readout and the sheets already use, because then
+   it is the only evidence on screen that layers exist at all. */
+.tl-lswitch {
+  appearance: none;
+  position: relative;
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  flex: none;
+  height: 22px;
+  padding: 0 var(--tl-space-3);
+  font-family: var(--tl-font-ui);
+  font-size: var(--tl-text-xs);
+  color: var(--tl-ink-2);
+  background: var(--tl-surface-2);
+  border: var(--tl-border) solid var(--tl-rule-strong);
+  border-radius: var(--tl-radius-sm);
+  cursor: pointer;
+  white-space: nowrap;
+  transition:
+    background var(--tl-dur-fast) var(--tl-ease),
+    border-color var(--tl-dur-fast) var(--tl-ease),
+    color var(--tl-dur-fast) var(--tl-ease);
+}
+.tl-lswitch__g { display: flex; }
+.tl-lswitch__g svg { width: 14px; height: 14px; }
+.tl-lswitch:hover { background: var(--tl-surface-3); border-color: var(--tl-ink-3); color: var(--tl-ink); }
+.tl-lswitch:active { background: var(--tl-press); }
+/* Open, the word is redundant — the column says it. */
+.tl-layers__bar[data-open="true"] .tl-lswitch__w { display: none; }
+
+/* ── CLOSED: THE STRIP BECOMES A CHIP ────────────────────────────────────────
+   Nothing on the bar but the switch has anything to act on once the panel is
+   away — "+ Add layer" would add a lane into a column you cannot see — so the
+   strip stops being a strip. It keeps its corner and loses its ground: no fill,
+   no top rule, no full width, and no pointer surface either, so scroll-to-zoom
+   and drag-to-pan pass straight through the corner exactly as they do over the
+   rest of the canvas. Only the chip takes input. */
+.tl-layers__bar[data-open="false"] {
+  width: auto;
+  height: auto;
+  padding: 0 0 var(--tl-space-3) var(--tl-space-3);
+  background: none;
+  border-top: 0;
+  pointer-events: none;
+}
+.tl-layers__bar[data-open="false"] > :not(.tl-lswitch) { display: none; }
+.tl-layers__bar[data-open="false"] .tl-lswitch {
+  pointer-events: auto;
+  height: var(--tl-tap);
+  padding: 0 var(--tl-space-4);
+  color: var(--tl-ink);
+  background: var(--tl-surface-over);
+  -webkit-backdrop-filter: blur(10px);
+  backdrop-filter: blur(10px);
+  box-shadow: var(--tl-shadow-panel);
+}
+.tl-layers__bar[data-open="false"] .tl-lswitch:hover { background: var(--tl-surface-3); border-color: var(--tl-ink-3); }
+
+/* ── A FINGER IS NOT A CURSOR ────────────────────────────────────────────────
+   --tl-tap is 36px on a coarse pointer and that is the design system's number,
+   not this file's to change; iOS asks for 44. So the PAINTED control stays at
+   the token — three 36px controls is already what this 44px strip is for — and
+   the switch grows a hit area to 44 with a pseudo-element instead, which costs
+   no pixels and moves nothing. The insets are asymmetric on purpose: 6px left
+   into the bar's own padding, 4px up and down into the strip, and only 2px
+   right, because the 4px gap to "+ Add layer" is all the room there is and two
+   hit areas that overlap would hand taps to the wrong button. */
+@media (pointer: coarse) {
+  .tl-layers__bar { height: 44px; }
+  .tl-lbtn, .tl-lswitch { height: var(--tl-tap); }
+  .tl-lswitch::after {
+    content: "";
+    position: absolute;
+    inset: -4px -2px -4px -6px;
+  }
+  .tl-layers__bar[data-open="false"] .tl-lswitch::after { inset: -4px; }
+}
+
 /* Popovers and the drag ghost live on <body>: inside the scrolling surface they
    would travel with it while the reader is reading them. */
 .tl-lpop {
@@ -344,19 +456,50 @@
 }
 body.tl-dragging { cursor: grabbing; }
 
-/* BELOW THE SHEET BREAKPOINT THE PANEL STANDS DOWN.
+/* BELOW THE SHEET BREAKPOINT THE PANEL IS A DRAWER.
 
-   Every other panel in this app becomes a bottom sheet over the canvas there.
-   This one cannot: being a column locked to the lane geometry IS what it is.
-   Squeezed into a phone it was 132px of "D..", "E..." and "M." — measured — so
-   the bands lost their names, which is precisely the failure the left dock was
-   built to prevent. It hides instead, and timeline.ts sees that it has no width
-   and paints the band names back onto the canvas in a 118px gutter of its own
-   (see panelOn / GUT_SOLO). Nothing is lost but the reordering. */
+   It used to be gone. `display: none` at 760px, unconditionally, and the note
+   here said "nothing is lost but the reordering" — which was not true, and is
+   the reason this section was rewritten. With the column absent there was no
+   way on a phone to hide a lane, add one, make a group, or move a layer's
+   detail dial: the panel is the ONLY home those four verbs have. What the
+   phone lost was not reordering, it was every control the timeline has.
+
+   IT STILL CANNOT BE A COLUMN IN FLOW. 232px out of 390px is not a chart, and
+   squeezed to what is left it was 132px of "D..", "E..." and "M." — measured —
+   which is the exact failure the left dock was built to prevent.
+
+   SO IT COMES OUT OF FLOW AND FLOATS OVER THE PLOT, at the same left edge, at
+   the same width it has on a tablet. That is the one arrangement that keeps
+   THE GEOMETRY LOCK literally true on a phone: .tl-view is still the only
+   scroller (an absolutely positioned child of a scroll container scrolls with
+   its content), the rows are still written from the canvas's own lane geometry
+   every frame, and each row is now directly ON TOP OF the band it names rather
+   than beside it. A bottom sheet — the app's other narrow idiom — could not do
+   any of that, because a sheet has a geometry of its own and a height of its
+   own, which is the one thing every row in this panel is forbidden to have.
+
+   AND HERE, AND ONLY HERE, IT TAKES AN EDGE. The seam note at the top of this
+   file argues at length that no rule may separate the panel from the plot — and
+   that argument is about two things on ONE sheet. A drawer is not on the sheet,
+   it is above it, with live marks running underneath; the hairline and the
+   shadow are what say so. Every other float in this app is edged the same way.
+
+   Closed, `.tl-layers[data-open="false"]` above removes it, clientWidth goes to
+   0, and timeline.ts paints the band names back into its own 118px gutter
+   (panelOn / GUT_SOLO) — the identical path, and the identical picture, the
+   phone had before any of this. */
 @media (max-width: 759px) {
-  .tl-layers, .tl-layers__bar { display: none; }
   .tl-view[data-view="zoom"][data-active="true"] { flex-direction: column; }
   .tl-view[data-view="zoom"] > .tl-canvasbox { flex: 1 1 auto; }
+  .tl-layers {
+    position: absolute;
+    left: 0;
+    top: 0;
+    z-index: var(--tl-z-panel);
+    border-right: var(--tl-border) solid var(--tl-rule);
+    box-shadow: var(--tl-shadow-panel);
+  }
 }
 
 

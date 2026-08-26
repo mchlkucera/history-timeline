@@ -23,6 +23,61 @@
 
    NO HOVER-DRIVEN LAYOUT. The detail word and the × appear on hover by OPACITY.
    Nothing moves, nothing reflows, nothing grows. The jelly rule stands.
+
+   ── THE SWITCH ───────────────────────────────────────────────────────────────
+
+   The founder, after an hour on a phone and an iPad: "The mobile works also,
+   but theres not enough space on the screen, could we somehow show/hide the
+   layers." That is ONE sentence about TWO different failures, and the switch
+   below has to answer both with the same idea.
+
+     · On a tablet the column is THERE and eating the plot — 232px of a 1024px
+       iPad in landscape, permanently. He wants it gone and the space back.
+     · On a phone the column was NOT there at all. app.css hid it under 760px,
+       and with it went every route to hiding a lane, adding one, grouping, or
+       moving a layer's detail dial: those controls have no other home in the
+       app. He wants it summoned.
+
+   ONE CONTROL, ONE COMPOSITION, ONE CORNER. `.tl-lswitch` is the first thing
+   on the layer bar — the strip that is already the panel's own chrome, already
+   pinned to the bottom-left corner of the stage, and now the ONLY part of the
+   panel that is on screen at every width in every state. Pressing it shows the
+   column; pressing it again takes it away. Same glyph, same corner, same verb
+   on a phone and on a desktop.
+
+   THE WORD APPEARS EXACTLY WHEN THE THING IT NAMES DOES NOT. Open, the button
+   is the glyph alone — the column is right there above it, saying what it is,
+   and the bar's 232px will not seat a fourth worded control (the count already
+   drops "shown" below 1181px to fit three). Closed, the glyph takes the word
+   "Layers" and the chip treatment every other float-over-the-canvas element in
+   this app uses, because then it is the only evidence the feature exists.
+
+   AND IT DRIVES THE PATH THAT WAS ALREADY THERE. timeline.ts asks ONE question
+   — does #layerPanel have any width (panelOn) — and paints the band names back
+   into a 118px gutter when the answer is no. The switch does not answer that
+   question and does not carry a second copy of it: it sets `display:none` on
+   the panel, which makes clientWidth 0, which is the same answer the phone
+   breakpoint used to give. There is exactly one notion of "is the panel there"
+   and the canvas and the panel read it from the same element.
+
+   BELOW 760px IT IS A DRAWER, NOT A COLUMN. app.css takes the panel out of
+   flow there and floats it over the plot at the same left edge, which is the
+   one arrangement that keeps the GEOMETRY LOCK literally true on a phone: the
+   rows still sit at the lanes' own y, at the lanes' own heights, over the very
+   lanes they name, and the one scroller is still the browser's. A bottom sheet
+   — the app's other narrow idiom, and the obvious guess — cannot do that: a
+   sheet has a geometry of its own, which is the one thing every row in this
+   file is forbidden to have.
+
+   WHERE THE STATE LIVES. localStorage, beside the arrangement itself (which
+   layers, their order, their groups, what is hidden, every detail dial —
+   layers.ts, same store, same reasoning). NOT the URL. `?v=&y=&s=` is a
+   COORDINATE — the view, the year, the span — and it is meant to be shared:
+   whether the person who sent you a link had their column open on a phone is
+   not part of where they were standing, and inheriting it would be a stranger
+   resizing your workspace. Unset means "whatever this screen's default is",
+   so a first visit still gets a column on a desktop and a clear canvas on a
+   phone; one press makes the choice this device's own and keeps it.
    ============================================================================= */
 
 import { $, clamp } from './shared';
@@ -31,6 +86,7 @@ import {
   DETAIL_TEXT, DETAIL_WORDS, Layers, layerDef, resetCatalogue,
   type Detail, type GNode, type LayerDef,
 } from './layers';
+import { SelCard } from './selcard';
 import { TL } from './timeline';
 
 const el = (t: string, c?: string, h?: string) => {
@@ -39,6 +95,13 @@ const el = (t: string, c?: string, h?: string) => {
   if (h != null) n.innerHTML = h;
   return n;
 };
+
+/* THE SWITCH'S GLYPH IS THE PANEL ITSELF: a frame, a column split off its left
+   edge, and three rows in that column. It does not change between the two
+   states — a glyph that flipped would read as two controls rather than one —
+   so the state is carried by aria-pressed, by the word, and by whether the
+   column it draws is standing beside it. */
+const COLS = '<svg viewBox="0 0 16 16" fill="none" stroke="currentColor" aria-hidden="true"><rect x="1.7" y="2.7" width="12.6" height="10.6" rx="1.6" stroke-width="1.3"/><path d="M6.5 2.7v10.6" stroke-width="1.3"/><path d="M3.5 5.9h1.6M3.5 8h1.6M3.5 10.1h1.6" stroke-width="1.1"/></svg>';
 
 const EYE = '<svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.3" aria-hidden="true"><path d="M1.5 8s2.4-4.2 6.5-4.2S14.5 8 14.5 8 12.1 12.2 8 12.2 1.5 8 1.5 8Z"/><circle cx="8" cy="8" r="1.9"/></svg>';
 const EYEOFF = '<svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.3" aria-hidden="true"><path d="M2.6 5.4C1.9 6.3 1.5 8 1.5 8S3.9 12.2 8 12.2c1 0 1.9-.2 2.7-.6M6.2 4c.6-.1 1.2-.2 1.8-.2 4.1 0 6.5 4.2 6.5 4.2s-.6 1.1-1.7 2.2"/><path d="M2.5 2.5l11 11"/></svg>';
@@ -50,10 +113,18 @@ interface Row {
   g?: GNode;
 }
 
+/** Where the switch's answer is kept. See "WHERE THE STATE LIVES" above. */
+const OPEN_KEY = 'tl-layers-open';
+/** The width at or above which a column is the default. Same 760px seam every
+ *  panel in this app turns into a sheet at — app.css and shell.css §13. */
+const WIDE = '(min-width: 760px)';
+
 export const LayerPanel = {
   host: null as HTMLElement | null,
   bar: null as HTMLElement | null,
   addBtn: null as HTMLButtonElement | null,
+  swBtn: null as HTMLButtonElement | null,
+  open: true,
   rows: [] as Row[],
   _lay: null as any,
   _drag: null as null | { id: string; isG: boolean; x: number; y: number; live: boolean; slop: number },
@@ -63,8 +134,9 @@ export const LayerPanel = {
     const host = this.host = $<HTMLElement>('#layerPanel');
     const bar = this.bar = $<HTMLElement>('#layerBar');
     if (!host) return;
-    if (this._built) { this.build(); return; }
+    if (this._built) { this.build(); this.apply(); return; }
     this._built = true;
+    this.open = this.readOpen();
     resetCatalogue();                   // the corpus is loaded by now — measure it
     Layers.load();
 
@@ -111,13 +183,100 @@ export const LayerPanel = {
       grp.title = 'Make an empty group, then drag layers into it';
       grp.addEventListener('click', () => { Layers.newGroup(); TL.ease(); });
       const cnt = el('span', 'tl-lcount'); cnt.id = 'layerCount';
-      bar.append(add, grp, cnt);
+      /* THE SWITCH GOES FIRST, and it is the only member of this strip that
+         survives the strip being closed — when the panel is away the bar keeps
+         nothing but this one chip in the corner it always occupied. */
+      const sw = this.swBtn = el('button', 'tl-lswitch') as HTMLButtonElement;
+      sw.type = 'button';
+      sw.dataset.lbar = 'switch';
+      sw.append(el('span', 'tl-lswitch__g', COLS), el('span', 'tl-lswitch__w', 'Layers'));
+      sw.addEventListener('click', () => this.setOpen(!this.open));
+      bar.append(sw, add, grp, cnt);
     }
+    /* The width can change under a stored answer — a rotation, a split view, a
+       window dragged narrow — but only an UNSET answer follows the width. Once
+       the reader has pressed the switch, that is this device's arrangement and
+       a rotation is not a request to undo it. */
+    if (typeof matchMedia !== 'undefined') {
+      matchMedia(WIDE).addEventListener('change', () => {
+        if (this.stored() === null) this.setOpen(this.readOpen(), false);
+      });
+    }
+    this.apply();
 
     // Any change to the model rebuilds the rows and re-eases the workspace.
     Layers.subscribe(() => { this.build(); TL.ease(); TL.paint(); });
     TL.onLayout(lay => this.place(lay));
     this.build();
+  },
+
+  // ── the switch ────────────────────────────────────────────────────────────
+  /** The reader's own answer, or null for "never asked". */
+  stored(): boolean | null {
+    try {
+      const raw = typeof localStorage !== 'undefined' ? localStorage.getItem(OPEN_KEY) : null;
+      if (raw === 'on') return true;
+      if (raw === 'off') return false;
+    } catch { /* private mode — the session still works, it just will not survive */ }
+    return null;
+  },
+  /** …falling back to what this screen can afford: a column on anything at or
+   *  above the sheet breakpoint, a clear canvas below it. That default is
+   *  exactly the behaviour that shipped before the switch existed, so a first
+   *  visit at any width sees no change at all. */
+  readOpen(): boolean {
+    const s = this.stored();
+    if (s !== null) return s;
+    return typeof matchMedia !== 'undefined' ? matchMedia(WIDE).matches : true;
+  },
+  /** Write the state onto the DOM. THIS IS THE WHOLE MECHANISM: `data-open` is
+   *  a CSS hook and nothing more, and the one thing the CSS does with it is
+   *  take the panel's width away — which is the same question timeline.ts's
+   *  panelOn() was already asking of this element. No second flag, no second
+   *  answer, no way for the canvas and the panel to disagree about who is
+   *  naming the bands. */
+  apply() {
+    const on = this.open;
+    if (this.host) this.host.dataset.open = String(on);
+    if (this.bar) this.bar.dataset.open = String(on);
+    const sw = this.swBtn;
+    if (sw) {
+      sw.setAttribute('aria-pressed', String(on));
+      sw.setAttribute('aria-label', on ? 'Hide the layers' : 'Show the layers');
+      sw.title = on
+        ? 'Hide the layers column — the band names go back onto the chart'
+        : 'Show the layers column — hide, reorder, group and add layers';
+    }
+  },
+  /**
+   * Show or hide the column.
+   *
+   * THE CANVAS WIDTH JUST CHANGED, AND THAT IS A RESIZE, NOT A ZOOM. d0/d1 are
+   * not touched here, so the v-span is not touched, so stepTick() cannot cross
+   * a rung and the latched layout window cannot move: the year under any given
+   * fraction of the plot is exactly where it was. What DOES change is `cw`, and
+   * layout()'s own `_lastCw !== cw` test reads that as a new look and arrives
+   * whole — the same treatment a window resize gets, and the reason this must
+   * NOT call TL.ease(), which would ask for a ramp under a step change.
+   *
+   * One synchronous render is enough: size() reads clientWidth, which flushes
+   * the style change above it, and render() ends by handing the finished lane
+   * geometry to place() through TL.onLayout — so the rows land on the new
+   * geometry in the SAME frame the canvas is drawn at it, which is what keeps
+   * the lock at 0.000px across a collapse-and-expand.
+   */
+  setOpen(v: boolean, remember = true) {
+    this.open = v;
+    if (remember) {
+      try { if (typeof localStorage !== 'undefined') localStorage.setItem(OPEN_KEY, v ? 'on' : 'off'); }
+      catch { /* private mode, quota — the switch still works for this session */ }
+    }
+    closePops();
+    this.apply();
+    TL.render();
+    // A mark's x moves with the gutter, so a card anchored to one is anchored
+    // to where that mark USED to be. Same repair a pan makes (TL.onScroll).
+    SelCard.reanchor();
   },
 
   /** Rebuild the rows. Structure only — never geometry; place() owns that. */

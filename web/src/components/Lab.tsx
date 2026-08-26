@@ -1279,6 +1279,11 @@ export default function Lab() {
      exists on the horizontal timeline, so a lane row also navigates there —
      locating a lane on a view that has no lanes is not locating anything. */
   const flashLayer = useCallback((id: string) => {
+    // AND A CLOSED PANEL HAS NO ROWS AT ALL. "Locate it in the panel" has to
+    // put the panel back first, or the loop below spends 40 frames looking for
+    // a row with no height and gives up without a word — which is exactly what
+    // this did on a phone before the switch existed, every time.
+    LayerPanel.setOpen(true);
     // A COLLAPSED GROUP HAS NO ROW TO FLASH. layerpanel.ts skips a collapsed
     // group's children entirely (the lanes still draw — collapsing is a panel
     // gesture, not a visibility one), so "find it in the panel" has to open the
@@ -2279,7 +2284,15 @@ export default function Lab() {
               own — it is one surface with the canvas — so a footer in flow would
               be under the fold on a tall arrangement. Two verbs and a count; the
               panel's chrome budget is this row and nothing else.
-              layerpanel.ts fills it, so it MUST ship EMPTY. */}
+              layerpanel.ts fills it, so it MUST ship EMPTY.
+
+              AND IT IS NOW ALSO THE SWITCH'S HOME, which is why it no longer
+              hides at 760px the way the panel used to. It is the one piece of
+              the layer panel that is on screen at every width in every state —
+              closed, the strip drops its ground and its two verbs and keeps a
+              single "Layers" chip in the corner it always had. `hidden` still
+              belongs to the view, because none of this means anything on the
+              ten projections that have no lanes. */}
           <div className="tl-layers__bar" id="layerBar" hidden={view !== 'zoom'} />
 
           {/* THE INDEX IS A STUB. ALWAYS.
