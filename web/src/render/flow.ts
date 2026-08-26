@@ -453,6 +453,20 @@ export function Ribbons(cfg: RibbonCfg) {
       SelStore.subscribe(() => this.render());
       repaintOnFonts(() => this.render());
     },
+    /** WHAT THE "Find a polity…" FIELD DROVE, now that the field is gone.
+     *  A query DIMS every ribbon whose name does not contain it and leaves the
+     *  matches at full ink — a filter over the whole picture, not a selection of
+     *  one thing, which is why it could not simply become a SelStore write. The
+     *  global "Search anything…" is the only search in the app now, so this is a
+     *  method instead of an <input> listener. Returns how many ribbons it keeps,
+     *  which is the number the old "N hits" readout showed. */
+    setQuery(q: string): number {
+      this.q = (q || '').trim();
+      this.render();
+      if (!this.q) return 0;
+      const ql = this.q.toLowerCase();
+      return this.items.filter((p: any) => String(p.name).toLowerCase().includes(ql)).length;
+    },
     animTo(a: number, b: number) {
       if (reduceMotion()) { this.d0 = a; this.d1 = b; this.render(); return; }
       const A = this.d0, B = this.d1, t0 = performance.now();
@@ -594,7 +608,9 @@ export function initFlow() {
   Flow.items = POLITIES;
   Flow.init();
   buildRegionRow();
-  $('#flowRome')!.addEventListener('click', () => { Flow.q = ''; ($('#flowSearch') as HTMLInputElement).value = ''; Flow.animTo(-300, 900); });
+  // Reset the query too: "Follow Rome" is a framing, and arriving at year -300
+  // with two thirds of the plate still dimmed by a stale filter reads as broken.
+  $('#flowRome')!.addEventListener('click', () => { Flow.setQuery(''); Flow.animTo(-300, 900); });
   $('#flowSplit')!.addEventListener('click', () => Flow.animTo(180, 820));
   $('#flowAll')!.addEventListener('click', () => Flow.animTo(-1200, 2026));
   $('#flowMode')!.addEventListener('click', (e: any) => {
@@ -602,9 +618,10 @@ export function initFlow() {
     e.target.textContent = Flow.mode === 'norm' ? 'Absolute scale' : 'Share of world';
     Flow.render();
   });
-  $('#flowSearch')!.addEventListener('input', (e: any) => {
-    Flow.q = e.target.value.trim(); Flow.render();
-    const n = Flow.q ? POLITIES.filter(p => p.name.toLowerCase().includes(Flow.q.toLowerCase())).length : 0;
-    $('#flowCnt')!.textContent = Flow.q ? `${n} hits` : '';
-  });
+  /* THIS VIEW NO LONGER HAS A SEARCH FIELD OF ITS OWN. #flowSearch and #flowCnt
+     were a second, weaker search sitting three inches from the global one: they
+     could only match a substring of a polity NAME, only inside this one view,
+     and only by dimming. "Search anything…" is the only search in the app now.
+     What the field could do survives as Flow.setQuery(q) above — call that to
+     filter the ribbons, or write the global selection to light exactly one. */
 }

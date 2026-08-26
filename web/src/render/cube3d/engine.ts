@@ -1297,6 +1297,25 @@ export class CubeEngine {
     return true;
   }
 
+  /**
+   * NOTHING TRACED. The counterpart of select(), and the reason it exists:
+   * dismissing the selection card clears the map's highlight, so it has to clear
+   * the block's too, or the card and the canvas disagree about what is selected —
+   * a lit solid with no card explaining it.
+   *
+   * An empty S.polity is a legal state everywhere downstream by construction:
+   * lineageOf('') returns [''], tracedIds() drops it for not being in polById, so
+   * buildEmpire() clears the group, builds no caps and reports an empty trace.
+   * The ghost world, the cut, the slice and the camera are all untouched — this
+   * puts out the light, it does not reset the view.
+   */
+  clearTrace() {
+    if (!this.S.polity) return false;
+    this.S.polity = '';
+    this.buildEmpire();
+    return true;
+  }
+
   // ─────────────────────────────────────────────────────────────────── theme
   /** re-read the Survey tokens: the shell's theme toggle changed underneath us */
   retheme() {

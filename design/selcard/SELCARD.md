@@ -71,10 +71,15 @@ stops trying to phrase four sentences and instead says one thing:
 ```
 Show this in
 ┌──────────────┬────────┬────────┬────────┐
-│ TIMELINE  ↵  │  MAP   │  CUBE  │  CORE  │
+│   TIMELINE   │  FLOW  │  MAP   │  CUBE  │
 └──────────────┴────────┴────────┴────────┘
-   ink block      surface   surface  surface
+    surface      surface  surface  surface
 ```
+
+> Updated. CORE was cut with the view, and FLOW took the fourth slot — see
+> §2a. The ink block is gone from this diagram too: it no longer means "do this
+> first", it means "you are here", so it lands on whichever cell matches the
+> current view and on none of them from Braid or Connections.
 
 Everything the verdict complains about falls out of this:
 
@@ -102,6 +107,68 @@ like an awkward number.
 
 ---
 
+## 2a. Flow's slot, and where a searched card parks
+
+**FLOW went in second, not last.** The row runs time then space. Timeline and
+Flow are the two projections onto a year axis — a bar on the line, a ribbon
+whose thickness is weight — Map is the projection onto the ground, and Cube
+fuses them: a line, a line with thickness, a surface, a solid. Putting Flow last
+would have split the row's one real adjacency, the same span drawn flat and then
+drawn thick, across the two spatial views. Founder: *"Timeline / Map / Cube — i
+am missing Flow here"*.
+
+This is the group's fixed order changing **once**, deliberately, because a
+destination was added. It is not the per-card reordering §3 forbids:
+`[timeline, flow, map, cube]` is the order on every card, and the group is still
+only ever *filtered*, never sorted.
+
+**NEVER vs NOT NOW, decided exactly as Map decides it.**
+
+| case | cell |
+|---|---|
+| no `polity` at all (a life, an event, a spread) | **not rendered** — Flow draws polities; a person is not one, and no amount of data will make them one |
+| a `polity` the flow corpus does not carry | **hatched** — the right kind of thing with no data, so the door is shown shut with the reason on it |
+| a `polity` whose region chip is switched off | **live** — genuinely "not now", and the click itself fixes it |
+
+The third row is the `seeOnMap` rule restated: *if it is not here, go where it
+is*. Nothing transient is ever hatched, so `showInFlow` must turn the polity's
+region chip back on — landing on Flow with the ribbon filtered out is the same
+broken promise as landing on the map at a year with no borders.
+
+**WHERE A SEARCHED CARD GOES.** Placement depends on whether the reader pointed
+at anything.
+
+- **You pointed** (click, tap, a row in the card's own connections list): the
+  card goes beside the thing and may never cover it. Unchanged.
+- **You did not point** (the search): the card **parks top-right** and stays
+  parked for the life of that selection — through a pan, through a view switch.
+  Anchoring after a search drops the card wherever the hit happens to be drawn,
+  which on the timeline is the left edge as often as not. Founder: *"After
+  search is done, show the card always on top right"*.
+
+The anchor argument could not carry this. `null` there already means *"I do not
+know where it is, ask the renderer"*, which is how the search's own call gets an
+anchor today; overloading it would make one value mean two opposite things. So
+the source is explicit: `select(id, rect, pt?, from?)` with
+`from: 'point' | 'search'`, defaulting to `'point'` so every renderer call site
+means exactly what it always meant.
+
+**The parked corner is shared with the control panels.** The card is the next
+thing *down* the right-hand column, never a second thing in the same corner: it
+right-aligns to the same inset the panels use, so the two read as one column,
+and it starts under whatever is already there. It prefers, in order, **below at
+its natural height → beside at its natural height → squeezed below** (never
+under `keepH`, the head-plus-destinations block that cannot scroll). Preferring
+a squeezed below-slot over a whole one beside is what made this knife-edge on
+Cube, where Controls is 584px tall and the slot under it is a dozen pixels short.
+
+It is measured, never assumed. Which corner Controls occupies is a shell
+decision that has changed before; reading the rects means the card is correct
+under every arrangement without knowing about any of them.
+
+Below 760px CSS turns the card into the bottom sheet and placement is skipped
+entirely — both rules stop at that width.
+
 ## 3. The seven questions
 
 ### 3.1 What is the visual hierarchy? What does the eye hit first?
@@ -126,7 +193,7 @@ line down, to the object that carries the fact the user *doesn't* have:
  1707 – 1997                                        1783
  the largest empire in history, ruling a quarter …               ← 12px, ink-2
  Show this in
- [ TIMELINE ↵ ][ MAP ][ CUBE ][ CORE ]
+ [ TIMELINE ][ FLOW ][ MAP ][ CUBE ]
  CONNECTIONS                                       ALL 7 →
  Industrial Revolution              part-of  ▇▇▇▇▇▇▇▇
  …
@@ -289,12 +356,13 @@ that button because it was the one control that wrote the year, and the
 centre-year rule made it a second, contradictory way to say the same thing. That
 deletion stands. Framing the era moves the window; the year follows the window.
 
-**And the absence does not gut the card.** Exactly one of the three destinations
+**And the absence does not gut the card.** Exactly one of the four destinations
 is year-sensitive:
 
 | destination | year-sensitive? |
 |---|---|
 | Timeline | no — it *moves* the year |
+| Flow | no — it lights the ribbon along its whole length |
 | **Map** | **yes** — it draws the nearest of eighteen snapshots |
 | Cube | no — it traces the whole life as a solid |
 

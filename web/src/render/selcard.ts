@@ -7,23 +7,31 @@
    zoom and hover while it is open, because the card's whole job is to be read
    AGAINST the timeline, not instead of it.
 
-   THE ACTION MODEL (design/selcard/SELCARD.md §2). These are NOT three
-   commands. They are ONE command — *look at this* — through three of the app's
+   THE ACTION MODEL (design/selcard/SELCARD.md §2). These are NOT four
+   commands. They are ONE command — *look at this* — through four of the app's
    own views:
 
        Show this in
-       [ TIMELINE ][ MAP ][ CUBE ]
+       [ TIMELINE ][ FLOW ][ MAP ][ CUBE ]
 
    so the subject's name can never appear in an action label ("Zoom to
    Polish-Lithuanian Commonwealth" is not shortened, it is structurally
    impossible), scanning drops from three phrases to three nouns, and the verb
    no longer flips per view. (CORE is gone: the founder cut the view.)
 
+   FLOW IS THE FOURTH, and it went in SECOND rather than last. The row runs
+   time then space: Timeline and Flow are the two projections onto a year axis,
+   Map is the projection onto the ground, Cube fuses them — a line, a line with
+   thickness, a surface, a solid. Flow draws polities as ribbons through time,
+   so for anything with a polity it is a genuine perspective on the same
+   subject, and it was the only one of the five views the card could not send
+   you to. Founder: "Timeline / Map / Cube — i am missing Flow here".
+
    ONE SIGNAL, ONE MEANING. The inverted cell — a solid ink block with an
    inverted label — means WHERE YOU ARE, and nothing else. On the Map view the
    MAP cell is inverted; on the Timeline view the TIMELINE cell is; on a view
-   that is not a destination at all (Flow, Braid, …) none of them is. Exactly
-   one is ever lit.
+   that is not a destination at all (Braid, Connections, …) none of them is.
+   Exactly one is ever lit.
 
    This replaces a strip that tried to carry two ideas at once: the ink block
    used to mean "do this first" and was hard-coded to TIMELINE on every view,
@@ -35,8 +43,10 @@
    are", and the focus ring is the card's only mark of it.
 
    DEGRADATION is the difference between NEVER and NOWHERE. A life can never
-   have a territory, so Map and Cube are NOT RENDERED for it — a permanently
-   dead cell on all thirty-nine lives teaches the user the app is broken.
+   have a territory and is not a polity, so Flow, Map and Cube are NOT RENDERED
+   for it — a permanently dead cell on all thirty-nine lives teaches the user
+   the app is broken. All three hang off the same test, `s.polity`, because
+   that is the one join all three views are reached through.
 
    A polity that HAS territory is always reachable, whatever year you are on.
    Map used to hatch whenever the CURRENT year had no borders — Rome selected
@@ -56,18 +66,33 @@
    the year, and the centre-year rule made it a second, contradictory way to say
    the same thing.)
 
-   PLACEMENT: it may never cover the thing it describes. The anchor rect comes
+   PLACEMENT DEPENDS ON WHETHER YOU POINTED AT ANYTHING.
+
+   YOU POINTED (a click, a tap, a row in the card's own connections list): the
+   card goes beside the thing, and may never cover it. The anchor rect comes
    from whichever renderer handled the click, in viewport coordinates, and the
    card goes right / left / below / above it, whichever fits, then clamps into
-   the viewport. Below 760px CSS turns it into the bottom sheet the panels
-   already use and placement is skipped entirely.
+   the viewport.
+
+   YOU DID NOT POINT (the search): the card PARKS at the top-right and stays
+   there for the life of that selection. Anchoring after a search puts the card
+   wherever the hit happens to have landed, which on the timeline is the left
+   edge as often as not — a position the reader cannot predict and did not
+   choose. Founder: "After search is done, show the card always on top right".
+   The parked corner is shared with the control panels, so the card takes the
+   slot BELOW them in the same right-hand column rather than the corner itself
+   (see place()); it never covers chrome, and it never has to know which corner
+   the chrome is in, because it measures.
+
+   Below 760px CSS turns it into the bottom sheet the panels already use and
+   placement is skipped entirely — both rules stop at that width.
 
    THIS FILE IMPORTS NO RENDERER. Everything it can DO arrives through wire() at
    boot, from Lab.tsx, which is the only module that already knows all eleven
    views — so there is no cycle back through timeline.ts, map.ts or cube.ts.
    ============================================================================= */
 
-import { $, CATBY, SelStore, TimeStore, YEARS, fmtBig, fmtY } from './shared';
+import { $, CATBY, POLITIES, SelStore, TimeStore, YEARS, fmtBig, fmtY } from './shared';
 import { esc, relDir } from './relations';
 import {
   bandLabel, catLabel, describe, perspectiveSpan, relCount, territoryAt,
@@ -90,7 +115,26 @@ const NARROW = 760;
 const SUPPRESS = new Set<string>();
 
 /** Which view each destination lands you on — the aria-current join. */
-const LANDS_ON: Record<string, string> = { persp: 'zoom', map: 'map', cube: 'cube' };
+const LANDS_ON: Record<string, string> = { persp: 'zoom', flow: 'flow', map: 'map', cube: 'cube' };
+
+/**
+ * IS THIS POLITY A RIBBON AT ALL? Flow draws POLITIES and only POLITIES, so a
+ * polity id that is not in that array carries no weight curve and can never be
+ * a ribbon — whatever you do with the region chips or the pan.
+ *
+ * Such ids exist: describe() falls back to the map's ALIAS table for a polity
+ * the flow corpus does not carry (subject.ts), and that subject still reports a
+ * `polity`, so it still gets a Map cell. The two sets happen to coincide today
+ * (147 = 147) but they are separate files with separate build scripts, and the
+ * corpus grows on both sides independently.
+ *
+ * Read from the CORPUS, never from flow.ts — same rule, and same reason, as
+ * firstMapYear() reading YEARS instead of asking map.ts: this file imports no
+ * renderer, so there is no cycle back through it.
+ */
+function isRibbon(polity: string | null): boolean {
+  return !!polity && POLITIES.some((p: any) => p.id === polity);
+}
 
 /**
  * THE FIRST SNAPSHOT THIS POLITY IS ACTUALLY DRAWN IN, or null if it is drawn
@@ -118,6 +162,25 @@ export interface CardWiring {
   /** show the map — at `year` when the subject is not drawn at the current one,
    *  otherwise (undefined) at the current global year, leaving it untouched */
   seeOnMap(year?: number): void;
+  /**
+   * show the flow of empires with this polity's ribbon lit — the FLOW
+   * destination.
+   *
+   * Flow already lights the selection from its own SelStore subscription, so
+   * this does NOT have to select anything: it has to make the ribbon VISIBLE.
+   * Which means, exactly as seeOnMap() travels to the snapshot the thing is
+   * actually drawn in, it must turn the polity's REGION chip back on when the
+   * reader has that region hidden — landing on Flow with the ribbon filtered
+   * out is the same broken promise as landing on the map at a year with no
+   * borders. It writes no year: Flow spans the whole corpus and the ribbon is
+   * lit along its entire length, so there is no moment to move to.
+   *
+   * OPTIONAL ONLY UNTIL Lab.tsx CARRIES IT. The card declares what it needs;
+   * Lab.tsx is the module that knows the views and implements it. Once it does,
+   * drop the `?` — a required member is the honest contract, and the guard in
+   * act() is only here so the two files can land in either order.
+   */
+  showInFlow?(polityId: string): void;
   /** show the cube with this polity id traced */
   traceInCube(polityId: string): void;
   /** reveal the full ranked relation list in the docked panel */
@@ -127,6 +190,32 @@ export interface CardWiring {
   /** where this id is drawn on the CURRENT view, if it is drawn at all */
   anchorOf(id: string): DOMRect | null;
 }
+
+/**
+ * WHERE THE SELECTION CAME FROM, which is the whole question of where the card
+ * goes.
+ *
+ * 'point' — you touched the thing. A mark on the timeline, a ribbon, a country,
+ *   a row in the card's own connections list. There is a place on screen you
+ *   were looking at, and the card belongs beside it.
+ *
+ * 'search' — you typed a name and pressed a row in a dropdown. You pointed at
+ *   NOTHING on the canvas, so anchoring the card to wherever the hit happens to
+ *   have landed is a coincidence dressed up as an intention: on the timeline it
+ *   parks the card at the left edge as often as not. Founder: "After search is
+ *   done, show the card always on top right (not on left as currently on
+ *   timeline it is)." So it parks, and it STAYS parked for the life of that
+ *   selection — through a pan, through a view switch — because a card that
+ *   silently jumps to the mark the first time the surface moves is worse than
+ *   either rule on its own.
+ *
+ * The anchor argument could NOT carry this. `null` there already means
+ * something else and has since the beginning: "I do not know where it is, ask
+ * the renderer" — select() falls through to resolveAnchor() on null, which is
+ * exactly how the search's own `select(id, null)` call gets an anchor today.
+ * Overloading it would have made a null anchor mean two opposite things.
+ */
+export type SelSource = 'point' | 'search';
 
 /** One cell of the destination group. Built in a fixed order and only filtered. */
 interface Dest {
@@ -157,9 +246,15 @@ export const SelCard = {
   dismissed: false,        // × — sticky until the selection changes
   /** the exact spot the user pointed at, when the selection came from the map */
   point: null as Place | null,
+  /** this selection came from the search box, so the card parks instead of
+   *  anchoring — and keeps parking until the selection changes */
+  parked: false,
   _hint: null as DOMRect | null,
   _pt: null as Place | null,
+  _src: 'point' as SelSource,
   _bound: false,
+  _ro: null as ResizeObserver | null,
+  _settle: 0,
 
   wire(w: CardWiring) { this.wiring = w; },
 
@@ -214,7 +309,9 @@ export const SelCard = {
       this.dismissed = false;                     // a NEW selection un-dismisses
       const r = this._hint; this._hint = null;
       const p = this._pt; this._pt = null;
+      const src = this._src; this._src = 'point';
       this.point = p;                             // …and a new selection re-points
+      this.parked = src === 'search';             // …and re-decides where it goes
       if (!SelStore.id) { this.hide(); return; }
       this.show(SelStore.id, r ?? this.resolveAnchor(SelStore.id));
     });
@@ -243,17 +340,28 @@ export const SelCard = {
    * `pt` is the exact point on the globe the user pointed at, which only the
    * map can know. It is the coordinate the card prints for a nameless patch of
    * the atlas — the one thing that says WHERE such a patch is.
+   *
+   * `from` says whether the reader pointed at anything at all — see SelSource.
+   * It defaults to 'point', so every renderer call site is unchanged and means
+   * what it always meant; only the search passes 'search'.
    */
-  select(id: string | null, rect: DOMRect | null, pt: Place | null = null) {
+  select(id: string | null, rect: DOMRect | null, pt: Place | null = null, from: SelSource = 'point') {
     if (id === SelStore.id) {                     // re-click: the store will not fire
       this.dismissed = false;
       this.point = pt;
+      // RE-SELECTING DECIDES AGAIN. Searching up the thing you already have
+      // selected has to park it, or the one case where the founder is most
+      // likely to look — search, glance, search the same name again — is the
+      // one case that does not obey. And it runs the other way too: clicking
+      // the mark of something you had searched for IS a point, so the card
+      // comes off its park and opens beside your finger.
+      this.parked = from === 'search';
       if (id) this.show(id, rect ?? this.resolveAnchor(id)); else this.hide();
       return;
     }
-    this._hint = rect; this._pt = pt;
+    this._hint = rect; this._pt = pt; this._src = from;
     SelStore.set(id);
-    this._hint = null; this._pt = null;
+    this._hint = null; this._pt = null; this._src = 'point';
   },
 
   /** Lab tells the card which view is on screen — aria-current depends on it. */
@@ -286,6 +394,86 @@ export const SelCard = {
     return r.width ? r.right + 8 : 0;
   },
 
+  /**
+   * EVERY PANEL ACTUALLY ON SCREEN, as viewport rects.
+   *
+   * The card sits ABOVE panels in z-order (--tl-z-pop over --tl-z-panel), so
+   * anything it lands on it HIDES — and a parked card lands somewhere nobody
+   * pointed at, which is exactly where a corner panel likes to live. dockRight()
+   * has always refused the left dock for this reason; this is the same refusal
+   * generalised, and it is measured rather than assumed.
+   *
+   * BY GEOMETRY, NEVER BY CORNER CLASS. Which corner Controls occupies is a
+   * shell decision that has changed before and will change again — it is being
+   * moved to the top-right as this lands. Reading the rects means the card is
+   * correct under every one of those arrangements without knowing about any of
+   * them, and gains nothing to keep in sync.
+   */
+  panelRects(): DOMRect[] {
+    const st = document.getElementById('stage'); if (!st) return [];
+    const out: DOMRect[] = [];
+    st.querySelectorAll<HTMLElement>('.tl-panel').forEach((p) => {
+      if (p.hidden) return;
+      const r = p.getBoundingClientRect();
+      if (r.width > 0 && r.height > 0) out.push(r);         // display:none measures 0
+    });
+    return out;
+  },
+
+  /**
+   * THE PARKED CARD FOLLOWS THE COLUMN.
+   *
+   * place() reads the panel rects ONCE, and on a view switch it runs before the
+   * new view's panel has finished laying out — Cube's Controls is 584px tall
+   * with six sections, and the card was placed against a stub of it and landed
+   * 76px INSIDE it. A one-shot measurement of something that is still growing is
+   * not a measurement.
+   *
+   * So the panels are watched instead of sampled. This also buys the case the
+   * one-shot version could never have handled at all: the reader collapses
+   * Controls with its chevron, and the card slides up to meet it, because "the
+   * next thing down the column" is a relationship, not a coordinate.
+   *
+   * No loop is possible — the card is not observed, only the panels, and no
+   * panel's size depends on where the card is. Coalesced to one place() per
+   * frame, because a panel animating its collapse fires this on every frame.
+   */
+  /**
+   * KEEP PLACING IT WHILE THE VIEW SETTLES — a few frames, then stop.
+   *
+   * One extra frame is not enough and a single measurement is not either. The
+   * card is shown in the same tick that React begins committing the incoming
+   * view's panel, and that panel keeps growing for several frames afterwards:
+   * Cube's Controls gains its FOLLOW LINEAGE chips only once the polity is
+   * selected, taking it from ~470px to 584px, and a card placed against the
+   * first number lands well inside the last one.
+   *
+   * Bounded, so it is a settle and not a poll: six frames (~100ms), cancelled
+   * the moment the card closes, and re-armed from the top on the next show().
+   * place() is a handful of getBoundingClientRect calls against at most a few
+   * panels, so this is far cheaper than the ResizeObserver it backs up — and
+   * unlike that observer it cannot be defeated by React swapping the panel node
+   * out from under it, which is exactly the failure it exists to cover.
+   */
+  placeSoon() {
+    if (this._settle) cancelAnimationFrame(this._settle);
+    let n = 0;
+    const tick = () => {
+      if (!this.open) { this._settle = 0; return; }
+      this.place();
+      this._settle = ++n < 6 ? requestAnimationFrame(tick) : 0;
+    };
+    this._settle = requestAnimationFrame(tick);
+  },
+
+  watchPanels() {
+    if (typeof ResizeObserver === 'undefined') return;     // jsdom, older Safari
+    if (!this._ro) this._ro = new ResizeObserver(() => this.placeSoon());
+    this._ro.disconnect();
+    const st = document.getElementById('stage'); if (!st) return;
+    st.querySelectorAll<HTMLElement>('.tl-panel').forEach(p => this._ro!.observe(p));
+  },
+
   resolveAnchor(id: string): DOMRect | null {
     try { return this.wiring ? this.wiring.anchorOf(id) : null; } catch { return null; }
   },
@@ -298,11 +486,22 @@ export const SelCard = {
     el.hidden = false;
     this.paint();
     this.place();
+    this.watchPanels();          // …and keep placing it as the panels settle
+    // AND ONCE MORE NEXT FRAME, unconditionally. A view switch shows this card
+    // in the same tick that React is still committing the incoming view's
+    // panel, so the first place() can only ever measure a stub of it — Cube's
+    // Controls grows from ~470px to 584px as its lineage chips arrive, and the
+    // card was landing 76px inside it. The observer above catches later growth,
+    // but it cannot catch a panel that reached its size before it was observed,
+    // and it is watching nodes React is free to replace. One extra frame is the
+    // cheap, unconditional half of the pair.
+    this.placeSoon();
   },
 
   hide(byUser = false) {
     if (byUser) this.dismissed = true;
     this.open = false;
+    this._ro?.disconnect();      // nothing to follow while it is shut
     if (this.el) this.el.hidden = true;
   },
 
@@ -478,6 +677,40 @@ export const SelCard = {
       });
     }
 
+    // FLOW — SECOND, because the row runs TIME then SPACE. Timeline and Flow
+    // are the two projections onto a year axis (a bar on the line; a ribbon
+    // whose thickness is weight); Map is the projection onto the ground; Cube
+    // fuses the two. Splitting the pair around the two spatial views would put
+    // the row's one real adjacency — the same span, drawn flat then drawn
+    // thick — at opposite ends of the strip. It is also the increasing-
+    // dimension reading the row already had: a line, a line with thickness, a
+    // surface, a solid. The founder's own words put it in the same place:
+    // "Timeline / Map / Cube — i am missing Flow here".
+    //
+    // This is the group's fixed order changing ONCE, deliberately, as a new
+    // destination is added. It is not the per-card reordering the header
+    // forbids: [timeline, flow, map, cube] is now the order on EVERY card, and
+    // a card without a polity still shows Timeline alone in the first slot.
+    if (!s.minimal && s.polity) {
+      const ribbon = isRibbon(s.polity);
+      out.push({
+        act: 'flow', label: 'Flow',
+        title: ribbon
+          ? 'Follow its ribbon through the flow of empires — how its weight rose and fell against every other power'
+          : `${s.name} carries no weight curve, so it is drawn in the flow of empires as no ribbon`,
+        // NEVER vs NOT NOW, decided exactly as the Map cell decides it. A
+        // polity the flow corpus does not carry has nothing behind the door at
+        // any year, any pan, any region — so the door is shown SHUT, with the
+        // reason on it, rather than hidden: hiding would claim the subject is
+        // the wrong KIND of thing for this view, and it is not; it is the right
+        // kind with no data. (A polity whose REGION chip is merely switched off
+        // is the other case entirely — genuinely "not now", and recoverable by
+        // the click itself, so the wiring travels there and this cell stays
+        // live. Nothing transient is ever hatched.)
+        off: !ribbon,
+      });
+    }
+
     // MAP — only for something that HAS a territory, and hatched rather than
     // hidden when that territory is empty at this year. Hiding it there would
     // imply the subject never had a map presence, which is a lie about the
@@ -569,6 +802,10 @@ export const SelCard = {
         w?.seeOnMap(first ?? undefined);
         break;
       }
+      // No year, no framing: the ribbon is lit along its whole length and Flow
+      // already spans the corpus. All this has to do is get you there with the
+      // region showing — see showInFlow's contract.
+      case 'flow': if (s.polity) w?.showInFlow?.(s.polity); break;
       case 'cube': if (s.polity) w?.traceInCube(s.polity); break;
       case 'all': w?.allConnections(); break;
     }
@@ -592,7 +829,13 @@ export const SelCard = {
     // canvas's own left edge is the dock's right edge, so that is the floor.
     const minX = Math.max(MARGIN, this.dockRight());
     const maxX = Math.max(minX, vw - MARGIN - w);
-    const a = this.anchor;
+    // A SEARCHED SELECTION HAS NO ANCHOR EVEN WHEN IT HAS ONE. The renderer can
+    // say perfectly well where the hit is drawn — that is not the question. The
+    // question is whether the reader was LOOKING there, and after a search they
+    // were looking at the search box. So the anchor is dropped on the floor
+    // here rather than never resolved, which keeps `this.anchor` truthful for
+    // everything else that reads it.
+    const a = this.parked ? null : this.anchor;
     let x: number, y: number, side = '';
 
     if (a) {
@@ -633,12 +876,78 @@ export const SelCard = {
         if (overlaps(x, y, w, h, a)) { x = clampN(a.right + GAP, minX, maxX); side = 'r'; }
       }
     } else {
-      // Parked: the top-right of the stage. Empty on every view that docks its
-      // panels left, and ocean on the map.
+      // ── PARKED: the top-right of the stage ────────────────────────────────
+      //
+      // Two things arrive here. A selection whose subject is not DRAWN on this
+      // view at all (no anchor to be had), and a selection that came from the
+      // SEARCH (an anchor exists and is deliberately ignored — see SelSource).
+      // They want the same thing for the same reason: one fixed, learnable
+      // place, chosen once, so the reader's eye knows where to go before the
+      // card is there.
+      //
+      // THE CORNER IS NOT EMPTY ANY MORE. It used to be — "empty on every view
+      // that docks its panels left, and ocean on the map" — and Controls is
+      // moving into it. The card is above panels in z-order, so parking on top
+      // of Controls does not look crowded, it looks like Controls is GONE, and
+      // the reader has no way to know a card they never positioned is what ate
+      // their toggles.
+      //
+      // THE RULE, in one line: the card is the next thing DOWN the right-hand
+      // column, never a second thing in the same corner. It right-aligns to the
+      // stage's right inset — the same margin the panels use, so the two read
+      // as one column rather than two floating boxes — and starts under
+      // whatever is already there.
       const st = document.getElementById('stage');
       const r = st ? st.getBoundingClientRect() : null;
-      x = clampN((r ? r.right : vw) - w - 12, minX, maxX);
-      y = clampN((r ? r.top : 60) + 12, MARGIN, vh - MARGIN - h);
+      const right = (r ? r.right : vw) - 12;
+      const top = (r ? r.top : 60) + 12;
+      x = clampN(right - w, minX, maxX);
+      y = clampN(top, MARGIN, Math.max(MARGIN, vh - MARGIN - h));
+
+      const hitting = () => this.panelRects().filter(p => overlaps(x, y, w, h, p));
+      const on = hitting();
+      if (on.length) {
+        let bot = MARGIN, lft = vw;
+        for (const p of on) { bot = Math.max(bot, p.bottom); lft = Math.min(lft, p.left); }
+        const under = bot + GAP;                  // the top of the slot below the stack
+        const room = vh - MARGIN - under;         // …and how much height that slot has
+        const beside = lft - GAP - w;             // the x of the slot inboard of it
+
+        // THE ORDER IS BELOW, THEN BESIDE, THEN SQUEEZE — and "below" has to
+        // mean the card FITS below, at the height it actually wants.
+        //
+        // Ranking a squeezed below-slot above a full-height one beside is what
+        // made this knife-edge on Cube: Controls there is 584px tall, the slot
+        // under it holds 191px, keepH is 207px, and the two were close enough
+        // that a dozen pixels of late panel growth decided it. The card either
+        // took a slot it did not fit in or overlapped by two pixels, when there
+        // was a 320x294 hole to its left the whole time. Fitting beats staying
+        // in the column: a card that has to scroll its connections away to sit
+        // under Controls is worse than one sitting next to it whole.
+        if (h <= room) {
+          y = under;                              // 1. below, whole
+        } else if (beside >= minX) {
+          x = beside;                             // 2. beside, whole
+        } else if (room >= this.keepH()) {
+          // 3. NOWHERE WHOLE, so squeeze into the taller of the two — but never
+          // below the part that cannot scroll: the identity, the measurement
+          // and the destinations. Past that the card starts CLIPPING its
+          // actions rather than scrolling its list, and the actions are the
+          // card's entire purpose.
+          y = under; h = room; el.style.maxHeight = h + 'px';
+        }
+        // Below minX with no room under, there is genuinely nowhere left — a
+        // window too narrow to hold a 264px panel and a 320px card side by
+        // side. It keeps the corner and the clamp catches it; a few px narrower
+        // and CSS takes over with the bottom sheet, placement skipped entirely.
+
+        // ONE CORRECTION PASS: dropping down can walk into a BOTTOM-corner
+        // panel, which the first measurement had no reason to look at.
+        if (hitting().length && beside >= minX) {
+          x = beside;
+          y = clampN(top, MARGIN, Math.max(MARGIN, vh - MARGIN - h));
+        }
+      }
     }
     // FINAL CLAMP. A mark can be drawn a little past the canvas edge (the layout
     // culls at cw + 40), so "the side that fits" can be chosen off an anchor that

@@ -1,45 +1,47 @@
 /* eslint-disable @typescript-eslint/no-explicit-any */
 // ================= ⑧ CONNECTIONS =================
-// THE SAME INSTRUMENT AS ② (render/timeline.ts), POINTED AT A DIFFERENT QUESTION.
+// The relationship atlas. Three kinds of thing share one horizontal time axis:
+//   event   — happens at a point in time
+//   entity  — persists and is in ONE place at a time (a person: a thread)
+//   spread  — persists and is in MANY places at once; its footprint moves and its
+//             intensity waxes and wanes (printing, the Industrial Revolution, a religion)
 //
-// It used to draw its own way — four lanes of swelling/tapering ribbons borrowed from
-// ③ Flow, with a second "hollow dashed" vocabulary for repeats, a lane-normalisation
-// toggle and a row of demo buttons. A stranger looking at ② and ⑧ side by side would
-// not have said they were the same product. The founder's line was the whole brief:
-// "The Connections should have same rendering as timeline."
+// Spreads — and states, which behave the same way — are drawn with the SAME ribbon
+// geometry as ③ Flow of empires (flowLayout, imported from ./flow), so thickness
+// follows the weight curve: swelling and tapering, not a rectangle. Events and
+// entities are placed INSIDE the ribbon they belong to, so "Mainz 1439 is a point
+// within the printing spread" is literally what you see.
 //
-// So the mark vocabulary here is now ②'s, to the pixel:
-//   • anything with DURATION  — a spread, a state, a belief stream, a life, an episode —
-//     is a rounded rectangle whose height is the importance ladder (TIER_H) and whose
-//     edges carry the same sharpness envelope. It is drawn by TL.drawSpread itself,
-//     imported, not re-implemented: one function, two views.
-//   • a MOMENT is a dot in its own stratum below the rectangles, exactly as in ②.
-//   • colour is the `--tl-cat-*` data system through catColor + varyColor,
-//     selection is a T.ink ring, a search hit is a T.accent2 ring, the axis reads
-//     along the TOP in mono, and the cursor is one minium hairline with a year pill.
-// The zoom is ②'s too: the piecewise C1 v-space (shared tv/ty), the same clampV, so
-// the wheel and the pinch feel identical in both views.
+// Relationships are explicit and weighted (data/relations/SCHEMA.md). Click anything
+// and the whole view re-grades itself by link weight: w=1.0 at full strength, w=0.2
+// barely up, everything unrelated dimmed but still there as context.
 //
-// WHAT IS STILL ONLY TRUE HERE, and the only reason the view exists:
-//   • the lanes are QUERIES, not curated bands — an item lands in its best-scoring one;
-//   • relationships are explicit and weighted (data/relations/SCHEMA.md), so clicking
-//     anything re-grades the whole view by link weight and draws a faint thread to each
-//     related thing at the YEAR the relation is about.
-//
-// Everything else — the click, the card, the highlight, the search, the axis — is the
-// app's, not this view's.
+// THE FLOW DIAGRAM IS THE RENDERING, AND IT STAYS. A commit briefly replaced these
+// ribbons with ②'s rectangles-and-dots vocabulary; the founder's answer was "the
+// connections should've stayed as the flow diagram before", so the ribbons are back
+// verbatim — flowLayout, the hollow-dashed echo, the loose strip, the threads, the
+// bottom axis. What that commit got RIGHT came with them and is still here:
+//   • a click selects and opens the selection card beside the mark (SelCard.select),
+//     empty canvas clears, and anchorOf(id) tells Lab where a mark is so a card
+//     opened in another view re-anchors when the reader arrives here;
+//   • the selection is the APP'S (SelStore), so one made anywhere lights up here and
+//     one made here survives a view switch;
+//   • the one top search box dims every non-match to 12% and rings the hits;
+//   • the canvas SIZES FROM THE STAGE (measure()) instead of a hard-coded 826px —
+//     the fourth lane, Power & economy, used to be permanently below the fold;
+//   • repaintOnFonts drops the textW memo and RELAYOUTS, so label widths are not
+//     frozen at fallback-font measurements taken before the webfont arrived.
 
 import {
-  $, BELIEFS, EVENTS, POLITIES, SelStore, TimeStore, catColor, clamp, clearTextCache, ellipsize, fitCanvas,
-  fmtBig, fmtSpan, fmtY, fontMono, fontUI, hexHsl, hideTip, inkFor, reduceMotion, repaintOnFonts,
-  sharpnessOf, showTip, textW, timeTicks, tokens, tv, ty, varyColor, clampV, yearPill,
+  $, BELIEFS, EVENTS, POLITIES, SelStore, TimeStore, catColor, clamp, clearTextCache, fitCanvas,
+  fmtY, fontMono, fontUI, hexHsl, hideTip, reduceMotion, repaintOnFonts, showTip, tokens,
+  varyColor, yearPill, type Tokens,
 } from './shared';
 import {
   bindPinch, slopFor, TAP_PAD, armSafariGestureGuard, refuseSafariGestures,
 } from './gesture';
 import { SelCard } from './selcard';
-import { TL } from './timeline';
-import { polityLvl } from './layers';
+import { flowLayout } from './flow';
 import {
   REL, SPREADCAT, esc, kindColor, lit as litOf, lvlOfWeight, peakOf, regionOf,
   relIndex, relOf as relOfShared, dimAlpha, renderRelatedPanel,
@@ -53,81 +55,69 @@ type NKind = 'spread' | 'polity' | 'belief' | 'event' | 'entity';
 interface Item {
   id: string; kind: NKind; name: string; start: number; end: number;
   cat: string; region: string | null; note: string;
-  dur: boolean;                          // has extent -> rectangle; otherwise a dot
-  sharp: number;                         // ②'s sharpness envelope, same defaults
-  type?: string;                         // moment | episode | life | era | zone | polity | spread
-  lvl: number;                           // importance 1..5 — the same ladder ② uses
+  ribbon: boolean;                       // has a weight curve -> drawn as a ribbon
+  weight?: [number, number][];
+  from?: string[]; to?: string[];
+  type?: string;                         // moment | episode | life | era | zone
+  lvl: number;                           // importance 1..5, for the context budget
   linked: boolean;                       // appears in links.json
-  lanes: number[];                       // every lane whose query it answers
-  home: number;                          // the best-scoring one — the only place it is drawn
 }
 
-// ---------- lanes are QUERIES ----------
-// Each lane scores an item 0-1 and the item is drawn in its best-scoring lane, ONCE.
-// (The old build drew it again, hollow and dashed, in every other lane it matched. That
-// was a second shape grammar nothing else in the app speaks, it needed its own legend
-// row, and a lane of European states became a hairball of echoes. The fact survives
-// where a set-membership fact belongs: in words, in the Related panel.)
-interface Lane { id: string; name: string; si: number; score: (n: Item) => number }
+// ---------- lanes are QUERIES, and they deliberately overlap ----------
+// Each lane scores an item 0-1. An item is drawn SOLID in its best-scoring lane and
+// HOLLOW everywhere else it matches, so a repeat reads as an echo, not as a bug.
+interface Lane { id: string; name: string; q: string; si: number; score: (n: Item) => number }
 const LANES: Lane[] = [
   {
-    id: 'eu', name: 'Europe', si: 0,
-    // a state IS its territory, so a European polity belongs to the region lane first
+    id: 'eu', name: 'Europe', q: 'region match', si: 0,
+    // a state IS its territory, so a European polity belongs to the region lane first;
+    // everything else that merely happened in Europe scores lower and echoes here.
     score: n => n.region === 'EU' ? (n.kind === 'polity' ? 1 : 0.6) : 0,
   },
   {
-    id: 'sci', name: 'Science & technology', si: 2,
+    id: 'sci', name: 'Science & technology', q: 'category match', si: 2,
     score: n => n.cat === 'sci' ? 1 : n.cat === 'reach' ? 0.45 : 0,
   },
   {
-    id: 'belief', name: 'Ideas & belief', si: 6,
+    id: 'belief', name: 'Ideas & belief', q: 'category match', si: 6,
     score: n => n.cat === 'belief' ? 1 : n.cat === 'art' ? 0.5 : 0,
   },
   {
-    id: 'power', name: 'Power & economy', si: 3,
+    id: 'power', name: 'Power & economy', q: 'category match', si: 3,
+    // narrowed: a European state's home is the Europe lane, so it still echoes here
+    // (the British Empire is genuinely both) but it no longer out-ranks the economic
+    // spreads this lane is actually about, and battles no longer flood it.
     score: n => n.cat === 'society' ? 0.95
       : n.cat === 'power' ? (n.kind === 'polity' && n.region === 'EU' ? 0.4 : 0.9)
         : n.cat === 'war' ? 0.55 : 0,
   },
 ];
 
-// ---------- level of detail, ported verbatim from ② ----------
+// ---------- level of detail, ported verbatim from ② (render/timeline.ts) ----------
 // The visible span decides which importance levels render, and levels fade rather than
-// pop. Same thresholds, same smoothstep ramp, so the two views behave identically.
+// pop. Same thresholds, same ramp, same 2.5× widening for the "lens" case, so the two
+// views behave identically — zoom out for the essentials, zoom in and the rest arrives.
 const THR: Record<number, number> = { 1: Infinity, 2: 40000, 3: 2400, 4: 650, 5: 170 };
 const levelFor = (S: number) => (S <= THR[5] ? 5 : S <= THR[4] ? 4 : S <= THR[3] ? 3 : S <= THR[2] ? 2 : 1);
-const alphaFor = (lvl: number, S: number) => {
-  const t = THR[lvl]; if (!isFinite(t)) return 1;
-  if (S <= t) return 1;
-  const p = (S - t) / (t * 0.6);
-  if (p >= 1) return 0;
-  return 1 - p * p * (3 - 2 * p);
+const alphaFor = (lvl: number, S: number, isLens: boolean) => {
+  const t = THR[lvl] * (isLens ? 2.5 : 1); if (!isFinite(t)) return 1;
+  if (S <= t) return 1; if (S <= t * 1.6) return 1 - (S - t) / (t * .6); return 0;
 };
 
-// ---------- ②'s constants, so the two canvases measure the same ----------
-// TIER_H, SP_PITCH, EV_PITCH, AXIS_TOP and DIM_FLOOR are module-private in timeline.ts.
-// They are repeated here rather than exported from it (that file is not mine to edit);
-// if the ladder is ever retuned there, retune it here in the same commit.
-const TIER_H: Record<number, number> = { 1: 20, 2: 17, 3: 14, 4: 12, 5: 10 };
-const SP_PITCH = 24, EV_PITCH = 17;
-const AXIS_TOP = 22;                 // the mono year scale reads along the TOP, as in ②
-const BOT = 30;                      // the strip the cursor pill sits on
-const DIM_FLOOR = 0.42;              // an unrelated thing is context, never erased
-const HEAD_H = 20;                   // the lane's dot + name
-const GAP = 6;                       // between the rectangles and the event stratum
-const VMAX = tv(2100) - tv(-10000);  // this corpus has no deep time; the clamp says so
-const F_IN = fontUI(10.5, 600);      // ②'s _fIn / _fUi at pitch 1
-const F_UI = fontUI(11.5);
+// hexHsl / varyColor moved to shared.ts (the timeline needs them too); the local id
+// hash stays because ribbon-interior placement uses it directly.
+const hash = (s: string) => { let h = 0; for (let i = 0; i < s.length; i++) h = (h * 31 + s.charCodeAt(i)) >>> 0; return h; };
 
-interface Hit {
-  id: string; li: number; kind: 'sp' | 'ev';
-  x0: number; x1: number; y: number; h: number;      // the MARK
-  bx: number; by: number; bw: number; bh: number;    // the click box, label included
-}
-interface Placed {
-  n: Item; row: number; x0: number; x1: number; lodA: number; isMatch: boolean;
-  labelW: number;
-  nextX: number;                     // the next mark IN ITS OWN ROW, so a label knows its room
+// interpolate a ribbon's top/bottom edge at one year
+function bandAt(a: any, y: number): [number, number] | null {
+  const t = a.top, b = a.bot; if (!t || t.length < 2) return null;
+  if (y <= t[0][0]) return [t[0][1], b[0][1]];
+  const last = t.length - 1;
+  if (y >= t[last][0]) return [t[last][1], b[last][1]];
+  let lo = 0, hi = last;
+  while (hi - lo > 1) { const m = (lo + hi) >> 1; if (t[m][0] <= y) lo = m; else hi = m; }
+  const f = (y - t[lo][0]) / ((t[hi][0] - t[lo][0]) || 1);
+  return [t[lo][1] + (t[hi][1] - t[lo][1]) * f, b[lo][1] + (b[hi][1] - b[lo][1]) * f];
 }
 
 export const Conn = {
@@ -135,30 +125,34 @@ export const Conn = {
   d0: 1350, d1: 2026,
   nodes: new Map<string, Item>(),
   sel: null as string | null,
+  hover: null as string | null,
   hoverX: null as number | null,
-  q: '',
   unresolved: 0,
   lanes: [] as any[],
-  hits: [] as Hit[],
-  dirty: true, lastW: 0,
-  // the vertical budget, decided by the stage and nothing else — see measure()
-  H: 824, laneH: 193, spRows: 4, evRows: 3,
+  hits: [] as any[],          // {id, lane, x0, x1, y, r, kind, anchor}
+  labels: [] as any[],        // placed after everything else, best-first, collisions dropped
+  q: '',                      // the ONE app-wide search box dims everything it does not hit
+  dirty: true, lastW: 0, mode: 'abs',
+  // The vertical budget is the STAGE'S, not this file's — see measure(). It used to be
+  // a hard-coded 826 against a 611-791px box that does not scroll, so the fourth lane —
+  // Power & economy, a quarter of the view — was permanently below the fold.
+  H: 760,
+  LANE_H: 196, PAD: 8, AXIS: 34, LABEL_H: 18, LOOSE_H: 34,
 
   // ---------- build the universe ----------
   build() {
     this.nodes = new Map(); this.unresolved = 0; this._linkPairs = 0;
     const add = (n: Item) => { if (!this.nodes.has(n.id)) this.nodes.set(n.id, n); return this.nodes.get(n.id)!; };
-    const base = { linked: false, lanes: [] as number[], home: -1 };
 
     // every spread is in, always — they are the spine of this view
     for (const s of REL.spreads) {
       const fp = s.footprint && s.footprint.length ? s.footprint[0] : null;
       add({
-        ...base,
         id: 'spread:' + s.id, kind: 'spread', name: s.name, start: s.start, end: s.end,
         cat: SPREADCAT[s.kind] || 'society', region: fp ? regionOf(fp.lat, fp.lon) : null,
-        note: s.note || '', dur: s.end > s.start, sharp: s.sharpness ?? 0.25, type: 'spread',
-        lvl: lvlOfWeight(peakOf(s.weight)),
+        note: s.note || '', ribbon: true, weight: s.weight || [[s.start, 1], [s.end, 1]],
+        from: (s.from || []).map(x => 'spread:' + x), to: (s.to || []).map(x => 'spread:' + x),
+        lvl: lvlOfWeight(peakOf(s.weight)), linked: false,
       });
     }
 
@@ -174,27 +168,22 @@ export const Conn = {
       const region = pl ? regionOf(pl[0], pl[1])
         : (band === 'EU' || band === 'ME' || band === 'AS' || band === 'AM') ? band
           : band === 'CO' ? null : 'EU';       // MU / SC / MZ are the European lens bands
-      const end = e[1] || e[0];
       return {
-        ...base,
-        id, kind, name: e[2], start: e[0], end, cat: e[6] || 'power',
-        region, note: e[5] || '', dur: end > e[0], sharp: sharpnessOf(e[7], e[9]),
-        type: e[7] || 'moment', lvl: e[4] || 3,
+        id, kind, name: e[2], start: e[0], end: e[1] || e[0], cat: e[6] || 'power',
+        region, note: e[5] || '', ribbon: false, type: e[7], lvl: e[4] || 3, linked: false,
       };
     };
-    // ②'s own numbers for a polity: sharpness 0.85 (dated ends, stroked) and polityLvl,
-    // so the Roman Empire is the same height and the same crispness in both views.
     const polNode = (p: any): Item => ({
-      ...base,
       id: 'polity:' + p.id, kind: 'polity', name: p.name, start: p.start, end: p.end,
-      cat: 'power', region: p.region || null, note: p.note || '',
-      dur: p.end > p.start, sharp: 0.85, type: 'polity', lvl: polityLvl(p),
+      cat: 'power', region: p.region || null, note: p.note || '', ribbon: true, weight: p.weight,
+      from: (p.from || []).map((x: string) => 'polity:' + x), to: (p.to || []).map((x: string) => 'polity:' + x),
+      lvl: lvlOfWeight(peakOf(p.weight)), linked: false,
     });
     const belNode = (b: any): Item => ({
-      ...base,
       id: 'belief:' + b.id, kind: 'belief', name: b.name, start: b.start, end: b.end,
-      cat: 'belief', region: null, note: b.note || '',
-      dur: b.end > b.start, sharp: 0.25, type: 'spread', lvl: lvlOfWeight(peakOf(b.weight)),
+      cat: 'belief', region: null, note: b.note || '', ribbon: true, weight: b.weight,
+      from: (b.from || []).map((x: string) => 'belief:' + x), to: (b.to || []).map((x: string) => 'belief:' + x),
+      lvl: lvlOfWeight(peakOf(b.weight)), linked: false,
     });
 
     const resolve = (id: string): Item | null => {
@@ -210,9 +199,9 @@ export const Conn = {
       return null;                                   // spread ids are already in
     };
 
-    // links — the WEIGHTS live in the shared relIndex (relations.ts); this loop survives
-    // for its side-effects: resolve() adds every linked node to the corpus, and the
-    // unresolved count is this view's honesty line.
+    // links — the WEIGHTS live in the shared relIndex (relations.ts) now; this loop
+    // survives for its side-effects: resolve() adds every linked node to the corpus,
+    // and the unresolved count is this view's honesty line.
     const seen = new Set<string>();
     for (const L of REL.links) {
       if (!L || !L.a || !L.b || L.a === L.b) continue;
@@ -224,20 +213,19 @@ export const Conn = {
       this._linkPairs++;
     }
 
-    // context budget — level of detail governs what is drawn, so the corpus can be
+    // context budget — now that level of detail governs what is drawn, the corpus can be
     // DEEPER than the screen: everything below the current level is simply held back
-    // until you zoom in.
+    // until you zoom in. So top up generously with levels 1–4 and let the span decide.
     POLITIES.slice().sort((a, b) => peakOf(b.weight) - peakOf(a.weight)).slice(0, 60).forEach(p => add(polNode(p)));
     for (const sys of (BELIEFS.systems || [])) for (const st of (sys.streams || [])) add(belNode(st));
     EVENTS.filter(e => (e[4] || 5) <= 4 && e[3] !== 'CO' && e[0] > -4000)
       .slice(0, 420).forEach(e => add(evNode(e, (e[7] === 'life' ? 'entity:' : 'event:') + e[2], e[7] === 'life' ? 'entity' : 'event')));
 
-    // lane assignment: the best score is where it lives, and it lives in one place
+    // lane assignment: best score solid, the rest hollow
     for (const n of this.nodes.values()) {
-      const scored = LANES.map((l, i) => [i, l.score(n)] as [number, number])
-        .filter(x => x[1] > 0).sort((a, b) => b[1] - a[1]);
-      n.lanes = scored.map(x => x[0]);
-      n.home = scored.length ? scored[0][0] : -1;
+      (n as any).lanes = LANES.map((l, i) => [i, l.score(n)] as [number, number]).filter(x => x[1] > 0)
+        .sort((a, b) => b[1] - a[1]);
+      (n as any).home = (n as any).lanes.length ? (n as any).lanes[0][0] : -1;
     }
     // default span: everything the spreads cover, with a little air
     const ss = REL.spreads.filter(s => isFinite(s.start));
@@ -256,9 +244,9 @@ export const Conn = {
    * economy, a quarter of the view — was simply below the bottom of a box that does
    * not scroll. ② solves that with a scroller and a rail; this view has neither, and
    * inventing one here would be exactly the "random control" the brief forbids. So the
-   * canvas FITS: four lanes share whatever the stage gives, and the rows inside a lane
-   * are however many fit at ②'s pitches. Nothing here reads the pointer — this moves on
-   * a window resize and on nothing else.
+   * canvas FITS: four lanes share whatever the stage gives, and each lane's ribbon band
+   * is whatever is left after its name row and its loose strip. Nothing here reads the
+   * pointer — this moves on a window resize and on nothing else.
    */
   measure() {
     const box = this.cv && this.cv.parentElement;
@@ -266,151 +254,156 @@ export const Conn = {
     const avail = stage ? stage.clientHeight : 0;
     if (!avail) return false;                       // hidden tab: keep the last budget
     const H = clamp(avail, 360, 1100);
-    const laneH = (H - AXIS_TOP - BOT) / LANES.length;
-    const budget = laneH - HEAD_H - GAP - 12;       // 12px of air above the separator
-    const spRows = clamp(Math.round(budget * 0.62 / SP_PITCH), 1, 6);
-    const evRows = clamp(Math.round(budget * 0.38 / EV_PITCH), 1, 4);
-    const changed = spRows !== this.spRows || evRows !== this.evRows || Math.abs(H - this.H) > 0.5;
-    this.H = H; this.laneH = laneH; this.spRows = spRows; this.evRows = evRows;
+    const laneH = (H - this.PAD - this.AXIS) / LANES.length;
+    const changed = Math.abs(H - this.H) > 0.5 || Math.abs(laneH - this.LANE_H) > 0.5;
+    this.H = H; this.LANE_H = laneH;
     if (changed) this.dirty = true;
     return changed;
   },
 
-  // ---------- geometry: ②'s piecewise screen mapping, verbatim ----------
+  // ---------- geometry ----------
   height() { return this.H; },
-  span() { return this.d1 - this.d0; },
-  x(y: number, G: number, Wp: number) {
-    const v0 = tv(this.d0), v1 = tv(this.d1);
-    return G + (tv(y) - v0) / ((v1 - v0) || 1) * Wp;
-  },
-  ix(x: number, G: number, Wp: number) {
-    const v0 = tv(this.d0), v1 = tv(this.d1);
-    return ty(v0 + (x - G) / Wp * (v1 - v0));
-  },
-  /** Zoom about an anchor year by factor f, in v-space — ②'s zoomBy, same invariant. */
-  zoomBy(anchorYear: number, f: number) {
-    const v0 = tv(this.d0), v1 = tv(this.d1), vc = tv(anchorYear);
-    const frac = (vc - v0) / ((v1 - v0) || 1);
-    const spanV = clamp((v1 - v0) * f, 8, VMAX);
-    const [nv0, nv1] = clampV(vc - frac * spanV, vc - frac * spanV + spanV);
-    this.d0 = ty(nv0); this.d1 = ty(nv1);
-    this.dirty = true;
-  },
   matches(n: Item) {
     return !!this.q && (n.name.toLowerCase().includes(this.q) || n.note.toLowerCase().includes(this.q));
   },
+  setQuery(v: string) {
+    const q = v.trim().toLowerCase();
+    if (q === this.q) return;
+    this.q = q; this.render();
+  },
+  X(y: number, G: number, Wp: number) { return G + (y - this.d0) / (this.d1 - this.d0) * Wp; },
+  span() { return this.d1 - this.d0; },
 
-  // ---------- layout: interval packing, exactly ②'s idea ----------
-  // Biggest and most important first into the first row that has room; anything that
-  // will not fit is DROPPED rather than stacked on a neighbour. The packing reads only
-  // the zoom window and the level of detail — never the selection, never the hover — so
-  // clicking something cannot move the picture underneath the click.
-  layout(cw: number, ctx: CanvasRenderingContext2D) {
+  // An item's level of detail in one lane. An echo is by definition the second telling of
+  // something, so it costs a level: a wide view shows each thing once, and the repeats
+  // fade in as you come closer. `isLens` is ②'s widening — see lodItem().
+  lodOf(n: Item, li: number, isLens: boolean) {
+    return alphaFor(clamp(n.lvl + ((n as any).home === li ? 0 : 1), 1, 5), this.span(), isLens);
+  },
+
+  layout(cw: number) {
     const G = 12, Wp = cw - G - 12;
-    const S = this.span();
     this.lanes = [];
     for (let li = 0; li < LANES.length; li++) {
       const lane = LANES[li];
-      const top = AXIS_TOP + li * this.laneH;
-      const spreads: Placed[] = [], events: Placed[] = [];
-      const cand: { n: Item; x0: number; x1: number; lodA: number }[] = [];
-      for (const n of this.nodes.values()) {
-        if (n.home !== li) continue;
-        if (n.end < this.d0 || n.start > this.d1) continue;
-        // a link endpoint keeps a hairline's worth of presence below the current level:
-        // selecting a thing must never be able to make one of its own relations vanish,
-        // and the layout has to be identical before and after the click that did it.
-        const lodA = Math.max(alphaFor(n.lvl, S), n.linked ? 0.12 : 0);
-        if (lodA <= 0.02) continue;
-        const x0 = this.x(n.start, G, Wp), x1 = this.x(n.end, G, Wp);
-        if (x1 < -40 || x0 > cw + 40) continue;
-        cand.push({ n, x0, x1, lodA });
+      const top = this.PAD + li * this.LANE_H;
+      const rTop = top + this.LABEL_H;
+      const rH = this.LANE_H - this.LABEL_H - this.LOOSE_H - 6;
+      const members = [...this.nodes.values()].filter(n => (n as any).lanes.some((x: any[]) => x[0] === li));
+      // Ribbons enter the stack at their level-of-detail strength, so one fading in
+      // SWELLS in rather than popping into a stack that then shoves everything sideways.
+      // A link endpoint keeps a hairline's worth of presence even below the current
+      // level — selection must never be able to make one of its own relations vanish,
+      // and the layout has to stay identical before and after a click.
+      const lodA = new Map<string, number>();
+      const ribbons: any[] = [];
+      for (const n of members) {
+        if (!n.ribbon || n.end <= this.d0 || n.start >= this.d1) continue;
+        const a = this.lodOf(n, li, false);
+        const s = Math.max(a, n.linked ? 0.12 : 0);
+        if (s <= 0.02) continue;
+        lodA.set(n.id, a);
+        ribbons.push(s >= 0.999 ? n : { ...n, weight: (n.weight || []).map((p: number[]) => [p[0], p[1] * s]) });
       }
-      // rectangles: importance first, then the longest — the two things a reader scans
-      const dur = cand.filter(c => c.n.dur).sort((a, b) =>
-        a.n.lvl - b.n.lvl || (b.x1 - b.x0) - (a.x1 - a.x0) || a.x0 - b.x0);
-      const rowEnd = new Array(this.spRows).fill(-1e9);
-      for (const c of dur) {
-        const r = rowEnd.findIndex(e => c.x0 > e + 4);
-        if (r < 0) continue;                       // an honest omission beats a pile-up
-        rowEnd[r] = Math.max(c.x1, c.x0 + 2);
-        spreads.push({
-          n: c.n, row: r, x0: c.x0, x1: c.x1, lodA: c.lodA, isMatch: this.matches(c.n),
-          labelW: textW(ctx, c.n.name, F_UI), nextX: 1e18,
-        });
-      }
-      // moments: left to right, and a dot RESERVES THE ROOM ITS NAME NEEDS. Packing on
-      // the dot alone put "Divine Comedy" straight through "East India Company
-      // chartered" — two marks 30px apart, two labels 120px wide.
-      const pts = cand.filter(c => !c.n.dur).sort((a, b) => a.x0 - b.x0 || a.n.lvl - b.n.lvl);
-      const evEnd = new Array(this.evRows).fill(-1e9);
-      for (const c of pts) {
-        const lw = textW(ctx, c.n.name, F_UI);
-        const r = evEnd.findIndex(e => c.x0 > e + 6);
-        if (r < 0) continue;
-        evEnd[r] = c.x0 + 7 + lw;
-        events.push({
-          n: c.n, row: r, x0: c.x0, x1: c.x0, lodA: c.lodA, isMatch: this.matches(c.n),
-          labelW: lw, nextX: 1e18,
-        });
-      }
-      // …and every mark is told who its neighbours in its own row are, so a label can
-      // ask "is there room to my right" instead of only "am I on the canvas".
-      for (const [arr, rows] of [[spreads, this.spRows], [events, this.evRows]] as const) {
-        for (let r = 0; r < rows; r++) {
-          const row = (arr as Placed[]).filter(p => p.row === r).sort((a, b) => a.x0 - b.x0);
-          for (let i = 0; i < row.length; i++) {
-            row[i].nextX = i + 1 < row.length ? row[i + 1].x0 : 1e18;
-          }
-        }
-        // …and drawn left to right within each row, so the paint can carry a running
-        // "how far has this row been written to" and a left-flipped label can ask it.
-        (arr as Placed[]).sort((a, b) => a.row - b.row || a.x0 - b.x0);
-      }
-      this.lanes.push({ lane, li, top, spreads, events, G, Wp });
+      const lay = ribbons.length ? flowLayout(ribbons, Wp, rH, this.d0, this.d1, this.mode) : null;
+      this.lanes.push({ lane, li, top, rTop, rH, members, lay, lodA, G, Wp, loose: [] as any[] });
     }
     this.lastW = cw; this.dirty = false;
   },
 
-  // ---------- the graded dimming: the shared implementations (relations.ts) ----------
-  _linkPairs: 0,
-  relsOf(id: string) { return relIndex.get(id) || []; },
-  relOf(id: string): Map<string, { w: number; kind: string }> { return relOfShared(id); },
-
-  /** Where an id is drawn right now, or null if it is not on the canvas. */
-  hitOf(id: string): Hit | null {
-    for (const h of this.hits) if (h.id === id) return h;
+  // where an item is drawn in one lane — the anchor a thread can attach to
+  laneAnchor(id: string, li: number): { x: number; y: number } | null {
+    for (const h of this.hits) if (h.id === id && h.li === li) return { x: h.ax, y: h.ay };
     return null;
   },
-  /** Where a given YEAR falls on a mark: along a rectangle, or the dot itself. */
-  pointAt(id: string, year: number): { x: number; y: number } | null {
-    const h = this.hitOf(id); if (!h) return null;
-    if (h.kind !== 'sp') return { x: h.x0, y: h.y };
-    const G = 12, Wp = this.cv.clientWidth - G - 12;
-    return { x: clamp(this.x(clamp(year, this.d0 - 1e9, this.d1 + 1e9), G, Wp), h.x0, h.x1), y: h.y };
+  /** A hit's box in canvas CSS pixels, as a viewport rect the selection card can dodge. */
+  rectOf(h: any): DOMRect {
+    const r = this.cv.getBoundingClientRect();
+    if (h.kind === 'ribbon') {
+      const G = 12, Wp = this.cv.clientWidth - G - 12;
+      const n = h.a.top.length;
+      const x0 = this.X(h.a.top[0][0], G, Wp), x1 = this.X(h.a.top[n - 1][0], G, Wp);
+      const th = Math.max(h.bt || 8, 8);
+      return new DOMRect(r.left + x0, r.top + h.ay - th / 2, Math.max(x1 - x0, 2), th);
+    }
+    return new DOMRect(r.left + h.x0 - 6, r.top + h.y - 8, Math.max(h.x1 - h.x0, 0) + 12, 16);
   },
-  /**
-   * WHEN is a relation? A moment is its own date. Something that BEGINS inside the
-   * shared span enters at its start. Something already there is dated by the start of
-   * the overlap. Nothing is dated by "the middle of the picture", which is what made
-   * every thread converge on one point and read as a spider.
-   */
+  /** Where a selected id is on screen right now — the card's anchor, for Lab's wiring.
+   *  A card opened in another view and carried here re-anchors onto this canvas. */
+  anchorOf(id: string): DOMRect | null {
+    if (!this.cv || !this.cv.clientWidth) return null;
+    const n = this.nodes.get(id);
+    const h = (n ? this.hitOf(id, (n as any).home) : null) || this.hitOf(id);
+    return h ? this.rectOf(h) : null;
+  },
+  hitOf(id: string, li?: number) {
+    let any: any = null;
+    for (const h of this.hits) {
+      if (h.id !== id) continue;
+      if (li === undefined || h.li === li) return h;
+      if (!any) any = h;
+    }
+    return any;
+  },
+  homeAnchor(id: string) {
+    const n = this.nodes.get(id); if (!n) return null;
+    const h = this.hitOf(id, (n as any).home) || this.hitOf(id);
+    return h ? { x: h.ax, y: h.ay } : null;
+  },
+
+  // Where a given YEAR falls on an item: a ribbon is sampled at that year, a point item
+  // is simply itself. This is what lets a thread land on a date instead of on an anchor.
+  pointAt(id: string, year: number): { x: number; y: number } | null {
+    const n = this.nodes.get(id); if (!n) return null;
+    const h = this.hitOf(id, (n as any).home) || this.hitOf(id);
+    if (!h) return null;
+    if (h.kind !== 'ribbon') return { x: h.ax, y: h.ay };
+    const t = h.a.top; if (!t || t.length < 2) return { x: h.ax, y: h.ay };
+    const y = clamp(year, t[0][0], t[t.length - 1][0]);
+    const b = bandAt(h.a, y); if (!b) return { x: h.ax, y: h.ay };
+    const G = 12, Wp = this.cv.clientWidth - G - 12;
+    return { x: this.X(y, G, Wp), y: h.rTop + (b[0] + b[1]) / 2 };
+  },
+
+  // WHEN is a relation? An event is its own date. A ribbon that begins inside the shared
+  // span enters at its start. A ribbon that was already there is dated by its strongest
+  // moment within the shared span. Nothing is dated by "the middle of the picture", which
+  // is what made every thread converge on one point and read as a spider.
   momentOf(oid: string, sn: Item): { x: number; y: number; year: number } | null {
     const o = this.nodes.get(oid); if (!o) return null;
     const lo = Math.max(o.start, sn.start), hi = Math.min(o.end, sn.end);
-    const year = hi < lo ? (o.start > sn.end ? o.start : o.end)
-      : (o.start >= lo && o.start <= hi) ? o.start : lo;
+    let year: number;
+    if (hi < lo) year = o.start > sn.end ? o.start : o.end;      // no overlap: the near end
+    else if (o.start >= lo && o.start <= hi) year = o.start;      // it begins during this
+    else {
+      year = lo;
+      const h = this.hitOf(oid, (o as any).home) || this.hitOf(oid);
+      if (h && h.kind === 'ribbon') {
+        let bt = -1;
+        for (let i = 0; i < h.a.top.length; i++) {
+          const yy = h.a.top[i][0]; if (yy < lo || yy > hi) continue;
+          const th = h.a.bot[i][1] - h.a.top[i][1]; if (th > bt) { bt = th; year = yy; }
+        }
+      }
+    }
     const p = this.pointAt(oid, year); if (!p) return null;
     return { x: p.x, y: p.y, year };
+  },
+
+  // ---------- the graded dimming: the shared implementations (relations.ts) ----------
+  _linkPairs: 0,
+  _qHits: 0,
+  relsOf(id: string) { return relIndex.get(id) || []; },
+  relOf(id: string): Map<string, { w: number; kind: string }> { return relOfShared(id); },
+  alphaOf(id: string, rels: Map<string, { w: number; kind: string }> | null) {
+    return dimAlpha(id, this.sel, rels);
   },
 
   // ---------- paint ----------
   render() {
     if (!this.cv) return;
-    const cw0 = this.cv.clientWidth || (this.cv.parentElement ? this.cv.parentElement.clientWidth : 0);
-    if (!cw0) return;
     this.measure();                       // the stage decides the height, before anything is sized
-    const H = this.H;
+    const H = this.height();
     const d = fitCanvas(this.cv, H); if (!d) return;
     const { cw, ctx } = d; const T = tokens();
     ctx.fillStyle = T.panel; ctx.fillRect(0, 0, cw, H);
@@ -418,160 +411,187 @@ export const Conn = {
       ctx.fillStyle = T.ink3; ctx.font = fontUI(13);
       ctx.fillText('No relations data loaded — run npm run data.', 20, H / 2); return;
     }
-    if (this.dirty || cw !== this.lastW) this.layout(cw, ctx);
+    if (this.dirty || cw !== this.lastW) this.layout(cw);
     const G = 12, Wp = cw - G - 12;
     const rels = this.sel ? this.relOf(this.sel) : null;
+    this.hits = []; this.labels = [];
+    // ONE SEARCH, EVERYWHERE THE SAME: a hit keeps its alpha and takes an accent2 ring,
+    // everything else drops to 12% — the app's single top field drives this view too.
+    this._qHits = 0;
+    const sDim = (n: Item) => this.q ? (this.matches(n) ? 1 : 0.12) : 1;
+    // resting state: nothing is selected, so nothing has earned prominence yet. The view
+    // should read as four calm bands of history you can name, not as a graph.
+    const REST = !this.sel;
+    // an item the selection actually points at is exempt from level of detail — clicking
+    // something must never be able to hide one of its own relations.
     const lit = (id: string) => litOf(id, this.sel, rels);
-    this.hits = [];
-    const bgHsl = hexHsl(T.panel); const isLight = (bgHsl ? bgHsl[2] : 92) > 50;
-    let hitCount = 0;
-
-    // ---- the shared time axis: THE SCALE IS A MASTHEAD, exactly as in ② --------
-    ctx.strokeStyle = T.line; ctx.lineWidth = 1;
-    ctx.font = fontMono(11); ctx.fillStyle = T.ink2; ctx.textAlign = 'center';
-    ctx.beginPath();
-    for (const t of timeTicks(this.d0, this.d1, Wp)) {
-      const x = this.x(t.y, G, Wp);
-      if (x < G - 1 || x > cw - 4) continue;
-      ctx.moveTo(x, AXIS_TOP); ctx.lineTo(x, H - BOT);
-      const tw = ctx.measureText(t.label).width;
-      if (x - tw / 2 >= 2 && x + tw / 2 <= cw - 4) ctx.fillText(t.label, x, AXIS_TOP - 7);
-    }
-    ctx.globalAlpha = .35; ctx.stroke(); ctx.globalAlpha = 1;
-    ctx.globalAlpha = .8; ctx.beginPath(); ctx.moveTo(0, AXIS_TOP); ctx.lineTo(cw, AXIS_TOP); ctx.stroke(); ctx.globalAlpha = 1;
-    const xn = this.x(2026, G, Wp);
-    if (xn >= G && xn <= cw) {
-      ctx.strokeStyle = T.accent2; ctx.setLineDash([4, 4]);
-      ctx.beginPath(); ctx.moveTo(xn, AXIS_TOP); ctx.lineTo(xn, H - BOT); ctx.stroke(); ctx.setLineDash([]);
-    }
-    ctx.textAlign = 'left';                 // the tick loop leaves it 'center'
+    const bgHsl = hexHsl(T.panel); const bgL = bgHsl ? bgHsl[2] : 92;
 
     for (const L of this.lanes) {
-      // ---- lane furniture: ②'s band furniture, at ②'s coordinates ----
+      // lane label + separator
       ctx.strokeStyle = T.line; ctx.globalAlpha = .8; ctx.beginPath();
-      ctx.moveTo(0, Math.round(L.top + this.laneH) - .5); ctx.lineTo(cw, Math.round(L.top + this.laneH) - .5);
-      ctx.stroke(); ctx.globalAlpha = 1;
-      ctx.fillStyle = T.s[L.lane.si];
-      ctx.beginPath(); ctx.arc(10, L.top + 13, 4, 0, 7); ctx.fill();
-      ctx.fillStyle = T.ink2; ctx.font = fontUI(10.5, 600); ctx.textAlign = 'left';
-      ctx.fillText(L.lane.name.toUpperCase(), 20, L.top + 17);
+      ctx.moveTo(0, L.top + this.LANE_H - 3); ctx.lineTo(cw, L.top + this.LANE_H - 3); ctx.stroke();
+      ctx.globalAlpha = 1;
+      ctx.fillStyle = T.s[L.lane.si]; ctx.beginPath(); ctx.arc(12, L.top + 9, 4, 0, 7); ctx.fill();
+      ctx.fillStyle = T.ink2; ctx.font = fontUI(10.5, 600); ctx.textAlign = 'left';   // a lane name is language
+      ctx.fillText(L.lane.name.toUpperCase(), 22, L.top + 13);
+      ctx.fillStyle = T.ink3; ctx.font = fontUI(10);
+      ctx.fillText('· ' + L.lane.q, 26 + ctx.measureText(L.lane.name.toUpperCase()).width * 1.06, L.top + 13);
 
-      // ---- rectangles: everything with duration --------------------------------
-      const spTop = L.top + HEAD_H;
-      // how far each row has been WRITTEN TO — a label flipped to the left has to
-      // clear the last one drawn, not merely the last mark drawn. ②'s `prevEnd`.
-      const spPrev = new Array(this.spRows).fill(-1e18);
-      for (const s of L.spreads as Placed[]) {
-        const n = s.n;
-        const isSel = n.id === this.sel;
-        const lodA = lit(n.id) ? 1 : s.lodA;
-        const searchDim = this.q ? (s.isMatch ? 1 : 0.12) : 1;
-        if (this.q && s.isMatch) hitCount++;
-        const a = clamp(lodA * dimAlpha(n.id, this.sel, rels, DIM_FLOOR) * searchDim, 0, 1);
-        if (a <= 0.02) continue;
-        const yC = spTop + s.row * SP_PITCH + SP_PITCH / 2;
-        const h = TIER_H[n.lvl] || 12;
-        const [col, , edge] = varyColor(catColor(n.cat, T), n.id, isLight);
-        const W = Math.max(s.x1 - s.x0, 2);
-        TL.drawSpread(ctx, s.x0, s.x1, yC, h, col, a, n.sharp, W);
-        if (n.sharp >= 0.6) {                  // the stroke is what makes "dated ends" read
-          ctx.globalAlpha = clamp(0.9 * a, 0, 1); ctx.strokeStyle = edge; ctx.lineWidth = 1;
-          ctx.beginPath(); ctx.roundRect(s.x0, yC - h / 2, W, h, 3); ctx.stroke();
+      // ---- ribbons: spreads and states, thickness = weight over time ----
+      const ribLabels: any[] = [];
+      if (L.lay) {
+        for (const [id, a] of L.lay.paths) {
+          if (a.top.length < 2) continue;
+          const n = this.nodes.get(id); if (!n) continue;
+          const solid = (n as any).home === L.li;
+          const isLit = lit(id);
+          const lodA = isLit ? 1 : Math.max(L.lodA.get(id) ?? 0, n.linked ? 0.12 : 0);
+          if (lodA <= 0.02) continue;
+          const [col, colL] = varyColor(catColor(n.cat, T), n.id);
+          const isMatch = this.matches(n);
+          if (isMatch && solid) this._qHits++;
+          const al = this.alphaOf(id, rels) * lodA * sDim(n);
+          const isSel = id === this.sel, isHov = id === this.hover;
+          ctx.beginPath();
+          ctx.moveTo(this.X(a.top[0][0], G, Wp), L.rTop + a.top[0][1]);
+          for (let i = 1; i < a.top.length; i++) ctx.lineTo(this.X(a.top[i][0], G, Wp), L.rTop + a.top[i][1]);
+          for (let i = a.bot.length - 1; i >= 0; i--) ctx.lineTo(this.X(a.bot[i][0], G, Wp), L.rTop + a.bot[i][1]);
+          ctx.closePath();
+          const fillA = al * (REST ? 0.6 : 0.88);
+          if (solid) {
+            ctx.globalAlpha = fillA; ctx.fillStyle = col; ctx.fill();
+            // a hairline of the panel colour between stacked ribbons: they separate by
+            // edge rather than by shouting at each other in saturation
+            ctx.globalAlpha = al * 0.8; ctx.strokeStyle = T.panel; ctx.lineWidth = 0.9; ctx.stroke();
+          } else {
+            // an echo must be quieter than the solid it echoes, or a lane full of echoes
+            // (every European state repeats in Power & economy) reads as a hairball
+            ctx.globalAlpha = al * (isLit ? 0.1 : 0.03); ctx.fillStyle = col; ctx.fill();
+            ctx.globalAlpha = al * (isLit ? 0.6 : 0.2); ctx.strokeStyle = col; ctx.lineWidth = isLit ? 1.1 : 0.7;
+            ctx.setLineDash(isLit ? [4, 3] : [1.5, 4]); ctx.stroke(); ctx.setLineDash([]);
+          }
+          if (isSel || isHov) {
+            // the echo of the selected item gets a lighter version of the same outline —
+            // it says "this is that same thing" without out-shouting the thing itself
+            ctx.globalAlpha = solid ? 1 : 0.5; ctx.strokeStyle = T.ink;
+            ctx.lineWidth = isSel ? (solid ? 1.8 : 1) : 1.1; ctx.stroke();
+          } else if (isMatch) {
+            ctx.globalAlpha = solid ? 1 : 0.5; ctx.strokeStyle = T.accent2;
+            ctx.lineWidth = 1.6; ctx.stroke();
+          }
+          // the thickest point is the hit target and the fallback thread anchor. The NAME
+          // goes somewhere else: a ribbon that only ever grows is thickest at the right
+          // edge, and a lane of such ribbons piles every label into one corner, so the
+          // name is placed where thickness and being-in-the-middle score best together.
+          const N = a.top.length;
+          let bi = 0, bt = 0, ni = 0, ns = -1;
+          for (let i = 0; i < N; i++) {
+            const t = a.bot[i][1] - a.top[i][1];
+            if (t > bt) { bt = t; bi = i; }
+            const u = N > 1 ? i / (N - 1) : .5;
+            const s = t * (0.55 + 0.45 * (1 - Math.abs(2 * u - 1)));
+            if (s > ns) { ns = s; ni = i; }
+          }
+          const bx = this.X(a.top[bi][0], G, Wp), by = L.rTop + (a.top[bi][1] + a.bot[bi][1]) / 2;
+          const nx = this.X(a.top[ni][0], G, Wp), ny = L.rTop + (a.top[ni][1] + a.bot[ni][1]) / 2;
+          const x0 = this.X(a.top[0][0], G, Wp), x1 = this.X(a.top[a.top.length - 1][0], G, Wp);
+          if (bt >= 10 && x1 - x0 > 44 && al > 0.34 && (solid || isLit)) {
+            // what the ribbon ACTUALLY looks like on screen is the colour composited over
+            // the panel at the fill alpha — a dark teal drawn at 0.6 is a pale field, and
+            // white text on it is unreadable. So derive the ink from the composite.
+            const effL = bgL + (colL - bgL) * fillA;
+            ribLabels.push({
+              text: n.name, x: nx, y: ny + 3.8, min: x0 + 4, max: x1 - 4, center: true, bt,
+              ribbon: solid ? (effL > 50 ? 'rgba(255,255,255,.5)' : 'rgba(0,0,0,.34)') : null,
+              col: solid ? (effL > 50 ? T.ink : '#fff') : col, alpha: Math.min(1, al + .1),
+              font: fontUI(clamp((a.bot[ni][1] - a.top[ni][1]) * 0.5, 9.5, 12.5), 600),
+              prio: (isSel ? 1e6 : rels && rels.get(id) ? 1000 + 1000 * rels.get(id)!.w : (solid ? 480 : 190) + bt),
+            });
+          }
           ctx.globalAlpha = 1;
+          this.hits.push({ id, li: L.li, kind: 'ribbon', a, rTop: L.rTop, ax: bx, ay: by, bt, solid });
         }
-        if (isSel) {
-          ctx.globalAlpha = 1; ctx.strokeStyle = T.ink; ctx.lineWidth = 1.6;
-          ctx.beginPath(); ctx.roundRect(s.x0 - 1, yC - h / 2 - 1, W + 2, h + 2, 4); ctx.stroke();
-        } else if (s.isMatch) {
-          ctx.globalAlpha = 1; ctx.strokeStyle = T.accent2; ctx.lineWidth = 1.6;
-          ctx.beginPath(); ctx.roundRect(s.x0 - 1, yC - h / 2 - 1, W + 2, h + 2, 4); ctx.stroke();
+      }
+      // a lane names its principals, not its whole membership — the rest are one hover away
+      ribLabels.sort((a, b) => b.prio - a.prio || b.bt - a.bt);
+      for (const l of ribLabels.slice(0, REST ? 7 : 11)) this.labels.push(l);
+
+      // ---- events + entities, sitting INSIDE the ribbon they belong to ----
+      const loose: any[] = [];
+      for (const n of L.members) {
+        if (n.ribbon) continue;
+        if (n.end < this.d0 || n.start > this.d1) continue;
+        const solid = (n as any).home === L.li;
+        const px = this.X(n.start, G, Wp), px1 = this.X(n.end, G, Wp);
+        if (px1 < -20 || px > cw + 20) continue;
+        // strongest link to a ribbon that is actually drawn in this lane = its parent
+        let host: any = null, hw = 0, hk = '';
+        for (const r of this.relsOf(n.id)) {
+          const t = this.nodes.get(r.other);
+          if (!t || !t.ribbon || !L.lay || !L.lay.paths.has(t.id)) continue;
+          if (r.w > hw) { hw = r.w; hk = r.kind; host = L.lay.paths.get(t.id); }
         }
-        // ---- the label, and ②'s truncation rule ----
-        const visX0 = Math.max(s.x0, G);
-        ctx.font = F_IN;
-        const inText = ellipsize(ctx, n.name, (s.x1 - visX0) - 12, F_IN, 3);
-        const labelW = s.labelW;
-        let mode: 'in' | 'right' | 'left' | 'none' = 'none';
-        if (inText) mode = 'in';
-        else if (s.x1 + 7 + labelW < Math.min(s.nextX - 4, cw - 4)) mode = 'right';
-        else if (s.x0 - 9 - labelW > Math.max(G, spPrev[s.row] + 4)) mode = 'left';
-        spPrev[s.row] = Math.max(spPrev[s.row], s.x1 + (mode === 'right' ? 8 + labelW : 2));
-        const textA = clamp((a - 0.10) / 0.15, 0, 1);
-        if (textA > 0.02) {
-          if (mode === 'in') {
-            ctx.globalAlpha = Math.min(1, a + 0.2) * textA;
-            const inkX0 = visX0 + 6, inkX1 = inkX0 + textW(ctx, inText, F_IN);
-            ctx.fillStyle = inkFor(col, T.panel,
-              TL.spreadAlphaAt(inkX0, s.x0, W, n.sharp, a),
-              TL.spreadAlphaAt(inkX1, s.x0, W, n.sharp, a), T.ink, T.panel);
-            ctx.fillText(inText, visX0 + 6, yC + 3.5);
-          } else if (mode !== 'none') {
-            ctx.font = F_UI; ctx.globalAlpha = textA; ctx.fillStyle = T.ink;
-            ctx.fillText(n.name, mode === 'right' ? s.x1 + 7 : s.x0 - 9 - labelW, yC + 4);
+        let y: number | null = null, inside = false;
+        if (host) {
+          const b = bandAt(host, clamp(n.start, this.d0, this.d1));
+          if (b) {
+            const th = b[1] - b[0];
+            const f = th > 12 ? 0.3 + (hash(n.id) % 100) / 100 * 0.4 : 0.5;
+            y = L.rTop + b[0] + th * f; inside = true;
           }
         }
-        ctx.globalAlpha = 1;
-        this.hits.push({
-          id: n.id, li: L.li, kind: 'sp', x0: s.x0, x1: s.x1, y: yC, h,
-          bx: mode === 'left' ? s.x0 - 11 - labelW : s.x0 - 2,
-          by: yC - SP_PITCH / 2, bh: SP_PITCH,
-          bw: (mode === 'left' ? 13 + labelW : 4) + W + (mode === 'right' ? 8 + labelW : 0),
-        });
+        // ②'s lens widening lands here: a point drawn INSIDE its spread is this view's
+        // whole reason to exist — Mainz within printing — so it holds detail 2.5× longer
+        // than the same event floating loose, exactly as the Music and Science bands do.
+        const lodA = lit(n.id) ? 1 : this.lodOf(n, L.li, inside);
+        if (lodA <= 0.02) continue;
+        if (y === null) { loose.push({ n, px, px1, solid, lodA }); continue; }
+        this.drawItem(ctx, T, n, px, px1, y, solid, rels, inside, L.li, hk === 'origin', lodA);
       }
-
-      // ---- the event stratum: dots, strictly below the rectangles ---------------
-      const evTop = L.top + HEAD_H + this.spRows * SP_PITCH + GAP;
-      ctx.font = F_UI;
-      const evPrev = new Array(this.evRows).fill(-1e18);
-      const evs = L.events as Placed[];
-      for (let i = 0; i < evs.length; i++) {
-        const e = evs[i], n = e.n;
-        const isSel = n.id === this.sel;
-        const lodA = lit(n.id) ? 1 : e.lodA;
-        const searchDim = this.q ? (e.isMatch ? 1 : 0.12) : 1;
-        if (this.q && e.isMatch) hitCount++;
-        const a = clamp(lodA * dimAlpha(n.id, this.sel, rels, DIM_FLOOR) * searchDim, 0, 1);
-        if (a <= 0.02) continue;
-        const yy = evTop + e.row * EV_PITCH + EV_PITCH / 2;
-        ctx.globalAlpha = a; ctx.fillStyle = catColor(n.cat, T);
-        ctx.beginPath(); ctx.arc(e.x0, yy, 3.2, 0, 7); ctx.fill();
-        if (isSel) {
-          ctx.globalAlpha = 1; ctx.strokeStyle = T.ink; ctx.lineWidth = 1.6;
-          ctx.beginPath(); ctx.arc(e.x0, yy, 7, 0, 7); ctx.stroke();
-        } else if (e.isMatch) {
-          ctx.globalAlpha = 1; ctx.strokeStyle = T.accent2; ctx.lineWidth = 1.6;
-          ctx.beginPath(); ctx.arc(e.x0, yy, 7, 0, 7); ctx.stroke();
-        }
-        // the label goes right when the next dot in this row leaves room, else left
-        const labelW = e.labelW;
-        const mode: 'right' | 'left' | 'none' = e.x0 + 7 + labelW < Math.min(e.nextX - 6, cw - 4) ? 'right'
-          : e.x0 - 9 - labelW > Math.max(G, evPrev[e.row] + 4) ? 'left' : 'none';
-        evPrev[e.row] = Math.max(evPrev[e.row], e.x0 + (mode === 'right' ? 7 + labelW : 4));
-        const textA = clamp((a - 0.10) / 0.15, 0, 1);
-        if (textA > 0.02 && mode !== 'none') {
-          ctx.globalAlpha = textA; ctx.fillStyle = T.ink;
-          ctx.fillText(n.name, mode === 'right' ? e.x0 + 7 : e.x0 - 9 - labelW, yy + 4);
-        }
-        ctx.globalAlpha = 1;
-        this.hits.push({
-          id: n.id, li: L.li, kind: 'ev', x0: e.x0, x1: e.x0, y: yy, h: 6.4,
-          bx: mode === 'left' ? e.x0 - 11 - labelW : e.x0 - 8,
-          by: yy - EV_PITCH / 2, bh: EV_PITCH,
-          bw: 16 + (mode === 'none' ? 4 : labelW),
-        });
+      // ---- the loose strip: matched the lane, but has no parent ribbon here ----
+      // three rows, and anything that will not fit is dropped rather than stacked on top
+      // of a neighbour — an unreadable pile-up says less than an honest omission.
+      const rows = REST ? [-1e9, -1e9] : [-1e9, -1e9, -1e9];
+      loose.sort((a, b) => a.px - b.px);
+      for (const it of loose) {
+        // a floating point that belongs to no ribbon here is the weakest thing this lane
+        // can say, so at rest it has to be first-rank to earn its place at all
+        if (REST && it.n.lvl > 2) continue;
+        const r = rows.findIndex(e => e < it.px - 6); if (r < 0) continue;
+        rows[r] = Math.max(it.px1, it.px) + 8;
+        const y = L.top + this.LANE_H - this.LOOSE_H + 6 + r * 9.5;
+        this.drawItem(ctx, T, it.n, it.px, it.px1, y, it.solid, rels, false, L.li, false, it.lodA * (REST ? 0.72 : 1));
       }
     }
 
     // ---- threads: the faintest tie that still resolves when you look for it ----
-    // Each thread leaves the selection at the YEAR the relation is about and lands on
-    // the related mark at that same moment, so it carries information instead of
-    // radiating from one anchor as a spider. Weight drives opacity hard: w=0.3 is a
-    // whisper you find only by looking, w=1.0 is plainly drawn. The ranking is in the
-    // panel and the card; the canvas only has to hint that a tie exists.
-    // THE SELECTION IS GLOBAL AND THIS CORPUS IS NOT — SelStore can hold an id this
-    // view has no node for, which is fine: there is simply nothing to draw.
+    // Two changes over the drawn-graph version. Each thread leaves the selection at the
+    // YEAR the relation is about and lands on the related item at that same moment, so it
+    // carries information instead of radiating from one arbitrary anchor as a spider. And
+    // weight drives opacity far harder than it drives anything else: w=0.3 is a whisper
+    // you find only by looking, w=1.0 is plainly drawn. The ranking is in the panel; the
+    // canvas only has to hint that a tie exists.
+    // THE SELECTION IS GLOBAL, and this corpus is not. SelStore can now be
+    // written by the timeline and by the selection card, so `sel` may be an id
+    // this view has no node for — a curated lane member, say. It has nothing to
+    // draw here, which is fine; the non-null assertion that used to be on this
+    // line was not (`Cannot read properties of undefined (reading 'ribbon')`,
+    // twenty lines down, taking the whole React tree with it).
     const sn = this.sel ? this.nodes.get(this.sel) : null;
     if (this.sel && rels && sn) {
+      const hub = this.homeAnchor(this.sel);
+      if (hub) {
+        // the selection's own echoes in the other lanes it matches — barely there
+        for (const [li] of (sn as any).lanes) {
+          if (li === (sn as any).home) continue;
+          const e = this.laneAnchor(this.sel, li); if (!e) continue;
+          ctx.globalAlpha = .14; ctx.strokeStyle = T.ink2; ctx.lineWidth = .7; ctx.setLineDash([1.5, 4]);
+          ctx.beginPath(); ctx.moveTo(hub.x, hub.y);
+          ctx.bezierCurveTo(hub.x, (hub.y + e.y) / 2, e.x, (hub.y + e.y) / 2, e.x, e.y);
+          ctx.stroke(); ctx.setLineDash([]);
+        }
+      }
       for (const [oid, r] of rels) {
         if (r.w < 0.3) continue;                            // only the strong relations
         const dst = this.momentOf(oid, sn); if (!dst) continue;
@@ -582,81 +602,170 @@ export const Conn = {
         ctx.beginPath(); ctx.moveTo(src.x, src.y);
         const my = (src.y + dst.y) / 2;
         ctx.bezierCurveTo(src.x, my, dst.x, my, dst.x, dst.y); ctx.stroke();
+        // a small stop at the far end: the thread has to resolve INTO something
         ctx.globalAlpha = Math.min(0.55, a * 2.1); ctx.fillStyle = kindColor(r.kind, T);
         ctx.beginPath(); ctx.arc(dst.x, dst.y, 0.9 + 1.4 * r.w * r.w, 0, 7); ctx.fill();
       }
       ctx.globalAlpha = 1;
+      // a ribbon already gets an ink outline when selected, so only a point needs a ring
+      if (!sn.ribbon && hub) {
+        ctx.strokeStyle = T.ink; ctx.lineWidth = 1.3;
+        ctx.beginPath(); ctx.arc(hub.x, hub.y, 7, 0, 7); ctx.stroke();
+      }
     }
 
-    // ---- the cursor paints LAST, over everything, exactly as in ② -------------
-    if (this.hoverX !== null && this.hoverX > G && this.hoverX < cw) {
-      const hx = Math.round(this.hoverX) + .5;
-      ctx.globalAlpha = .55; ctx.strokeStyle = T.panel; ctx.lineWidth = 3;
-      ctx.beginPath(); ctx.moveTo(hx, AXIS_TOP); ctx.lineTo(hx, H - BOT); ctx.stroke();
-      ctx.globalAlpha = .9; ctx.strokeStyle = T.accent; ctx.lineWidth = 1;
-      ctx.beginPath(); ctx.moveTo(hx, AXIS_TOP); ctx.lineTo(hx, H - BOT); ctx.stroke();
-      ctx.globalAlpha = 1;
-      yearPill(ctx, T, this.hoverX, H - 26, fmtBig(this.ix(this.hoverX, G, Wp)));
+    this.drawLabels(ctx, cw);
+
+    // ---- axis (same conventions as ② and ③) ----
+    const BOT = H - this.AXIS + 6;
+    ctx.strokeStyle = T.line; ctx.font = fontMono(11); ctx.fillStyle = T.ink2; ctx.textAlign = 'center';   // years are measurements
+    const span = this.d1 - this.d0;
+    const step = [2000, 1000, 500, 250, 100, 50, 25, 10, 5].find(s => span / s >= 6) || 5;
+    ctx.beginPath();
+    for (let y = Math.ceil(this.d0 / step) * step; y <= this.d1; y += step) {
+      const x = this.X(y, G, Wp); ctx.moveTo(x, this.PAD); ctx.lineTo(x, BOT - 6); ctx.fillText(fmtY(y), x, BOT + 10);
     }
-    const sc = $('#searchCnt'); if (sc && this.q) sc.textContent = `${hitCount} hits`;
+    ctx.globalAlpha = .25; ctx.stroke(); ctx.globalAlpha = 1; ctx.textAlign = 'left';
+    if (this.hoverX !== null && this.hoverX > G && this.hoverX < cw) {
+      const yr = this.d0 + (this.hoverX - G) / Wp * span;
+      ctx.strokeStyle = T.accent; ctx.globalAlpha = .45; ctx.beginPath();
+      ctx.moveTo(this.hoverX, this.PAD); ctx.lineTo(this.hoverX, BOT - 6); ctx.stroke(); ctx.globalAlpha = 1;
+      yearPill(ctx, T, this.hoverX, BOT - 4, fmtY(yr));
+    }
+    const sc = $('#searchCnt'); if (sc && this.q) sc.textContent = `${this._qHits} hits`;
     this.caption();
-    SelCard.reanchor();
+    SelCard.reanchor();       // the card follows its mark as the window pans and zooms
   },
 
-  /** `pad` widens every target by the same margin — 0 for a cursor, TAP_PAD for a
-   *  fingertip, which cannot be aimed at a 6px dot. Dots win over rectangles: the
-   *  contained thing is the smaller target. */
-  at(mx: number, my: number, pad = 0): Hit | null {
-    for (const k of ['ev', 'sp'] as const) {
-      for (let i = this.hits.length - 1; i >= 0; i--) {
-        const h = this.hits[i];
-        if (h.kind !== k) continue;
-        if (mx >= h.bx - pad && mx <= h.bx + h.bw + pad && my >= h.by - pad && my <= h.by + h.bh + pad) return h;
+  drawLabels(ctx: CanvasRenderingContext2D, cw: number) {
+    const placed: number[][] = [];
+    const hits = (r: number[]) => placed.some(p => r[0] < p[2] && r[2] > p[0] && r[1] < p[3] && r[3] > p[1]);
+    for (const L of this.labels.slice().sort((a, b) => b.prio - a.prio)) {
+      ctx.font = L.font;
+      const tw = ctx.measureText(L.text).width;
+      let x = L.x;
+      if (L.center) {
+        if (tw > L.max - L.min) continue;
+        x = clamp(L.x, L.min + tw / 2, L.max - tw / 2);
       }
+      const r = L.center ? [x - tw / 2 - 2, L.y - 9, x + tw / 2 + 2, L.y + 3] : [x - 2, L.y - 8, x + tw + 2, L.y + 3];
+      if (r[2] > cw - 4 || r[0] < 2) continue;        // never let a label run off the canvas
+      if (hits(r)) continue;
+      placed.push(r);
+      ctx.globalAlpha = L.alpha; ctx.textAlign = L.center ? 'center' : 'left';
+      if (L.ribbon) { ctx.fillStyle = L.ribbon; ctx.fillText(L.text, x + 0.7, L.y + 0.6); }
+      if (L.halo) { ctx.strokeStyle = L.halo; ctx.lineWidth = 3; ctx.lineJoin = 'round'; ctx.strokeText(L.text, x, L.y); }
+      ctx.fillStyle = L.col; ctx.fillText(L.text, x, L.y);
+      ctx.textAlign = 'left'; ctx.globalAlpha = 1;
+    }
+  },
+
+  // one event / entity, in the shape grammar of ② — hollow when it is an echo
+  drawItem(ctx: CanvasRenderingContext2D, T: Tokens, n: Item, x0: number, x1: number, y: number,
+    solid: boolean, rels: Map<string, { w: number; kind: string }> | null, inside: boolean, li: number,
+    origin: boolean, lodA: number) {
+    const col = catColor(n.cat, T);
+    const isMatch = this.matches(n);
+    if (isMatch && solid) this._qHits++;
+    const al = this.alphaOf(n.id, rels) * lodA * (this.q ? (isMatch ? 1 : 0.12) : 1);
+    const isSel = n.id === this.sel, isHov = n.id === this.hover;
+    const w = Math.max(x1 - x0, 0);
+    ctx.globalAlpha = al; ctx.fillStyle = col; ctx.strokeStyle = col; ctx.lineWidth = 1.4;
+    if (n.type === 'life' || n.type === 'episode' || n.type === 'era' || w > 3) {
+      const h = n.type === 'life' ? 6 : 5.5;
+      ctx.beginPath(); ctx.roundRect(x0, y - h / 2, Math.max(w, 5), h, h / 2);
+      if (solid) ctx.fill(); else { ctx.globalAlpha = al * .18; ctx.fill(); ctx.globalAlpha = al; ctx.stroke(); }
+      if (n.type === 'life') { ctx.globalAlpha = al; ctx.beginPath(); ctx.arc(x0, y, 2.8, 0, 7); if (solid) ctx.fill(); else ctx.stroke(); }
+    } else {
+      const r = inside ? 3.4 : 3;
+      ctx.beginPath(); ctx.arc(x0, y, r, 0, 7);
+      if (solid) ctx.fill(); else { ctx.globalAlpha = al * .18; ctx.fill(); ctx.globalAlpha = al; ctx.stroke(); }
+    }
+    // the event a spread STARTS from — Mainz 1439 — gets a stem and a diamond, because
+    // at its origin the ribbon is still a hairline and the point would read as floating
+    if (origin) {
+      ctx.globalAlpha = al; ctx.strokeStyle = col; ctx.lineWidth = 1.4;
+      ctx.beginPath(); ctx.moveTo(x0, y - 9); ctx.lineTo(x0, y + 9); ctx.stroke();
+      ctx.beginPath(); ctx.moveTo(x0, y - 5.4); ctx.lineTo(x0 + 4.4, y); ctx.lineTo(x0, y + 5.4); ctx.lineTo(x0 - 4.4, y);
+      ctx.closePath(); ctx.fillStyle = col; ctx.fill();
+      ctx.strokeStyle = T.panel; ctx.lineWidth = 1; ctx.stroke();
+    }
+    // a point sitting inside a ribbon gets a hairline of the panel colour so it reads
+    // as ON the ribbon rather than as part of it
+    if (inside && !origin) {
+      ctx.globalAlpha = Math.min(1, al * .9); ctx.strokeStyle = T.panel; ctx.lineWidth = 1;
+      ctx.beginPath(); ctx.arc(x0, y, (n.type === 'moment' || !n.type ? 3.4 : 3.4) + 1.2, 0, 7); ctx.stroke();
+    }
+    if (isSel || isHov) {
+      ctx.globalAlpha = 1; ctx.strokeStyle = T.ink; ctx.lineWidth = isSel ? 1.6 : 1;
+      ctx.beginPath(); ctx.arc(x0, y, 7, 0, 7); ctx.stroke();
+    } else if (isMatch) {
+      ctx.globalAlpha = 1; ctx.strokeStyle = T.accent2; ctx.lineWidth = 1.6;
+      ctx.beginPath(); ctx.arc(x0, y, 7, 0, 7); ctx.stroke();
+    }
+    // labels are prominence, not decoration: strong relations get named first, and
+    // anything that would collide with an already-placed label is simply dropped.
+    // ② labels anything it draws strongly; here the ribbons already carry the names, so
+    // at rest only the first-rank moments get one and the rest are a hover away. That is
+    // the single biggest difference between "calm" and "a wall of text".
+    const showLabel = isSel || isHov || (this.sel ? al > 0.34 : (al > 0.3 && n.lvl <= 2));
+    if (showLabel) {
+      const r = rels && rels.get(n.id);
+      this.labels.push({
+        text: n.name.length > 34 ? n.name.slice(0, 33) + '…' : n.name,
+        x: Math.max(x0, x1) + 6, y: y + 3.4, col: T.ink, alpha: clamp(al + .12, 0, 1),
+        halo: inside ? T.panel : null,
+        font: fontUI(10.5, isSel ? 600 : 400),
+        prio: isSel ? 1e6 : r ? 1000 + 1000 * r.w : (6 - n.lvl) * 20 + (inside ? 40 : 0),
+      });
+    }
+    ctx.globalAlpha = 1;
+    this.hits.push({ id: n.id, li, kind: 'item', x0, x1: Math.max(x0, x1), y, ax: x0, ay: y });
+  },
+
+  /** `pad` widens every target by the same margin — 0 for a cursor, TAP_PAD for
+   *  a fingertip, which cannot be aimed at a 14px-tall node row. */
+  at(mx: number, my: number, pad = 0) {
+    // points win over ribbons — the contained thing is the smaller target
+    for (let i = this.hits.length - 1; i >= 0; i--) {
+      const h = this.hits[i];
+      if (h.kind !== 'item') continue;
+      if (mx >= h.x0 - 6 - pad && mx <= h.x1 + 6 + pad && Math.abs(my - h.y) <= 7 + pad) return h;
+    }
+    const G = 12, Wp = this.cv.clientWidth - G - 12;
+    for (const h of this.hits) {
+      if (h.kind !== 'ribbon') continue;
+      const a = h.a, n = a.top.length;
+      const x0 = this.X(a.top[0][0], G, Wp), x1 = this.X(a.top[n - 1][0], G, Wp);
+      if (mx < x0 - 2 - pad || mx > x1 + 2 + pad) continue;
+      const t = clamp(Math.round((mx - x0) / Math.max(x1 - x0, 1) * (n - 1)), 0, n - 1);
+      if (my >= h.rTop + a.top[t][1] - 1 - pad && my <= h.rTop + a.bot[t][1] + 1 + pad) return h;
     }
     return null;
   },
-  /** A hit box in canvas CSS pixels, as a viewport rect the card can dodge. */
-  rectOf(h: Hit): DOMRect {
-    const r = this.cv.getBoundingClientRect();
-    return new DOMRect(r.left + h.bx, r.top + h.by, h.bw, h.bh);
-  },
-  /** Where a selected id is on screen right now — the card's anchor, for Lab's wiring.
-   *  (SelCard's `anchorOf` hook in Lab.tsx still answers null for this view; one line
-   *  there — `if (v === 'conn') return Conn.anchorOf(id);` — makes a card that was
-   *  opened from the timeline re-anchor correctly when the reader switches here.) */
-  anchorOf(id: string): DOMRect | null {
-    if (!this.cv || !this.cv.clientWidth) return null;
-    const h = this.hitOf(id);
-    return h ? this.rectOf(h) : null;
-  },
 
-  /** The one selection write. Everything — canvas, panel, card — hangs off SelStore. */
-  select(id: string | null) { SelStore.set(id); },
-
-  setQuery(v: string) {
-    const q = v.trim().toLowerCase();
-    if (q === this.q) return;
-    this.q = q; this.dirty = true; this.render();
+  select(id: string | null) {
+    // body is the store write: the SelStore subscriber (init) assigns this.sel and
+    // re-renders, so internal callers keep working and the selection is app-wide.
+    SelStore.set(id);
   },
 
   // ---------- the side panel: the shared Related renderer (relations.ts) ----------
   panel() {
     renderRelatedPanel($('#connPanel'), this.sel, {
-      emptyHTML: `<div class="empty">Four lanes, one time axis, and the marks are ` +
-        `<b>②'s</b> — a rectangle is something with duration, a dot is a moment, height is ` +
-        `importance and colour is the domain. <b>Scroll to zoom</b> and the rest fade in by ` +
-        `importance, exactly as they do there.</div>` +
-        `<div class="empty" style="margin-top:10px"><b>Click anything</b> and everything related ` +
-        `to it stays lit in proportion to how strongly it is related, with a faint thread drawn ` +
-        `to each at the year the relation is about. Everything else dims but stays on screen as ` +
-        `context. The selection is the app's, not this view's: it follows you to the map, the ` +
-        `timeline and the cube.</div>`,
+      emptyHTML: `<div class="empty">Four lanes, one time axis. At this span you are seeing only the ` +
+        `<b>most important</b> things in each — <b>scroll to zoom in</b> and the rest fade in by importance, ` +
+        `the same way ② behaves.</div>` +
+        `<div class="empty" style="margin-top:10px"><b>Click anything</b> — a ribbon, a point, a state — and everything ` +
+        `related to it stays lit in proportion to how strongly it is related, with a faint thread drawn to each. ` +
+        `Everything else dims but stays on screen as context. Click empty space to clear.</div>` +
+        `<div class="empty" style="margin-top:10px">Try <b>the Industrial Revolution</b> ribbon in <i>Power &amp; economy</i>, ` +
+        `or the <b>printing</b> ribbon in <i>Science &amp; technology</i> and the events sitting inside it.</div>`,
       extraSub: (id: string) => {
         const n = this.nodes.get(id); if (!n) return '';
-        const also = n.lanes.filter(i => i !== n.home).map(i => LANES[i].name);
-        return `<div class="sub">lane: ${n.home >= 0 ? LANES[n.home].name : '—'}` +
-          (also.length ? ` · also matches ${also.join(' · ')}` : '') + `</div>`;
+        const laneNames = ((n as any).lanes || []).map((l: any[], i: number) =>
+          `${LANES[l[0]].name}${i === 0 ? ' <i>(solid)</i>' : ' <i>(echo)</i>'}`).join(' · ') || '—';
+        return `<div class="sub">lanes: ${laneNames}</div>`;
       },
     });
   },
@@ -665,13 +774,14 @@ export const Conn = {
   caption() {
     const el = $('#connCap'); if (!el) return;
     const spreads = [...this.nodes.values()].filter(n => n.kind === 'spread').length;
-    const html = `<b>importance ≤ ${levelFor(this.span())} of 5 · span ${fmtSpan(this.span())}` +
-      ` · ${spreads} spreads · ${this._linkPairs} weighted links.</b> ` +
-      `Same marks as ② the timeline: a <b>rectangle</b> is something with duration and its ` +
-      `edges say how dated its ends are, a <b>dot</b> is a moment, <b>taller means more ` +
-      `important</b> and colour is the domain. The lanes are queries rather than curated ` +
-      `bands, and a thing is drawn in the one it answers best. Click a mark to select it ` +
-      `app-wide; the threads are its weighted relations.` +
+    const links = this._linkPairs;
+    const html = `<b>Showing importance ≤ ${levelFor(this.span())} of 5 · span ${Math.round(this.span()).toLocaleString()} yrs` +
+      ` · ${spreads} spreads · ${links} weighted links in the corpus.</b> ` +
+      `Scroll to zoom and the level of detail follows, exactly as in ② — the essentials at a wide span, ` +
+      `the rest fading in as you come closer. Ribbon thickness is the spread's reach at that moment; a ribbon's ` +
+      `importance is the peak of that same curve. Points drawn <i>inside</i> a ribbon are the ` +
+      `events and lives that belong to it. Solid = this is the item's strongest-matching lane; hollow = the same item ` +
+      `echoed in another lane it also matches, one level of detail further down.` +
       (this.unresolved ? ` <span style="color:var(--accent2)">${this.unresolved} link endpoint${this.unresolved === 1 ? '' : 's'} did not resolve against the corpus.</span>` : '');
     if (html !== this._cap) { this._cap = html; el.innerHTML = html; }
   },
@@ -695,35 +805,36 @@ export const Conn = {
     this.sel = SelStore.id;
     SelStore.subscribe(() => { this.sel = SelStore.id; this.render(); this.panel(); });
     /* A REPAINT IS NOT ENOUGH WHEN THE FONT ARRIVES — IT HAS TO BE A RELAYOUT.
-       Row packing reserves the room a name needs (textW), and textW memoises by
+       Label placement reserves the room a name needs, and textW memoises by
        (font, text). Measure "East India Company chartered" before IBM Plex has
-       loaded and you cache the fallback's width, pack the next dot 10px too close,
-       and then draw both names in the real font, one through the other. So the
-       memo is dropped and the layout is redone, not just the paint. */
+       loaded and you cache the fallback's width, pack the next name too close,
+       and then draw both in the real font, one through the other. So the memo is
+       dropped and the layout is redone, not just the paint. */
     repaintOnFonts(() => { clearTextCache(); this.dirty = true; this.render(); });
+    /* ONE SEARCH, EVERYWHERE THE SAME. ②'s box is the app's single top field, and
+       this view rides the same element with the same listener shape — a hit keeps
+       full alpha and takes a T.accent2 ring, everything else drops to 12%. */
+    const sbox = $<HTMLInputElement>('#cmdk') || $<HTMLInputElement>('#searchBox');
+    if (sbox) sbox.addEventListener('input', (e: any) => this.setQuery(e.target.value));
     armSafariGestureGuard();
     refuseSafariGestures(cv);
-    /* ONE SEARCH, EVERYWHERE THE SAME. ②'s box is the app's single top field, and
-       this view now rides the same element with the same listener shape — a hit keeps
-       full alpha and takes a T.accent2 ring, everything else drops to 12%. */
-    const box = $<HTMLInputElement>('#cmdk') || $<HTMLInputElement>('#searchBox');
-    if (box) box.addEventListener('input', (e: any) => this.setQuery(e.target.value));
-
     /* Same division as every other view: one finger drags the graph through time,
-       two zoom about their midpoint — through the same v-space arithmetic the wheel
-       uses, so there is one zoom path and two input devices. */
+       two zoom about their midpoint. The pinch calls the wheel's own arithmetic
+       with `pow(1.0018, deltaY)` replaced by the finger ratio, against the same
+       [8, 30000] span clamp — one zoom path, two input devices. */
     const P = bindPinch(cv, {
       onStart: () => { this.drag = null; hideTip(); },
       onPinch: (now, prev) => {
         const r = cv.getBoundingClientRect(); const G = 12, Wp = cv.clientWidth - G - 12;
-        this.zoomBy(this.ix(prev.cx - r.left, G, Wp), prev.d / now.d);
-        const v0 = tv(this.d0), v1 = tv(this.d1);
-        const dv = (now.cx - prev.cx) / Wp * (v1 - v0);
-        const [a, b] = clampV(v0 - dv, v1 - dv);
-        this.d0 = ty(a); this.d1 = ty(b);
+        const yc = this.d0 + (prev.cx - r.left - G) / Wp * (this.d1 - this.d0);
+        const s = clamp(this.span() * (prev.d / now.d), 8, 30000);
+        const frac = (yc - this.d0) / (this.d1 - this.d0);
+        this.d0 = yc - frac * s; this.d1 = this.d0 + s;
+        const dy = (now.cx - prev.cx) / Wp * s;
+        this.d0 -= dy; this.d1 -= dy;
         this.dirty = true; this.render();
       },
-      onRebase: p => { this.drag = { x: p.clientX, y: p.clientY, v0: tv(this.d0), v1: tv(this.d1), moved: false }; },
+      onRebase: p => { this.drag = { x: p.clientX, y: p.clientY, d0: this.d0, d1: this.d1, moved: false }; },
     });
     cv.addEventListener('pointermove', e => {
       if (P.multi) { this.drag = null; return; }        // the pinch owns the gesture
@@ -732,37 +843,33 @@ export const Conn = {
       if (this.drag) {
         const G = 12, Wp = cv.clientWidth - G - 12;
         const dx = e.clientX - this.drag.x;
-        const slop = slopFor(e);
-        if (Math.abs(dx) > slop || (e.pointerType !== 'mouse' && Math.abs(e.clientY - this.drag.y) > slop)) this.drag.moved = true;
-        const dv = dx / Wp * (this.drag.v1 - this.drag.v0);
-        const [a, b] = clampV(this.drag.v0 - dv, this.drag.v1 - dv);
-        this.d0 = ty(a); this.d1 = ty(b); this.dirty = true; this.render(); return;
+        const dy = dx / Wp * (this.drag.d1 - this.drag.d0);
+        if (Math.abs(dx) > slopFor(e) || (e.pointerType !== 'mouse' && Math.abs(e.clientY - this.drag.y) > slopFor(e))) this.drag.moved = true;
+        this.d0 = this.drag.d0 - dy; this.d1 = this.drag.d1 - dy; this.dirty = true; this.render(); return;
       }
-      // NO HOVER ON A FINGER. A touch pointermove that reaches here is the tail of a
-      // tap, and a tooltip pinned under the fingertip covers the thing it describes.
-      // Tap opens the card, which says more and can be closed.
+      // hover is a mouse affordance; the tap below opens the same node instead
       if (e.pointerType !== 'mouse') return;
       const h = this.at(mx, my);
-      this.render();                                    // the crosshair follows the hand
+      const id = h ? h.id : null;
+      this.hover = id; this.render();
       if (h) {
         const n = this.nodes.get(h.id)!;
         const links = this.relsOf(h.id).length;
         const rels = this.sel ? this.relOf(this.sel) : null;
-        const r2 = rels && rels.get(h.id);
+        const r = rels && rels.get(h.id);
         showTip(e.clientX, e.clientY,
           `<div class=t>${esc(n.name)}</div>` +
-          `<div class=m>${fmtBig(n.start)}${n.end > n.start ? ' – ' + fmtY(n.end) : ''} · ${esc(LANES[n.home] ? LANES[n.home].name : '—')}</div>` +
-          `<div class=m>${esc(n.kind)} · ${esc(n.type || 'moment')}</div>` +
+          `<div class=m>${n.kind} · ${fmtY(n.start)}${n.end > n.start ? ' – ' + fmtY(n.end) : ''}${h.solid === false ? ' · echo of another lane' : ''}</div>` +
           (n.note ? `<div class=m>${esc(n.note)}</div>` : '') +
-          `<div class=m>${links} relation${links === 1 ? '' : 's'}${r2 ? ` · ${esc(r2.kind)} of the selection, weight ${r2.w.toFixed(2)}` : ''}</div>` +
-          `<div class=m>importance ${'●'.repeat(6 - n.lvl)}${'○'.repeat(n.lvl - 1)} (${n.lvl}) · click to select</div>`);
+          `<div class=m>${links} relation${links === 1 ? '' : 's'}${r ? ` · ${r.kind} of the selection, weight ${r.w.toFixed(2)}` : ''}</div>` +
+          `<div class=m>click to focus</div>`);
         cv.style.cursor = 'pointer';
       } else { hideTip(); cv.style.cursor = 'crosshair'; }
     });
-    cv.addEventListener('pointerleave', () => { hideTip(); this.hoverX = null; this.render(); });
+    cv.addEventListener('pointerleave', () => { hideTip(); this.hover = null; this.hoverX = null; this.render(); });
     cv.addEventListener('pointerdown', e => {
       if (P.multi) { this.drag = null; hideTip(); return; }
-      this.drag = { x: e.clientX, y: e.clientY, v0: tv(this.d0), v1: tv(this.d1), moved: false };
+      this.drag = { x: e.clientX, y: e.clientY, d0: this.d0, d1: this.d1, moved: false };
       try { cv.setPointerCapture(e.pointerId); } catch { /* synthetic or already-lifted pointer */ }
     });
     cv.addEventListener('pointerup', e => {
@@ -773,11 +880,10 @@ export const Conn = {
       const wasDrag = this.drag && this.drag.moved; this.drag = null;
       if (wasDrag || P.tapBlocked) return;
       const r = cv.getBoundingClientRect(), mx = e.clientX - r.left, my = e.clientY - r.top;
-      const H = cv.clientHeight;
-      // EITHER axis strip sets the global moment, exactly as in ②.
-      if (my < AXIS_TOP || my > H - BOT) {
+      // the axis strip sets the global moment, exactly as in ②
+      if (my > cv.clientHeight - this.AXIS) {
         const G = 12, Wp = cv.clientWidth - G - 12;
-        TimeStore.set(Math.round(this.ix(mx, G, Wp)), 'tl');
+        TimeStore.set(Math.round(this.d0 + (mx - G) / Wp * this.span()), 'tl');
         return;
       }
       const h = this.at(mx, my, e.pointerType === 'mouse' ? 0 : TAP_PAD);
@@ -788,52 +894,43 @@ export const Conn = {
     cv.addEventListener('wheel', e => {
       e.preventDefault();
       const r = cv.getBoundingClientRect(); const G = 12, Wp = cv.clientWidth - G - 12;
-      this.zoomBy(this.ix(e.clientX - r.left, G, Wp), Math.pow(1.0018, e.deltaY));
-      this.render();
+      const yc = this.d0 + (e.clientX - r.left - G) / Wp * (this.d1 - this.d0);
+      // same gesture constants as ②: wheel zooms about the cursor, drag pans
+      const f = Math.pow(1.0018, e.deltaY); const s = clamp(this.span() * f, 8, 30000);
+      const frac = (yc - this.d0) / (this.d1 - this.d0);
+      this.d0 = yc - frac * s; this.d1 = this.d0 + s; this.dirty = true; this.render();
     }, { passive: false });
 
     /* ── THE RANDOM CONTROLS ARE GONE ────────────────────────────────────────
-       "No page should have random controls." This view had five buttons no other
-       view has: two guided-tour jumps (the Industrial Revolution, printing from
-       Mainz), a "Whole span" zoom preset, a "Share of lane" ribbon-normalisation
-       toggle, and "Clear selection".
-
-       The tour jumps and the preset are what the ONE search box at the top is for
-       — type "industrial" and click the row. "Share of lane" normalised ribbon
-       thickness within a lane, and there are no ribbons any more, so it has
-       nothing left to mean. And nothing else in the app carries a clear-selection
-       button: clicking empty canvas clears, and so does the card's own close.
-
-       The markup was in Lab.tsx, which is not this file's to edit; it has since
-       been deleted there, so this file binds none of them and no longer needs the
-       loop that used to hide them. #connReset — "back to the framing this view
-       opens on" — is the one that stayed, and it is Lab's own click handler, not
-       a binding here. Nothing on this canvas is wired to a button any more: the
-       whole instrument is the wheel, the drag, the tap and the one search box. */
+       "No page should have random controls." This view used to carry five buttons
+       no other view has: two guided-tour jumps (the Industrial Revolution, printing
+       from Mainz), a "Whole span" preset, a "Share of lane" ribbon-normalisation
+       toggle, and "Clear selection". The markup was deleted from Lab.tsx, so the
+       bindings are gone from here too. The tour jumps and the preset are what the
+       ONE search box at the top is for; clicking empty canvas clears, and so does
+       the card's own close. `mode` stays fixed at 'abs' — absolute reach is what a
+       ribbon's thickness means, and there is no longer a control to change it.
+       #connReset — "back to the framing this view opens on" — is Lab's own click
+       handler calling animTo, not a binding here.
+       Panel rows walk the graph: renderRelatedPanel binds that listener once and it
+       writes SelStore directly. */
     buildConnLegend();
     this.panel();
   },
-  drag: null as { x: number; y: number; v0: number; v1: number; moved: boolean } | null,
+  drag: null as any,
 };
 
-// The SAME legend as ② (timeline.ts buildGrammarLegend) — the same three marks, in the
-// same order, drawn the same way — plus the one line that is only true here: a link's
-// weight is its opacity.
+// the same shape-grammar legend idea as ②, saying what solid / hollow / inside mean
 export function buildConnLegend() {
   const row = $('#connGrammar'); if (!row) return;
   const c = 'var(--ink2)';
-  const g = (svg: string, label: string) => `<span class="g"><svg width="30" height="14" viewBox="0 0 30 14">${svg}</svg>${label}</span>`;
-  row.innerHTML = `<span class="note" style="font-weight:600">Mark =</span>` +
-    g(`<rect x="3" y="3.5" width="24" height="7" rx="2" fill="${c}" opacity=".75"/><rect x="3" y="3.5" width="24" height="7" rx="2" fill="none" stroke="${c}" stroke-width="1"/>`, 'spread, sharp — dated ends') +
-    g(`<defs><linearGradient id="cnfade" x1="0" y1="0" x2="1" y2="0">` +
-      `<stop offset="0" stop-color="${c}" stop-opacity=".05"/><stop offset=".38" stop-color="${c}" stop-opacity=".75"/>` +
-      `<stop offset=".62" stop-color="${c}" stop-opacity=".75"/><stop offset="1" stop-color="${c}" stop-opacity=".05"/>` +
-      `</linearGradient></defs><rect x="2" y="3.5" width="26" height="7" rx="2" fill="url(#cnfade)"/>`, 'spread, soft — fades in and out') +
-    g(`<circle cx="15" cy="7" r="3.2" fill="${c}"/>`, 'event — a moment') +
-    `<span class="note" style="margin-left:6px">taller = more important</span>` +
-    `<span class="note" style="font-weight:600;margin-left:6px">Colour = domain</span>` +
-    g(`<path d="M6 13 C6 7 8 5 8 1" fill="none" stroke="var(--accent2)" stroke-width="1.3" opacity=".32"/>` +
-      `<path d="M20 13 C20 7 22 5 22 1" fill="none" stroke="var(--accent2)" stroke-width=".7" opacity=".07"/>`,
+  const g = (svg: string, label: string) => `<span class="g"><svg width="34" height="16" viewBox="0 0 34 16">${svg}</svg>${label}</span>`;
+  row.innerHTML =
+    g(`<path d="M1 9 C10 3 22 3 33 6 L33 12 C22 10 10 13 1 13 Z" fill="${c}" opacity=".85"/>`, 'spread — thickness = reach') +
+    g(`<path d="M1 9 C10 3 22 3 33 6 L33 12 C22 10 10 13 1 13 Z" fill="none" stroke="${c}" stroke-width=".9" stroke-dasharray="1.5 4"/>`, 'the same item, echoed in another lane') +
+    g(`<path d="M1 9 C10 3 22 3 33 6 L33 12 C22 10 10 13 1 13 Z" fill="${c}" opacity=".28"/><circle cx="17" cy="8" r="3.4" fill="${c}"/>`, 'event inside its spread') +
+    g(`<path d="M9 15 C9 9 11 7 11 1" fill="none" stroke="var(--accent2)" stroke-width="1.3" opacity=".32"/>` +
+      `<path d="M23 15 C23 9 25 7 25 1" fill="none" stroke="var(--accent2)" stroke-width=".7" opacity=".07"/>`,
       'link — strong, then weak: weight is its opacity');
 }
 

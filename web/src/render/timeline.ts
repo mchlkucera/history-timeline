@@ -702,6 +702,66 @@ export const TL = {
   showsAt(lvl: number, detail: Detail, isCur: boolean, i = -1) {
     return lvl <= this.tierOf(detail, isCur, i);
   },
+  /* ── THE ARRIVAL FADE, AND WHY IT IS A FUNCTION OF THE ZOOM ──────────────
+     "Connections now have the nice fade-in that timeline had before,
+     re-introduce this fade to Timeline. Make sure the fade in out is smoooth."
+
+     ⑧ still runs the ORIGINAL ramp — alphaFor(lvl, span), a smoothstep spread
+     across a 1.6× band of spans. That is what makes a mark there ARRIVE: it
+     comes up under the hand, in proportion to how far the wheel has been turned,
+     and turning the wheel back takes it away again along the identical curve.
+     When the ladder replaced that ramp here it was lost. Qualification became
+     the rung's hard `lvl <= tier` test, so a whole tier switched on at once,
+     eased only by a 230ms settle clock fired at the crossing — and a clock is
+     not the gesture. It cannot be reversed half way; a second crossing landing
+     mid-fade restarted it from the wrong end, so a mark sitting at 0.5 JUMPED to
+     1; and 230ms of a tier appearing reads as a blink, not as an arrival.
+
+     So the fade is a pure function of the v-span again, and of nothing else:
+
+       kOn(lvl)  the FIRST rung whose tier admits this mark. STEPS' tiers are
+                 non-decreasing, so this is well defined, and being a property of
+                 the mark and its lane rather than of the zoom, it is cached.
+       vIn       that rung's door, hysteresis included: STEPS[kOn].v·(1−HYST).
+       vTo       the NEXT rung's door — one rung of wheeling, ~25 notches.
+       u         log(vIn/vs) / log(vIn/vTo), clamped, then smoothstepped.
+
+     THE TWO ENDS ARE WHAT MAKE IT SMOOTH IN BOTH DIRECTIONS. Zooming in, the
+     rung's door opens at exactly vs = vIn, where u = 0: the mark joins the
+     layout at alpha ZERO and grows from there. Zooming out, alpha is back to
+     zero at vIn, while the rung itself is not given up until vs exceeds
+     STEPS[kOn].v·(1+HYST) — so the mark is already invisible across the whole
+     width of the dead band before its membership lapses. It cannot pop in and it
+     cannot pop out. Smoothstep has zero derivative at both ends, so there is no
+     corner at either one, and because alpha is a function of the window and not
+     of a clock, reversing the wheel retraces the curve exactly.
+
+     AND IT MOVES NOTHING. This is alpha, and only alpha. A row's height is still
+     `want`, the rung's binary demand; membership in `vis` and in the event
+     packer is still the rung's binary `on`; the latched window still decides
+     every x. Between rungs the layout stays bit-frozen exactly as it was — it is
+     only the INK that is now a continuous function of the zoom.
+
+     MONOTONICITY HOLDS BY CONSTRUCTION: alpha is non-decreasing as vs falls and
+     `on` only ever opens, so a mark visible at rung N is visible at rung N+1 at
+     greater-or-equal alpha. Zooming in can still only add. */
+  _kOn: new Map<string, number>(),
+  kOn(lvl: number, detail: Detail, isCur: boolean) {
+    const key = lvl + '|' + detail + '|' + (isCur ? 1 : 0);
+    const hit = this._kOn.get(key); if (hit !== undefined) return hit;
+    let k = 0; while (k < STEPS.length - 1 && !this.showsAt(lvl, detail, isCur, k)) k++;
+    this._kOn.set(key, k);
+    return k;
+  },
+  /** How far this mark has ARRIVED, 0..1, read off the live v-span and nothing else. */
+  lodFade(lvl: number, detail: Detail, isCur: boolean) {
+    const k = this.kOn(lvl, detail, isCur);
+    if (k <= 0) return 1;                    // admitted at the widest rung: it never arrives
+    const vIn = STEPS[k].v * (1 - HYST);
+    const vTo = (k + 1 < STEPS.length ? STEPS[k + 1].v : STEPS[k].v / 1.456) * (1 - HYST);
+    const u = clamp(Math.log(vIn / Math.max(this.vspan(), 1e-6)) / Math.log(vIn / vTo), 0, 1);
+    return u * u * (3 - 2 * u);
+  },
   /* ── THE LATCHED LAYOUT WINDOW ───────────────────────────────────────────
      layout() decides occupancy against THIS window; render() draws at the live
      one. It is re-latched on exactly three things: the first frame, a rung
@@ -1026,18 +1086,19 @@ export const TL = {
         if (wA <= 0.02) continue;
         const isLit = lit(it.id, sel, rels);
         const on = this.showsAt(it.lvl, detail, isCur);                 // at the rung we are ON
-        const was = sp < 1 && this.showsAt(it.lvl, detail, isCur, this._stepFrom);
-        // THE ROW'S HEIGHT IS THE RUNG'S DEMAND, never the settle's alpha. Heights
-        // are walked by the limiter and alphas by the settle clock; crossing the two
-        // over is what used to make a fade and a growth fight each other.
-        const want = (on || isLit) ? wA : (isMatch ? 0.6 * wA : 0);
+        // MEMBERSHIP IS THE RUNG'S. It is a boolean of the rung, the detail dial and
+        // the selection — never of the live span — so it cannot change between rungs,
+        // and the packing, the row demand and the fold set are all bit-frozen with it.
+        if (!on && !isLit && !isMatch) continue;
+        // THE ROW'S HEIGHT IS THE RUNG'S DEMAND, never the fade. Heights are walked by
+        // the limiter and alphas by the zoom; crossing the two over is what used to
+        // make a fade and a growth fight each other.
+        const want = (on || isLit) ? wA : 0.6 * wA;
         if (want > gRaw[it.row]) gRaw[it.row] = want;
-        // …and the alpha IS the settle's, the only thing left of the old ramp: a
-        // mark the rung has just revealed fades in across the settle, one the rung
-        // has just dropped fades out across it, and everything else is simply there.
-        let lodA = isLit ? 1 : on ? (was || sp >= 1 ? 1 : sp) : (was ? 1 - sp : (isMatch ? 0.6 : 0));
-        lodA *= wA;
-        if (lodA <= 0.02) continue;
+        // …and the alpha is the ARRIVAL FADE — see lodFade. The mark joins the layout
+        // at zero on the frame the rung admits it and comes up over that rung; it is
+        // back at zero before the rung is given up. Alpha only: nothing here moves.
+        const lodA = (isLit ? 1 : on ? this.lodFade(it.lvl, detail, isCur) : 0.6) * wA;
         const x0 = this.x(it.start, G, Wp), x1 = this.x(it.end, G, Wp);   // LIVE — drawing only
         vis.push({ it, row: it.row, x0, x1, lodA, isMatch });
         if (isMatch || it.id === sel) spare[it.row] = true;
@@ -1086,10 +1147,12 @@ export const TL = {
         if (wA <= 0.02) continue;
         const isLit = lit(id, sel, rels);
         const on = this.showsAt(ev[4], detail, isCur);
-        const was = sp < 1 && this.showsAt(ev[4], detail, isCur, this._stepFrom);
-        const a = (isLit ? 1 : on ? (was || sp >= 1 ? 1 : sp) : (was ? 1 - sp : 0)) * wA;
-        if (a <= 0.02) continue;
-        if (on || isLit) nOn++;
+        // Membership is the rung's, so the packer is handed the SAME set for the whole
+        // rung — a dot that is still fading in has already been given its slot, and no
+        // dot moves sideways while another one arrives.
+        if (!on && !isLit) continue;
+        const a = (isLit ? 1 : this.lodFade(ev[4], detail, isCur)) * wA;
+        nOn++;
         qual.push({
           ev, id, title, a, on: on || isLit, isMatch,
           x0: this.x(ev[0], G, Wp),                 // LIVE — drawing only
@@ -2187,7 +2250,11 @@ export const TL = {
           }
           ctx.globalAlpha = 1;
           prevEnd = Math.max(prevEnd, s.x1 + (mode === 'right' ? 8 + labelW : 0));
-          if (g >= HIT_FLOOR) this.boxes.push({
+          // A MARK STILL ARRIVING IS NOT YET A TARGET. The row floor asks "is this row
+          // tall enough to aim at"; the mark's own fade asks "is this thing actually
+          // there yet" — without the second test a rectangle at 4% alpha, one wheel
+          // notch past the rung that admitted it, answered a click on empty canvas.
+          if (g >= HIT_FLOOR && s.lodA >= HIT_FLOOR) this.boxes.push({
             x: mode === 'left' ? s.x0 - 11 - labelW : s.x0 - 2,
             y: yC - h / 2 - 2,
             w: (s.x1 - s.x0) + 4 + (mode === 'right' ? 10 + labelW : mode === 'left' ? 12 + labelW : 0),
@@ -2229,7 +2296,7 @@ export const TL = {
           else if (E.mode === 'left') ctx.fillText(title, E.x0 - 9 - E.labelW, yy + 4);
         }
         ctx.globalAlpha = 1;
-        if (g >= HIT_FLOOR) this.boxes.push({
+        if (g >= HIT_FLOOR && E.lodA >= HIT_FLOOR) this.boxes.push({
           x: E.mode === 'left' ? E.x0 - 11 - E.labelW : E.x0 - 8, y: yy - slot / 2,
           w: 16 + (E.mode === 'none' ? 4 : E.labelW), h: slot, kind: 'ev', id: E.id, ev: E.ev,
           band: L.label, isMatch: E.isMatch,
@@ -2559,19 +2626,40 @@ export const TL = {
         const dx = e.clientX - drag.x, dy = e.clientY - drag.y;
         const dv = dx / Wp * (drag.v1 - drag.v0);
         const slop = slopFor(e);
-        if (Math.abs(dx) > slop || (e.pointerType !== 'mouse' && Math.abs(dy) > slop)) drag.moved = true;
+        // ONE SLOP, BOTH AXES, EITHER POINTER. dy used to count only for a finger,
+        // because only a finger moved the sheet; now that a mouse drag moves it too,
+        // a drag STRAIGHT DOWN has to read as a drag rather than as a click that
+        // happened to travel 200px. slopFor still supplies the number — 3px for a
+        // mouse, 10px for a fingertip — so drag-vs-click is decided in exactly one
+        // place, as it was before.
+        if (Math.abs(dx) > slop || Math.abs(dy) > slop) drag.moved = true;
         const [nv0, nv1] = clampV(drag.v0 - dv, drag.v1 - dv);
         this.d0 = ty(nv0); this.d1 = ty(nv1);
-        // THE SECOND AXIS, FOR A HAND. On desktop the sheet moves on Shift+wheel
-        // and on the rail; a finger has neither, and the canvas takes
-        // touch-action:none so the browser will not scroll it either. So a touch
-        // drag carries both axes at once — X through time, Y down the sheet —
-        // which is also exactly what the vertical projection has always done.
-        // Gated on pointerType: the mouse's gesture is untouched.
-        if (e.pointerType !== 'mouse') {
-          const sc2 = this.scroller();
-          if (sc2) { const was = sc2.scrollTop; sc2.scrollTop = drag.top - dy; if (sc2.scrollTop !== was) this.onScroll(); }
-        }
+        /* THE SECOND AXIS, AND IT IS NOT ONLY FOR A HAND ANY MORE.
+           "Make sure you can pan up down on timeline by dragging."
+
+           b84f9fa gave this to a finger, and gated it on pointerType because a
+           finger has no Shift key and the canvas takes touch-action:none, so a
+           touch drag was the only way the sheet could move at all. That reasoning
+           said nothing about the mouse — it only said the mouse ALREADY had two
+           other routes. Having a route is not the same as the direct manipulation
+           being there, and a reader who grabs a plot taller than its window
+           expects it to come with the hand. The wheel, Shift+scroll and the rail
+           all still work; this is a fourth door onto the same scrollTop, not a
+           replacement for any of them.
+
+           Y IS LATCHED, NOT ACCUMULATED: `top` is read once at pointerdown and
+           every move writes `top - dy`, so the sheet tracks the hand exactly —
+           drag 200px down and scrollTop falls by 200 — and a clamp at either end
+           cannot drift the gesture out of registration. Same arithmetic as X,
+           which latches v0/v1 the same way.
+
+           THE ZOOM ANCHOR HAS ALREADY YIELDED: startDrag() nulls _yAnchor on
+           every press, mouse included, so a settle still running from an earlier
+           wheel cannot fight these writes — the same rule scrollBy() and the
+           rail's press-and-hold follow. */
+        const sc2 = this.scroller();
+        if (sc2) { const was = sc2.scrollTop; sc2.scrollTop = drag.top - dy; if (sc2.scrollTop !== was) this.onScroll(); }
         this.paint(); return;
       }
       // NO HOVER ON A FINGER. A touch pointermove that reaches here is the tail

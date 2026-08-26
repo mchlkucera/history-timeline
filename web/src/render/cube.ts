@@ -20,6 +20,7 @@
    loop when you leave.
    ============================================================================= */
 import { $, repaintOnFonts, tokens, fmtY, SelStore } from './shared';
+import { SelCard } from './selcard';
 import type {
   CubeEngine, CubeState, CutInfo, MeshRes, Projection, SliceInfo,
   SolidMode, Spacing, CubeStats, TraceInfo, ViewName,
@@ -64,28 +65,24 @@ export const Cube = {
     const E = () => this.engine;
 
     // trace ------------------------------------------------------------------
-    const filter = $<HTMLInputElement>('#cubeFilter');
+    /* THE "Trace a polity" SEARCH FIELD IS GONE. #cubeFilter was a second search
+       box — a ranked lookup over the same 147 polities the global "Search
+       anything…" already ranks — whose only extra act was to hand the winner to
+       select(). So the global search does that instead: Cube.select(id) is the
+       entry point, and a plain SelStore write of 'polity:<id>' reaches it too
+       (see the subscriber below). The <select> stays: it is a BROWSE control and
+       the readout of which polity the block is traced from, not a search. */
     const sel = $<HTMLSelectElement>('#cubeSov');
-    let traceTimer = 0;
-    filter?.addEventListener('input', () => {
-      const q = filter.value.trim();
-      const hits = this.fillSelect(q);
-      clearTimeout(traceTimer);
-      if (!q) return;
-      // debounce: meshing the solid costs 100-400 ms, so do not rebuild per keystroke
-      traceTimer = window.setTimeout(() => { if (hits.length) this.select(hits[0]); }, 280);
+    /* PICKING FROM THE LIST IS A SELECTION, so it is written to the GLOBAL store
+       rather than straight into the engine. Three things follow, all of them the
+       point: the same polity lights up on the timeline, the map and the flow; the
+       card opens and says what it is; and the card's X clears it — which it could
+       not do while the dropdown was the only thing that knew. A null anchor with
+       'search' is the shape a lookup takes here (selcard.ts §select) — the card
+       resolves its own anchor, because a <select> is not a place on the canvas. */
+    sel?.addEventListener('change', () => {
+      if (sel.value) SelCard.select('polity:' + sel.value, null, null, 'search');
     });
-    filter?.addEventListener('keydown', (ev) => {
-      if (ev.key === 'Enter') {
-        clearTimeout(traceTimer);
-        const h = E()?.rank(filter.value) ?? [];
-        if (h.length) this.select(h[0].id);
-        filter.blur();
-      } else if (ev.key === 'Escape') {
-        filter.value = ''; this.fillSelect(''); filter.blur();
-      }
-    });
-    sel?.addEventListener('change', () => { clearTimeout(traceTimer); this.select(sel.value); });
 
     // segmented controls -----------------------------------------------------
     this.seg('#cubeLineage', v => { this.S.lineage = +v; E()?.buildEmpire(); });
@@ -180,7 +177,14 @@ export const Cube = {
      */
     SelStore.subscribe(() => {
       const id = SelStore.id;
-      if (!id || !id.startsWith('polity:')) return;
+      /* NOTHING IS SELECTED ANY MORE, SO NOTHING MAY STAY LIT. Dismissing the
+         card cleared the map's highlight and left the block's solid burning —
+         the card and the canvas then disagreed about what was selected, and the
+         only way back was to trace something else. Clearing is unconditional,
+         hidden view included: unlike select() it meshes nothing, so there is no
+         cost to pay off screen and no stale id to arrive with later. */
+      if (!id) { this.clear(); return; }
+      if (!id.startsWith('polity:')) return;
       const pid = id.slice(7);
       if (pid === this.S.polity) return;
       if (!cv.clientWidth) { this.S.polity = pid; return; }   // hidden — remember only
@@ -270,11 +274,27 @@ export const Cube = {
     if (e.select(id)) { const s = $<HTMLSelectElement>('#cubeSov'); if (s) s.value = id; }
   },
 
+  /** Put the trace out. The public half of clear-on-deselect — the SelStore
+   *  subscriber in init() calls it, and so may anything else that means "no
+   *  polity". The <select> is emptied with it so the panel cannot claim a
+   *  polity the block is no longer drawing. */
+  clear() {
+    const e = this.engine;
+    if (!e) { this.S.polity = ''; return; }
+    if (e.clearTrace()) { const s = $<HTMLSelectElement>('#cubeSov'); if (s) s.selectedIndex = -1; }
+  },
+
   /**
-   * The filter box and the select are ONE control. The prototype's bug worth
-   * not repeating: assigning `select.value` from script does not fire `change`,
-   * so a filtered list narrowed while the view kept tracing whatever it had.
-   * Typing picks the best match and traces it (debounced, in init()).
+   * Fill the polity list. `q` ranks and narrows it; the engine's own rank() is
+   * still the ranker, so a caller that wants the cube's ordering can ask for it —
+   * but nothing in this panel types any more, so in practice this runs once, at
+   * load, with no query.
+   *
+   * The prototype's bug worth not repeating, and the reason select() writes
+   * `sel.value` by hand: assigning `select.value` from script does not fire
+   * `change`, so the list could narrow while the view kept tracing whatever it
+   * had. That is also why the change listener above is safe to route through the
+   * global store — it cannot re-enter.
    */
   fillSelect(q = ''): string[] {
     const sel = $<HTMLSelectElement>('#cubeSov');
@@ -291,10 +311,16 @@ export const Cube = {
     }
     sel.innerHTML = groups.join('') || '<option disabled>no match</option>';
     const set = new Set(hits.map(p => p.id));
-    if (set.has(this.S.polity)) sel.value = this.S.polity;
+    // An empty S.polity means "nothing traced" (see Cube.clear), and the select
+    // must not quietly name a polity the block is not drawing.
+    if (!this.S.polity) sel.selectedIndex = -1;
+    else if (set.has(this.S.polity)) sel.value = this.S.polity;
     else if (hits.length) sel.value = hits[0].id;
+    // "N of M" only ever meant "this list is narrowed"; with no filter box there
+    // is nothing to narrow it, so an unfiltered call says nothing rather than
+    // "147/147". The element itself goes with the field it belonged to.
     const cnt = $('#cubeCnt');
-    if (cnt) cnt.textContent = `${hits.length}/${e.polities().length}`;
+    if (cnt) cnt.textContent = q ? `${hits.length}/${e.polities().length}` : '';
     return hits.map(p => p.id);
   },
 
@@ -465,6 +491,18 @@ export const Cube = {
       ? `${t.present.length} of ${t.total} snapshots · ${fmtY(t.present[0])} → ${fmtY(t.present[t.present.length - 1])}`
       : `no geometry in any of the ${t.total} snapshots`;
     const cap = $('#cubeCap');
+    /* NOTHING TRACED IS A STATE THE CAPTION HAS TO BE ABLE TO SAY. Falling
+       through to the sentence below with an empty name printed "  is traced as a
+       solid — no geometry in any of the 18 snapshots", which reads as a failure
+       to find something rather than as an empty selection. The first half of the
+       caption is the standing legend for the block and stays either way. */
+    if (cap && !t.id) {
+      cap.innerHTML =
+        `<b>Reading the block:</b> X is longitude, Y latitude, Z time — a horizontal cut is a world map at one date, ` +
+        `a vertical column is a state that lasted. ` +
+        `Nothing is traced: pick a polity from the list, or search for one, to draw it as a solid through time.`;
+      return;
+    }
     if (cap) {
       // A SWATCH quotes the trace colour and the name stays in ink. Colouring
       // the text itself would put a mid-tone data hue on a panel surface, which
