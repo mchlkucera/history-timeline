@@ -1552,6 +1552,9 @@ export const TL = {
   /** Move down the sheet. The browser clamps at both ends; nothing here needs to. */
   scrollBy(dy: number) {
     const sc = this.scroller(); if (!sc) return;
+    // the reader is driving. A zoom anchor still settling from a moment ago would
+    // pull this straight back, so it yields — same rule as the touch drag.
+    this._yAnchor = null;
     const was = sc.scrollTop;
     sc.scrollTop = was + dy;
     if (sc.scrollTop !== was) this.onScroll();
@@ -1562,6 +1565,144 @@ export const TL = {
     if (!sc || !sc.clientHeight) return { top: 0, view: 0, all: 0, over: 0 };
     const over = Math.max(0, sc.scrollHeight - sc.clientHeight);
     return { top: sc.scrollTop, view: sc.clientHeight, all: sc.scrollHeight, over };
+  },
+  /* ══ THE SECOND ANCHOR — Y, THE ONE THE X ANCHOR ALWAYS IMPLIED ═════════
+     The founder: "when I zoom in it also scrolls to where my cursor is (when
+     cursor is on bottom of screen i see the bottom lane widening), now it just
+     widens the top lane and i have to shift scroll to get there."
+
+     WHY IT ONLY BECAME WRONG RECENTLY. zoomBy() has always held the YEAR under
+     the cursor still — x is affine in tv with x(anchor) fixed, so the X anchor
+     is exact by construction. There was no Y counterpart because there was
+     nothing for one to do: the plot was held to a stage-height budget and the
+     sheet never grew. 47e4edf retired that budget so that zooming in can only
+     ADD marks, and the sheet grows instead — measured on the default arrangement
+     at 1440x900, 791px at rung 21 to 1005px at rung 25 against a 791px window,
+     and far more than that on a fuller board. ALL of that new height lands BELOW
+     the reader's scroll position, so the top band visibly widens and the band
+     they were pointing at slides off the bottom: measured, a three-rung zoom with
+     the cursor over `Americas · States & empires` low on the screen moved that
+     band 155px down and put a different band under the cursor. This is the
+     missing half of the anchor, not a new idea: hold under the cursor what was
+     under the cursor, on both axes.
+
+     WHAT IS ANCHORED, AND WHY NOT A PROPORTIONAL RESCALE. The obvious cheap
+     answer — scrollTop × Hafter / Hbefore — is wrong here and wrong worst where
+     the board is densest. Bands do NOT grow by a common factor: `asks()` is a
+     per-band count of the rows holding something the rung's tier gate now lets
+     through, so a band that gained three rows and a band that gained none move
+     by completely different amounts, and the error is the sum of every band
+     ABOVE the cursor. So the anchor is the BAND (its permanent key) plus the
+     FRACTION down that band, which is a statement about content and survives
+     any amount of growth anywhere else on the sheet.
+
+     WHERE THE CURSOR CAN BE, all four cases, none left undefined:
+       · INSIDE A BAND — anywhere in it, header, spread stratum, the GAP_H
+         furniture, the event stratum, the pad under the last mark. All of it is
+         one band's [top, top+h) and all of it anchors by fraction. There is no
+         separate rule for the event stratum: it is part of its band's height and
+         it moves with it.
+       · IN THE LEFT GUTTER — x plays no part in this. The 118px gutter and the
+         panel column are at the same y as the band they name (the geometry lock),
+         so the band under the cursor is the same band either side of the seam.
+       · BETWEEN TWO BANDS — there is no between. Bands are contiguous by
+         construction: layout()'s `L.top = top; top += L.h`, so one band's last
+         pixel is the next band's first. The air the eye reads as a gap is
+         GAP_H *inside* a band. Nothing can fall down the crack.
+       · OFF THE BANDS ENTIRELY — above the first (the axis masthead's 22px) or
+         below the last (the empty film that pads the sheet to HMAX, and the year
+         strip drawn on it). NEAREST BAND, and the leftover pixels are kept in
+         `off` so the anchor is still exact: "18px above the top of Europe" holds
+         as precisely as "0.6 of the way down Asia · Dynasties".
+
+     AND IT IS EXACTLY A SCROLL ADJUSTMENT. Nothing here touches the ladder. The
+     26 rungs, the bit-frozen layout between them, the hysteresis and the slew
+     limiter decide what the sheet looks like exactly as before; this reads the
+     answer they gave and moves the ONE shared scroller so the reader is still
+     looking at the same thing. Y does not scale with zoom, no camera, no
+     continuous relayout — "we dont want the 2d render, keep this one". */
+  _yAnchor: null as null | { key: string; frac: number; off: number; vy: number },
+  /** Which band owns this canvas y — or the nearest one, when none does. */
+  bandAt(cy: number, lay: Layout): LaneLayout | null {
+    const ls = lay.lanes;
+    if (!ls.length) return null;
+    for (const L of ls) if (L.h > 0.5 && cy >= L.top && cy < L.top + L.h) return L;
+    return cy < ls[0].top ? ls[0] : ls[ls.length - 1];
+  },
+  /**
+   * REMEMBER WHAT IS UNDER THE CURSOR, in client coordinates, from the layout
+   * that is ON SCREEN RIGHT NOW. Called by the wheel and by every pinch frame,
+   * BEFORE zoomBy — the same ordering the X anchor uses, and for the same
+   * reason: the anchor is the state of the world the reader is looking at.
+   *
+   * Re-latching on every notch is deliberate and is what makes the whole thing
+   * compose. Mid-settle the drawn geometry is part way between two rungs, and
+   * measuring against THAT is self-consistent: whatever is under the cursor at
+   * this instant is what has to be under it at the next.
+   */
+  markYAnchor(clientY: number) {
+    const lay = this._lay, cv = this.cv;
+    if (!lay || !cv || !this.scroller()) { this._yAnchor = null; return; }
+    /* A CURSOR THAT HAS NOT MOVED HAS NOT CHANGED ITS MIND. Re-latching on a
+       notch that arrived at the same pixel would re-quantise the anchor against
+       the scroll grid (0.5px at DPR 2) once per notch, and a flick is six or
+       eight notches: measured, that alone walked the held point 1.85px off over
+       four rungs. Holding the ORIGINAL latch for the length of one flick makes
+       the target absolute for the whole gesture, so the error cannot accumulate
+       — it is the same 0.5px at the end as at the start. The latch is still
+       taken fresh the moment the cursor moves, and dropped altogether when the
+       sheet stops moving, so a flick is exactly as far as one anchor reaches. */
+    if (this._yAnchor && Math.abs(clientY - this._yAnchor.vy) < 0.5) return;
+    const cy = clientY - cv.getBoundingClientRect().top;    // canvas y — moves with the scroll
+    const L = this.bandAt(cy, lay);
+    if (!L) { this._yAnchor = null; return; }
+    const frac = L.h > 0.5 ? clamp((cy - L.top) / L.h, 0, 1) : 0;
+    this._yAnchor = { key: L.key, frac, off: cy - (L.top + frac * L.h), vy: clientY };
+  },
+  /** Set by applyYAnchor; the native scroll event it provokes is not news. */
+  _yEcho: -1,
+  /**
+   * PUT IT BACK. Called once per painted frame, after the panel has been placed
+   * from the same layout, so the sheet the scroller measures is the finished one.
+   *
+   * IT RUNS FOR THE WHOLE SETTLE, not once at the crossing, and it has to: the
+   * slew limiter delivers a band's new height over ~230ms and more when it has
+   * far to travel, so a single correction taken on the crossing frame would
+   * correct for growth that has not happened yet — it would measure zero. Each
+   * frame asks the same absolute question of the CURRENT geometry, which is why
+   * this cannot drift and cannot accumulate.
+   *
+   * THE CLAMP. The target is absolute, never incremental, so a frame that cannot
+   * be honoured costs nothing. At scrollTop 0 (zooming out with the sheet's top
+   * already against the window's) or at the bottom, the browser clamps the write,
+   * `sc.scrollTop !== was` is false, and the frame simply does what it can — the
+   * reader sees the ordinary un-anchored behaviour, which is the graceful
+   * degradation. There is no loop to fight: the next frame recomputes the same
+   * absolute target from scratch, so nothing is stored up, nothing oscillates,
+   * and the instant the sheet is tall enough for the target to be reachable it is
+   * hit exactly.
+   *
+   * AND THEN IT LETS GO. The anchor is a correction for a layout that is MOVING.
+   * Once `lay.anim` is false the sheet has arrived and there is nothing left to
+   * correct — holding on past that would mean the reader's own next scroll had to
+   * argue with it.
+   */
+  applyYAnchor(lay: Layout) {
+    const a = this._yAnchor; if (!a) return;
+    const sc = this.scroller(), cv = this.cv;
+    if (!sc || !cv) { this._yAnchor = null; return; }
+    const L = lay.lanes.find(l => l.key === a.key);
+    // the band left the board (a layer switched off mid-zoom): no anchor rather
+    // than a wrong one
+    if (!L) { this._yAnchor = null; return; }
+    const want = L.top + a.frac * L.h + a.off;              // where it is NOW, in canvas y
+    const dy = (cv.getBoundingClientRect().top + want) - a.vy;
+    if (Math.abs(dy) >= 0.5) {
+      const was = sc.scrollTop;
+      sc.scrollTop = was + dy;
+      if (sc.scrollTop !== was) { this._yEcho = sc.scrollTop; SelCard.reanchor(); }
+    }
+    if (!lay.anim) this._yAnchor = null;
   },
   _rail: null as HTMLElement | null,
   _track: null as HTMLElement | null,
@@ -1634,6 +1775,7 @@ export const TL = {
         const th = thumb.offsetHeight;
         const run = Math.max(1, tb.height - th);
         const at = clamp((e.clientY - tb.top - this._railDrag!.top) / run, 0, 1);
+        this._yAnchor = null;                  // the reader is driving; the anchor yields
         const scr = this.scroller(); if (scr) scr.scrollTop = at * st.over;
         this.onScroll();
       };
@@ -1684,7 +1826,18 @@ export const TL = {
      that has just moved. */
   onScroll() {
     this.updateRail();
-    if (this.hoverX !== null) this.render();
+    /* THE ANCHOR'S OWN WRITE IS NOT NEWS. Setting scrollTop queues a native
+       `scroll` event, which lands here, which repaints — and applyYAnchor writes
+       scrollTop on EVERY frame of a settle, so without this the settle would run
+       two layouts per frame. That is not merely wasted work: layout() advances the
+       slew limiter once per call, so the limiter would be stepped twice per frame
+       and the eased crossing the founder asked for would run at double speed. The
+       frame that caused the scroll has already painted at that offset, so the echo
+       needs nothing but the rail (done above) and the card. */
+    const sc = this.scroller();
+    const echo = !!sc && this._yEcho >= 0 && Math.abs(sc.scrollTop - this._yEcho) < 0.5;
+    this._yEcho = -1;
+    if (!echo && this.hoverX !== null) this.render();
     SelCard.reanchor();
   },
   /** Register another projection of this state (vertical.ts). Repainted by paint(). */
@@ -2106,6 +2259,12 @@ export const TL = {
     // after the slew limiter has had its say — so a row and its lane agree at
     // every fractional state of every transition, not just at the ends.
     for (const f of LAYOUTS) f(lay);
+    // …and NOW the Y anchor, because "now" is the only moment it can be right:
+    // the canvas has been resized to lay.H and the panel has been placed from the
+    // same numbers, so the sheet the scroller is about to be measured against is
+    // the finished one. Before the panel is placed, scrollHeight is a stale answer
+    // and every correction taken from it would be one frame behind.
+    this.applyYAnchor(lay);
     // …and the rail, which measures the finished sheet against the window
     this.updateRail();
     // THE FOLLOWER'S ONLY CLOCK. layout() reports `anim` while any drawn height is
@@ -2263,6 +2422,10 @@ export const TL = {
       if (e.shiftKey) { this.scrollBy(e.deltaY || e.deltaX); return; }
       const r = cv.getBoundingClientRect(); const G = this.gutter(), Wp = cv.clientWidth - G - 10;
       const yc = this.ix(e.clientX - r.left, G, Wp);
+      // BOTH AXES ARE LATCHED BEFORE THE ZOOM, off the same event, off the layout
+      // that is on screen. `yc` is the year under the cursor and zoomBy holds it;
+      // markYAnchor is the band under the cursor and applyYAnchor holds that.
+      this.markYAnchor(e.clientY);
       this.zoomBy(yc, Math.pow(1.0018, e.deltaY));
       this.paint();
     }, { passive: false });
@@ -2291,6 +2454,16 @@ export const TL = {
     let drag: any = null;
     const startDrag = (p: { clientX: number; clientY: number }) => {
       const sc0 = this.scroller();
+      /* A FINGER ON THE PLOT OUTRANKS THE ANCHOR. b84f9fa gave the one-finger
+         drag both axes — X through time, Y down the sheet — and it does Y by
+         latching `top` at pointerdown and writing `top - dy` on every move. An
+         anchor still running from the pinch that just ended would be moving
+         scrollTop between those writes, and each write would snap it straight
+         back to the stale latch: the two would fight for the rest of the settle.
+         So the anchor lets go the moment a drag is seeded. This also covers
+         onRebase (two fingers become one) and an ordinary mouse press, where the
+         drag never writes scrollTop but the press is still a new intent. */
+      this._yAnchor = null;
       drag = {
         x: p.clientX, y: p.clientY, v0: tv(this.d0), v1: tv(this.d1),
         top: sc0 ? sc0.scrollTop : 0, moved: false,
@@ -2304,6 +2477,11 @@ export const TL = {
         // (1) ZOOM ABOUT THE MIDPOINT. The anchor is where the midpoint WAS, so
         // the year the two fingers were holding is the year that stays put —
         // the same invariant zoomBy's own docblock states for the cursor.
+        // AND ITS Y IS THE ANCHOR THE SAME WAY. gesture.ts hands the midpoint as
+        // one point, cx and cy of the same two contacts, so a pinch needs no
+        // second mechanism: prev.cy is to the sheet exactly what prev.cx is to
+        // time, and both are read from where the fingers WERE.
+        this.markYAnchor(prev.cy);
         this.zoomBy(this.ix(prev.cx - r.left, G, Wp), prev.d / now.d);
         // (2) THEN CARRY IT. The midpoint itself may have travelled; without
         // this the fingers scale the sheet but do not hold it, which reads as
