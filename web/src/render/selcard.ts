@@ -175,12 +175,13 @@ export interface CardWiring {
    * borders. It writes no year: Flow spans the whole corpus and the ribbon is
    * lit along its entire length, so there is no moment to move to.
    *
-   * OPTIONAL ONLY UNTIL Lab.tsx CARRIES IT. The card declares what it needs;
-   * Lab.tsx is the module that knows the views and implements it. Once it does,
-   * drop the `?` — a required member is the honest contract, and the guard in
-   * act() is only here so the two files can land in either order.
+   * Lab.tsx implements it — it is the module that knows the views. It must not
+   * SELECT anything (flow lights the selection from its own SelStore
+   * subscription); its job is to make the ribbon VISIBLE, which means pressing
+   * the region chip back on when the reader has that region hidden, the same
+   * way seeOnMap() travels to a snapshot. It writes no year.
    */
-  showInFlow?(polityId: string): void;
+  showInFlow(polityId: string): void;
   /** show the cube with this polity id traced */
   traceInCube(polityId: string): void;
   /** reveal the full ranked relation list in the docked panel */
@@ -805,7 +806,7 @@ export const SelCard = {
       // No year, no framing: the ribbon is lit along its whole length and Flow
       // already spans the corpus. All this has to do is get you there with the
       // region showing — see showInFlow's contract.
-      case 'flow': if (s.polity) w?.showInFlow?.(s.polity); break;
+      case 'flow': if (s.polity) w?.showInFlow(s.polity); break;
       case 'cube': if (s.polity) w?.traceInCube(s.polity); break;
       case 'all': w?.allConnections(); break;
     }

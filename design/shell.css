@@ -430,49 +430,28 @@ html:has(body.tl-body) { height: 100%; overflow: hidden; }
 }
 
 /*
-   THE DOCK.
+   THE DOCK IS GONE. It was a strip of app ground down one edge of the stage,
+   reserved for the panel COLUMN, with the canvas taking what was left
+   (`padding-inline` on .tl-view plus a ::before for the ground and its
+   hairline). Five views used it, then three.
 
-   A floating panel is honest over a MAP: the panel sits on ocean and the map
-   has no furniture there. It is not honest over a CHART. The timeline family
-   draws its row furniture in a fixed left gutter of the canvas — timeline band
-   names at x=20, connections lane names at x=22, and the earliest ribbons in
-   Flow start at x=0 — none of which the renderer can move. A 264px panel over
-   that strip does not cover "some map", it covers the legend: all six band
-   names on the horizontal timeline, three of four lane headers on Connections.
+   It was invented for one reason and that reason has been answered a better
+   way. A floating panel is honest over a MAP — it sits on ocean, and the map
+   has no furniture there. It was not honest over a CHART: the timeline family
+   draws its row furniture in a fixed LEFT gutter of the canvas (band names at
+   x=20, connections lane names at x=22, the earliest ribbons in Flow at x=0),
+   and a 264px panel over that strip covered all six band names on the
+   horizontal timeline and three of four lane headers on Connections.
 
-   So those views hand the panel column a strip of its own and the canvas takes
-   the rest. Nothing is hidden in any state, the panel keeps its glass and its
-   corner radius (it is still an instrument overlay, not a form column), and
-   .tl-view padding is the whole mechanism: fitCanvas() reads canvas
-   clientWidth, so the canvas re-fits to the remaining width by itself.
+   Controls is a top-right panel on every view now. Nothing any renderer draws
+   is parked at a right edge, so no panel is anywhere near the furniture the
+   dock was built to protect — and the strip was left reserving 288px for a
+   column that had moved out. The founder measured the result before he
+   diagnosed it: "Flow should span all the screen like others."
 
-   Views whose canvas has no fixed left furniture — Map, People, Horizon, Cube —
-   keep the floating panels they were designed for. --dock is set per view.
+   So every view is full-bleed and every panel floats, which is also the plainer
+   rule: one canvas, edge to edge, with the instrument over its corner.
 */
-.tl-app { --tl-dock-w: calc(var(--tl-panel-w) + var(--tl-gutter) * 2); }
-
-@media (min-width: 760px) {
-  .tl-stage[data-dock="left"] .tl-view { padding-left: var(--tl-dock-w); }
-  /*
-     The strip is chrome, not canvas: it takes the app ground and a hairline,
-     and the chart-film graticule stops at its edge. Left as canvas it read as
-     a piece of the chart that had simply been left blank.
-
-     z-index sits above the index line (5) and below the panels (20), so the
-     accent index stops at the dock instead of running under the controls.
-  */
-  .tl-stage[data-dock="left"]::before {
-    content: "";
-    position: absolute;
-    left: 0; top: 0; bottom: 0;
-    width: var(--tl-dock-w);
-    background: var(--tl-ground);
-    border-right: var(--tl-border) solid var(--tl-rule-soft);
-    pointer-events: none;
-    z-index: calc(var(--tl-z-index) + 1);
-  }
-  .tl-stage[data-dock="left"] .tl-graticule { left: var(--tl-dock-w); }
-}
 
 .tl-canvas { position: absolute; inset: 0; display: block; }
 .tl-canvas > canvas {
@@ -1343,6 +1322,40 @@ html:has(body.tl-body) { height: 100%; overflow: hidden; }
   overflow: hidden;
 }
 .tl-pop[hidden] { display: none; }
+
+/*
+   IT ARRIVES AND IT LEAVES, and both are seen.
+
+   "show and hide with a little animation" — because the notes now open BY
+   THEMSELVES the first time you land on a view (Lab.tsx, the seen-set), and a
+   364px panel that simply exists on the next frame reads as a glitch rather
+   than as something the app did on purpose. Motion is what tells the reader
+   this was opened FOR them, and the direction says where it came from: it
+   drops out of the help button in the rail, six pixels above where it lands.
+
+   ANIMATIONS, NOT TRANSITIONS. The element carries `hidden` at rest, so it is
+   display:none between openings and a transition would have nothing to
+   interpolate from on the frame it appears. An animation runs on an element
+   that has only just been displayed, which is the whole difference.
+
+   Both durations are the shell's own: in on --tl-dur-base, out on
+   --tl-dur-fast, because a thing you asked to close should never make you wait
+   as long as a thing arriving. §12's reduced-motion block flattens both to
+   0.01ms, and Lab.tsx unhides on animationend — which still fires — so the
+   popover disappears immediately there instead of hanging about.
+*/
+.tl-pop[data-anim="in"]  { animation: tl-pop-in  var(--tl-dur-base) var(--tl-ease) both; }
+/* AND A LEAVING POPOVER TAKES NO CLICKS. It is on its way out and already
+   fading, so a press meant for what is underneath must reach it — and there is
+   a harder reason: an animation only runs while the page is being rendered, so
+   in a background or occluded tab the leave never starts and never ends. The
+   element would then sit at opacity 0 with fill-mode `both`, invisible and
+   still swallowing pointer events over the top-right corner of the stage, which
+   is where Controls lives on every view. Lab.tsx lands the exit on a timer for
+   the same reason; this makes the stuck state harmless in the meantime. */
+.tl-pop[data-anim="out"] { animation: tl-pop-out var(--tl-dur-fast) var(--tl-ease-in) both; pointer-events: none; }
+@keyframes tl-pop-in  { from { opacity: 0; transform: translateY(-6px) scale(.985); } to { opacity: 1; transform: none; } }
+@keyframes tl-pop-out { from { opacity: 1; transform: none; } to { opacity: 0; transform: translateY(-4px) scale(.99); } }
 .tl-pop__hd {
   display: flex;
   align-items: flex-start;

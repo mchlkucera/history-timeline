@@ -42,7 +42,7 @@ import { buildGallery } from '@/render/gallery';
 import { Conn, initConn, loadRelations } from '@/render/connections';
 import { searchCorpus, searchLayers, type Hit, type LayerHit } from '@/render/search';
 import { Layers, planReveal, reveal, type RevealPlan } from '@/render/layers';
-import { describe, perspectiveSpan, setPolityAliases } from '@/render/subject';
+import { describe, perspectiveSpan, setPolityAliases, type Subject } from '@/render/subject';
 import { railPos, railYear, railNum, railEraOf, SNAPSHOTS } from './rail';
 
 // The extent the engraved scale actually covers (rail.ts's first and last stop).
@@ -91,10 +91,6 @@ const GROUP_DEFAULT: Record<string, ViewId> = {
 // timeline. Read off GROUP_DEFAULT via the first group so the landing view and
 // the first tab in the rail can never drift apart.
 const DEFAULT_VIEW: ViewId = GROUP_DEFAULT[GROUPS[0].id];
-
-// The Timeline group's two members, read straight off GROUPS so the projection
-// switch in the time rail can never drift from the group it projects.
-const TIME_MEMBERS: ViewId[] = GROUPS.find(g => g.id === 'g-time')!.members;
 
 // "Reset view" on the timeline means the whole RECORDED span, not the Big Bang:
 // timeline.ts boots on [-3000, 2026] and that is the framing the reader arrived
@@ -182,17 +178,34 @@ const ORDER: ViewId[] = ['zoom', 'vertical', 'map', 'pop', 'horizon', 'flow', 'b
 // x=0. The 264px panel sat exactly there, so the first sight of the primary
 // timeline was six unlabelled bands.
 //
-// These five give the column a strip of its own (shell.css §04) and the canvas
-// takes the remaining width. Map, People, Horizon and Cube keep floating
-// panels — verified sitting over ocean and over empty projection space.
-// The two TIMELINE views left this set when the layer panel landed. The dock
-// was a strip of app ground with a hairline down its right edge, holding a
-// bordered "Controls" panel over it — and the founder's instruction was the
-// opposite of that: "make the layers blend seamlessly to the workspace". The
-// layer panel is now a flex item of the view itself, in the same colour the
-// canvas paints, sharing the canvas's scroller (app.css, THE SEAM). The
-// vertical projection has no panel at all any more, so it takes the full width.
-const DOCKED: ReadonlySet<ViewId> = new Set<ViewId>(['flow', 'braid', 'conn']);
+// ── THE DOCK IS GONE, AND WITH IT THE LAST VIEW THAT WAS NOT FULL-BLEED ─────
+// "Flow should span all the screen like others."
+//
+// Five views used to hand the panel COLUMN a strip of its own and let the
+// canvas take what was left. That was the right trade for exactly as long as
+// the column was a bordered panel standing on the canvas's own left gutter,
+// where the renderers park furniture they cannot move: band names at x=20,
+// lane names at x=22, the earliest ribbons in Flow at x=0. A 264px panel there
+// did not cover "some chart", it covered the legend.
+//
+// Controls is a floating top-right panel on all ten views now, and there is no
+// furniture at any of their right edges — so the strip was reserving 288px
+// (264 + two gutters) for a column that had already left. Measured at 1440x900:
+// stage 1440x791, flow's canvas 1152x791, short by exactly the reservation,
+// while Map and Cube — never docked — had the whole 1440. That is the founder's
+// complaint, and it was in this file rather than in flow.ts.
+//
+// CONNECTIONS GOES WITH THEM, and that is the one judgement call here. It kept
+// a dock longer than the other two because it floated a SECOND panel, "Related",
+// on the same chart. Related is not a panel any more — it is the disclosure at
+// the head of the field notes — so what is left is one short Controls (a reset,
+// a note and a folded legend) over the top-right corner of an 826px canvas.
+// A corner, at last, is a thing a floating panel may have.
+//
+// The mechanism was `data-dock` on #stage plus a padding rule in shell.css §04;
+// both are deleted. fitCanvas() reads canvas clientWidth, so every renderer
+// re-fits to the new width by itself with no change on its side.
+
 
 // ── Field notes ─────────────────────────────────────────────────────────────
 // Everything the old <p class="lede"> and the hand-authored captions used to
@@ -443,7 +456,14 @@ function paintUnread(seen: Set<string>, view: string) {
      v  WHERE TO LOOK    the ten views.
 */
 type SRow =
-  | { k: 'c'; h: Hit; p: RevealPlan }
+  /* `to` is WHERE TAKING THIS ROW WOULD LAND YOU, decided against the view you
+     are standing on (landingFor). null means nothing in the app can draw it, and
+     that is now the only thing that makes a row dead — it used to be
+     `p.need === 'never'`, which was the timeline's verdict standing in for the
+     whole app and was wrong on exactly the views that could have helped: a
+     belief stream is never on the timeline and is the entire subject of the
+     Beliefs view. */
+  | { k: 'c'; h: Hit; p: RevealPlan; to: ViewId | null }
   | { k: 'l'; l: LayerHit }
   | { k: 'v'; v: ViewId };
 
@@ -452,23 +472,120 @@ type SRow =
  * fewest words that are still true. Null when nothing does, which is the
  * common case and draws no line at all.
  */
-function needLine(p: RevealPlan): string | null {
-  if (p.need === 'never') return p.why || 'not drawn on this timeline';
-  if (!p.layerName) return null;
-  if (p.need === 'add') return `in ${p.layerName} — not added`;
-  if (p.need === 'show') return `in ${p.layerName} — hidden`;
-  if (p.need === 'detail') return `in ${p.layerName} — needs more detail`;
+function needLine(r: { p: RevealPlan; to: ViewId | null }, here: ViewId): string | null {
+  // A ROW THAT IS ABOUT TO MOVE YOU SAYS SO FIRST. It is the more surprising
+  // fact of the two, and it is the one the reader can act on by pressing the
+  // seg instead. The layer verdict below only ever applied to the timeline
+  // family anyway, so on any other landing it would have been describing work
+  // that is not going to happen.
+  if (r.to === null) return r.p.why || 'not drawn anywhere in the app';
+  if (r.to !== here) return `shown on ${VIEWS[r.to].seg}`;
+  if (!r.p.layerName) return null;
+  if (r.p.need === 'add') return `in ${r.p.layerName} — not added`;
+  if (r.p.need === 'show') return `in ${r.p.layerName} — hidden`;
+  if (r.p.need === 'detail') return `in ${r.p.layerName} — needs more detail`;
   return null;
 }
 
 /** The same verdict as a whole sentence, for the row's title attribute. */
-function needTitle(p: RevealPlan, name: string): string | null {
+function needTitle(r: { p: RevealPlan; to: ViewId | null }, name: string, here: ViewId): string | null {
+  const p = r.p;
   const raise = p.detailWord ? ` and sets it to “${p.detailWord}”` : '';
-  if (p.need === 'never') return `${name} is ${p.why || 'not drawn on this timeline'}, so there is nothing here to zoom to.`;
+  if (r.to === null) return `${name} is ${p.why || 'not drawn on this timeline'}, and no other view draws it either — there is nothing to go to.`;
+  // THE HONEST SENTENCE FOR A VIEW THAT CANNOT SHOW IT. People and the
+  // information horizon draw aggregates, Concepts is documentation: none of
+  // them can put one named thing on screen, so taking the row travels, and it
+  // says where and why before it is pressed rather than after.
+  if (r.to !== here) {
+    return `${VIEWS[here].seg} cannot show one ${p.need === 'never' && p.why ? p.why.replace(/ —.*$/, '') : 'thing'} on its own, `
+      + `so this opens ${name} on ${VIEWS[r.to].name}.`;
+  }
   if (p.need === 'add') return `Adds the “${p.layerName}” layer${raise}, then selects ${name} and frames it.`;
   if (p.need === 'show') return `Un-hides “${p.layerName}”${raise}, then selects ${name} and frames it.`;
   if (p.need === 'detail') return `Raises “${p.layerName}” to “${p.detailWord}”, then selects ${name} and frames it.`;
   return null;
+}
+
+/* ── WHERE A SEARCH RESULT LANDS ──────────────────────────────────────────────
+   "Search by default opens the entity there where you are — you're on timeline
+   you see on timeline, you're on cube you see it on cube."
+
+   Every hit used to land on the horizontal timeline. That is the right answer
+   for one view out of ten and a teleport out of the other nine: search "Rome"
+   while you are orbiting the cube and the cube vanished, taking the camera, the
+   cut and the lineage chain with it, to show you a bar.
+
+   THE VERDICT IS NOT INVENTED HERE. The selection card already had to answer
+   exactly this question for its "Show this in" row, and it already distinguishes
+   NEVER from NOT NOW — a life has no territory, so the map can never draw it,
+   while a polity you are simply standing 900 years away from is one snapshot
+   away. That verdict is SelCard.dests(), and this reads it rather than writing a
+   second copy that could disagree with the card sitting on the same screen.
+
+   Three sources of truth, each owned by the module that has the facts:
+     · SelCard.dests(sub)  — map and cube: has it a territory at all
+     · planReveal(id)      — the timeline family: is a layer drawing it
+     · the renderer's own item list — flow and beliefs: is it in this corpus
+
+   AND WHEN THE VIEW GENUINELY CANNOT: fall back to the horizontal timeline,
+   which is the one destination that exists for everything with a span. People,
+   the information horizon and Concepts can never show one named thing — they
+   draw aggregates and documentation — so a hit taken there always travels. The
+   row says so before it is taken (needLine / needTitle below).
+*/
+interface Landing { view: ViewId; act: () => void }
+
+/** Everything the card's "Show this in" row would offer for this subject. */
+const destsOf = (sub: Subject): { act: string; off?: boolean }[] => {
+  try { return SelCard.dests(sub); } catch { return []; }
+};
+const destOpen = (sub: Subject, act: string) =>
+  destsOf(sub).some(d => d.act === act && !d.off);
+
+/** Is this id one of the ribbons THIS engine is drawing? Braid holds one system
+ *  at a time (religions OR ideologies), so a stream from the other system is
+ *  genuinely not on this canvas — the card has no Beliefs destination and
+ *  therefore no verdict of its own to borrow, unlike Flow. */
+const ribbonHas = (eng: { items: any[] }, localId: string) => {
+  try { return (eng.items || []).some((i: any) => i && i.id === localId); } catch { return false; }
+};
+
+/** A little air either side, so a framed ribbon is not flush with the edges. */
+const padSpan = (a: number, b: number): [number, number] => {
+  const pad = Math.max(40, Math.round((b - a) * 0.18));
+  return [a - pad, Math.min(2026, b + pad)];
+};
+
+/**
+ * PUT A POLITY ON THE FLOW CANVAS — the one implementation, shared by the
+ * card's "Show this in ▸ Flow" and by taking a search result while standing on
+ * Flow. It does NOT navigate; both callers decide that for themselves.
+ *
+ * THE STORE IS THE TRACE. flow.ts's localSel() reads the global selection and
+ * lights the matching ribbon and its whole lineage, so a 'polity:<id>' write is
+ * the entire gesture — exactly as it is for the cube. Framing is a courtesy on
+ * top: the flow window belongs to the reader and may be parked a millennium
+ * from the thing they just asked for.
+ *
+ * AND A HIDDEN REGION COMES BACK ON. The region chips are a browsing filter,
+ * not a verdict — but a hidden region is CULLED from flow's layout before
+ * anything is drawn, so without this the destination lands on a canvas with
+ * nothing on it. Done by pressing flow's own chip rather than by writing
+ * Flow.off: the set, the chips' pressed state and the "n of 5" readout are one
+ * thing kept in step by flow.ts's private regionToggle(), and reaching past it
+ * would light the ribbon while the panel still claimed the region was hidden.
+ * A synthetic click carries no modifier, so it toggles rather than isolating,
+ * and it is only ever sent when the region is genuinely off.
+ */
+function showInFlow(pid: string) {
+  const item = (Flow.items as any[]).find(p => p && p.id === pid);
+  if (item && item.region && Flow.off.has(item.region)) {
+    document.querySelector<HTMLElement>(
+      `#flowRegionRow .chip[data-region="${CSS.escape(item.region)}"]`)?.click();
+  }
+  SelStore.set('polity:' + pid);
+  const sub = describe('polity:' + pid);
+  if (sub) { const [f0, f1] = padSpan(...perspectiveSpan(sub)); Flow.animTo(f0, f1); }
 }
 
 /* A ROW THAT CANNOT ACT IS NOT IN THE ARROW ORDER. A content hit whose thing is
@@ -476,7 +593,7 @@ function needTitle(p: RevealPlan, name: string): string | null {
    footprint) stays in the list because it is still a truthful answer to the
    word, but the cursor steps over it and Enter cannot land on it — the same
    rule the group headers have always followed. */
-const canTake = (r: SRow) => !(r.k === 'c' && r.p.need === 'never');
+const canTake = (r: SRow) => !(r.k === 'c' && r.to === null);
 const stepSel = (rows: SRow[], from: number, dir: number) => {
   for (let n = 1; n <= rows.length; n++) {
     const i = ((from + dir * n) % rows.length + rows.length) % rows.length;
@@ -566,7 +683,13 @@ function readUrl(): UrlState {
 const I = {
   mark: <svg viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.3"><circle cx="8" cy="8" r="6" /><path d="M8 2v12M2 8h12" /><ellipse cx="8" cy="8" rx="2.7" ry="6" /></svg>,
   search: <svg viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.4" aria-hidden="true"><circle cx="7" cy="7" r="4.5" /><path d="M10.5 10.5L14 14" /></svg>,
-  info: <svg viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.4" aria-hidden="true"><circle cx="8" cy="8" r="6.2" /><path d="M8 7.2v4" /><path d="M8 4.7v.6" /></svg>,
+  // A QUESTION MARK, NOT AN i. "Turn it instead to help icon." The ⓘ said
+  // "there is information about this" — true, and useless, because everything
+  // on screen is information. The popover behind it answers "what am I looking
+  // at and what can I do here", which is a question, and the keyboard route to
+  // it has always been the ? key. Now the glyph, the shortcut and the footer
+  // hint all spell the same character.
+  help: <svg viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.4" aria-hidden="true"><circle cx="8" cy="8" r="6.2" /><path d="M6.15 6.1a1.95 1.95 0 1 1 2.15 2.72v1.05" strokeLinecap="round" /><path d="M8.3 11.9v.5" strokeLinecap="round" /></svg>,
   theme: <svg viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.4" aria-hidden="true"><path d="M13.2 9.6A5.6 5.6 0 0 1 6.4 2.8a5.6 5.6 0 1 0 6.8 6.8z" /></svg>,
   prev: <svg viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.5" aria-hidden="true"><path d="M10 3.5L5.5 8l4.5 4.5" /></svg>,
   next: <svg viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.5" aria-hidden="true"><path d="M6 3.5L10.5 8 6 12.5" /></svg>,
@@ -578,6 +701,14 @@ export default function Lab() {
   const [ready, setReady] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [notesOpen, setNotesOpen] = useState(false);
+  /* TWO FLAGS FOR ONE POPOVER, because it has to be seen LEAVING.
+     `notesOpen` is what the reader asked for; `notesVis` is whether the element
+     is still in the layout. Opening sets both; closing drops `notesOpen` at
+     once — so aria-expanded, the ? key and Escape are all instantly honest —
+     and holds `notesVis` until the exit animation has actually run
+     (onAnimationEnd below). Without the second flag `hidden` lands on the same
+     frame as the close and there is nothing left on screen to animate. */
+  const [notesVis, setNotesVis] = useState(false);
   // TWO PANELS, TWO ANSWERS. "you might want to hide/show both" — so Controls
   // and Reading each keep their own, and each wears the same chevron in the
   // same corner of its own header. Null means "nobody has said", which resolves
@@ -631,6 +762,68 @@ export default function Lab() {
   // gallery.ts still emits data-goto="sketch" on three cards (SHELL does not own
   // that file in this pass), so all three land on Beliefs rather than on Beliefs,
   // Horizon and People respectively. Logged as a follow-up.
+  // ── field notes ───────────────────────────────────────────────────────────
+  // Declared HERE, above go(), because the first-visit auto-open below has to
+  // run from inside the navigation itself rather than from an effect on `view`.
+  // `at` is passed explicitly on that path: viewRef is synced by an effect, so
+  // during the click that changes the view it still holds the OLD one.
+  const openNotes = useCallback((open: boolean, at?: ViewId) => {
+    const v = at ?? viewRef.current;
+    setNotesOpen(open);
+    if (open) setNotesVis(true);           // unhide NOW; the exit is what waits
+    if (!open) return;
+    if (!seen.current.has(v)) {
+      seen.current.add(v);
+      try { localStorage.setItem('tl-notes-seen', JSON.stringify([...seen.current])); } catch { /* ignore */ }
+    }
+    paintUnread(seen.current, v);
+  }, []);
+
+  /* ── THE NOTES OPEN THEMSELVES, ONCE, ON THE FIRST VISIT TO EACH VIEW ──────
+     "When clicking for a view for the first time, show the Field notes (the
+     help button) automatically (show and hide with a little animation)."
+
+     Ten views, ten different pictures, and until now the only way to learn what
+     any of them was FOR was to notice a small round button at the far end of
+     the rail and press it. The notes answer "what am I looking at"; a reader
+     who has never seen this view is exactly the reader with that question, so
+     it is answered before it is asked. The animation is shell.css §10.
+
+     ONCE, AND PERSISTED THE WAY THE UNREAD DOT ALREADY WAS. The seen-set is the
+     same set the dot has always been painted from, in the same localStorage key
+     (`tl-notes-seen`), written by the same openNotes() call — so this fires the
+     FIRST time a browser ever lands on a view and never again, whether it was
+     dismissed in two seconds or read to the end. No second store, no second
+     source of truth, nothing to keep in step.
+
+     ON A TIMER, AND THE DELAY IS NOT A LINT DODGE. The view changes, the canvas
+     repaints, and THEN the panel slides in — so the reader sees what they
+     pressed for before anything is laid over it, and the entry animation has a
+     settled picture to arrive on rather than racing the first frame of a new
+     renderer. It is also what keeps this out of the cascading-render trap the
+     suggestion list is kept out of (see leaveSearch): nothing here calls
+     setState synchronously in an effect body.
+
+     THREE THINGS CALL IT OFF, all re-checked when the timer fires rather than
+     when it is set — a fifth of a second is long enough for any of them to
+     become true:
+       · the data has not landed (the notes must not open over the loading
+         overlay, on top of a canvas that has never painted);
+       · this view has been seen before;
+       · the selection card is up — a reader who arrived by TAKING A SEARCH
+         RESULT has already said what they came for, and dropping a panel over
+         it would be the app answering a question nobody asked.
+     And the cleanup cancels it outright, so flicking through four views lands
+     one panel, on the view you stopped at. */
+  useEffect(() => {
+    if (!ready || seen.current.has(view)) return;
+    const t = setTimeout(() => {
+      if (seen.current.has(view) || SelCard.open) return;
+      openNotes(true, view);
+    }, 320);
+    return () => clearTimeout(t);
+  }, [ready, view, openNotes]);
+
   const go = useCallback((id: string) => {
     const v = (id === 'sketch' ? 'braid' : id) as ViewId;
     if (!VIEWS[v]) return;
@@ -776,6 +969,12 @@ export default function Lab() {
             }
             go('map');
           },
+          /* SHOW THIS IN FLOW. "Timeline / Map / Cube — i am missing Flow here!"
+             The card knows the destination exists; this file is the only module
+             that knows what to do about it. The doing is showInFlow() above —
+             shared with the search, so one polity cannot be revealed two
+             different ways depending on which control asked. */
+          showInFlow: (pid) => { showInFlow(pid); go('flow'); },
           traceInCube: (pid) => { Cube.select(pid); go('cube'); },
           allConnections: () => setRelOpen(true),
           mapYear: () => (WorldMap as any).year(),
@@ -960,10 +1159,12 @@ export default function Lab() {
   // you go on purpose, not a panel that latches open for the rest of the session.
   useEffect(() => SelStore.subscribe(() => setRelOpen(false)), []);
 
-  // Below 1024 the switcher takes its own scrolling row (shell.css §13). On a
-  // phone that row is wider than the screen, and the .tl-seg — the whole reason
-  // a group has more than one view — sits past its right edge behind the fade.
-  // So after a deliberate move, park whatever is contextual inside the row.
+  // Below 1024 the switcher takes its own scrolling row (shell.css §13), and on
+  // a phone that row is still wider than the screen. So after a deliberate move,
+  // park the tab you are now on inside it.
+  // It used to park the .tl-seg instead, when there was one in this row and it
+  // was the payload; the seg is a row of Controls now, so the ACTIVE TAB is the
+  // only contextual thing left up here and it is what has to be in view.
   // Skipped on first paint: yanking the row sideways before the user has
   // touched anything would just hide the switcher they arrived on.
   // Compares the previous view rather than "have I run before", because Strict
@@ -976,12 +1177,8 @@ export default function Lab() {
     if (prev === null || prev === view) return;
     const mid = document.querySelector<HTMLElement>('.tl-rail__mid');
     if (!mid || mid.scrollWidth <= mid.clientWidth + 1) return;
-    const segEl = document.getElementById('viewSeg');
-    // offsetParent is null while the seg is display:none for a single-member group.
-    const target: HTMLElement | null = segEl && segEl.offsetParent
-      ? segEl
-      : mid.querySelector<HTMLElement>('.tl-switch__item[aria-selected="true"]');
-    target?.scrollIntoView({ inline: 'nearest', block: 'nearest' });
+    mid.querySelector<HTMLElement>('.tl-switch__item[aria-selected="true"]')
+      ?.scrollIntoView({ inline: 'nearest', block: 'nearest' });
   }, [view]);
 
   /* ═══ THE SWITCHER ROW'S OVERFLOW, SAID OUT LOUD ═══════════════════════════
@@ -1265,54 +1462,6 @@ export default function Lab() {
   const closeSearch = useCallback(() => { setSRows([]); setSTotal(0); setSSel(0); }, [setSRows, setSTotal, setSSel]);
 
 
-  /**
-   * ONE QUERY, TWO KINDS OF ANSWER.
-   *
-   * Content comes from search.ts (the same corpus the canvas dims); views come
-   * from the VIEWS table, which only this file has. They are ranked as one list
-   * with content first — because "what happened" is the question this app is
-   * for, and the ten views are a fixed set the user learns once.
-   *
-   * The exception is a query that NAMES a view outright — "cube", "connections",
-   * "horizon", whatever is written on the rail. Someone who typed the whole word
-   * is navigating, and making them arrow past ten empires to reach the view they
-   * just named would be the wrong default.
-   *
-   * It has to be the WHOLE word, not a prefix. "empire" is a prefix of the
-   * Empires seg, and it also matches sixty-six empires in history — putting the
-   * view above them because of a shared stem gets the common case backwards.
-   * "cubism" is not a view at all, and leads with the movement either way.
-   */
-  const buildRows = useCallback((raw: string): { rows: SRow[]; total: number } => {
-    const q = raw.trim().toLowerCase();
-    if (q.length < 2) return { rows: [], total: 0 };
-    const { hits, total } = searchCorpus(raw, SEARCH_CAP);
-    const layers = searchLayers(raw, LAYER_CAP);
-    const views = ORDER.filter(v => {
-      const m = VIEWS[v];
-      return (m.name + ' ' + m.seg + ' ' + m.gist).toLowerCase().includes(q);
-    }).slice(0, VIEW_CAP);
-    const navFirst = views.some(v => {
-      const g = GROUPS.find(gr => gr.members.includes(v));
-      return VIEWS[v].seg.toLowerCase() === q
-        || VIEWS[v].name.toLowerCase() === q
-        || (g ? g.label.toLowerCase() === q : false);       // the word on the rail
-    });
-    // A LANE'S OWN NAME LEADS. "Literature" is not an ambiguous word in this
-    // app — it is a lane, and one of the four literary movements inside it is
-    // not what was asked for. Anything softer than an exact-ish name match
-    // (search.ts's tier 0) is a hint, and hints go under the content.
-    const laneFirst = layers.some(l => l.lead);
-    const cRows: SRow[] = hits.map(h => ({ k: 'c', h, p: planReveal(h.id) }));
-    const lRows: SRow[] = layers.map(l => ({ k: 'l', l }));
-    const vRows: SRow[] = views.map(v => ({ k: 'v', v }));
-    const body = laneFirst ? [...lRows, ...cRows] : [...cRows, ...lRows];
-    return {
-      rows: navFirst ? [...vRows, ...body] : [...body, ...vRows],
-      total: total - hits.length,
-    };
-  }, []);
-
   /* THE LANE ROW'S GESTURE. Add-or-locate, and the difference is only whether
      the lane is already on the board — the founder's "I could also search for
      existing lane, which would just highlight it."
@@ -1359,25 +1508,196 @@ export default function Lab() {
   }, []);
 
   /**
+   * REVEAL IT WHERE THE READER IS STANDING, or say where it had to go.
+   *
+   * Returns the landing for a content hit taken from `here`, or null when
+   * nothing anywhere can draw the thing (a belief stream searched from People:
+   * the timeline does not draw beliefs and People does not draw one thing).
+   *
+   * READ TOP TO BOTTOM AS "CAN HERE DO IT?", then the fallback. Every branch
+   * ends in the same two acts in the same order — put the selection in the
+   * store, then move the view's own window onto it — because the selection is
+   * global and every renderer in the app already lights whatever is selected.
+   * That is why flow and the cube need no new API at all: cube.ts traces on a
+   * 'polity:*' store write, flow.ts's localSel() lights the matching ribbon.
+   */
+  const landingFor = useCallback((here: ViewId, sub: Subject, plan: RevealPlan): Landing | null => {
+    const id = sub.id;
+    const [a, b] = perspectiveSpan(sub);
+    const pid = sub.polity;
+    const onTimeline = plan.need !== 'never';
+
+    /* THE FALLBACK, AND A DESTINATION IN ITS OWN RIGHT. Everything the old
+       takeRow did, unchanged: earn the frame first (reveal() adds the layer,
+       opens its eye, raises its dial), only then select and frame, and scroll
+       the panel row into view when the board actually changed. */
+    const toTimeline = (to: ViewId): Landing => ({
+      view: to,
+      act: () => {
+        if (!reveal(plan)) return;
+        SelCard.select(id, null, null, 'search');
+        frameSettled(a, b);
+        go(to);
+        if (plan.need !== 'ready' && plan.layer) flashLayer(plan.layer);
+      },
+    });
+
+    switch (here) {
+      // THE MAP travels through time to reach it — the card's own act, so the
+      // "not drawn at 1783, go to 500 BCE where its borders first appear" rule
+      // is the identical rule in both places rather than a second one here.
+      case 'map':
+        if (destOpen(sub, 'map')) {
+          return { view: 'map', act: () => { SelCard.select(id, null, null, 'search'); SelCard.act('map'); } };
+        }
+        break;
+      // THE CUBE never has a "not now": it traces the whole life as a solid.
+      case 'cube':
+        if (destOpen(sub, 'cube')) {
+          return { view: 'cube', act: () => { SelCard.select(id, null, null, 'search'); SelCard.act('cube'); } };
+        }
+        break;
+      // FLOW lights the ribbon off the global selection and frames its span.
+      // setQuery('') first: a leftover filter would dim the very ribbon this
+      // gesture exists to show.
+      case 'flow':
+        // The card's own "is there a ribbon behind this door" verdict, so the
+        // search row and the card's Flow cell can never disagree about the same
+        // polity on the same screen. showInFlow carries the rest of the
+        // contract, including turning a hidden region back on.
+        if (pid && destOpen(sub, 'flow')) {
+          return { view: 'flow', act: () => { Flow.setQuery(''); showInFlow(pid); } };
+        }
+        break;
+      // BELIEFS — the same engine, the other corpus, and only the system
+      // currently showing. A stream from the other one is not on this canvas.
+      case 'braid':
+        if (id.startsWith('belief:') && ribbonHas(Braid, id.slice(7))) {
+          return {
+            view: 'braid',
+            act: () => {
+              Braid.setQuery('');
+              SelCard.select(id, null, null, 'search');
+              const [f0, f1] = padSpan(a, b); Braid.animTo(f0, f1);
+            },
+          };
+        }
+        break;
+      // CONNECTIONS draws a subset of the corpus and knows which: its own node
+      // table is the test. Everything is optional-chained because this view is
+      // being redrawn by another hand — a missing method costs the fallback,
+      // never a throw.
+      case 'conn': {
+        const C = Conn as any;
+        if (C?.nodes?.has?.(id)) {
+          return {
+            view: 'conn',
+            act: () => {
+              SelCard.select(id, null, null, 'search');
+              const [f0, f1] = padSpan(a, b);
+              try { C.animTo(f0, f1); } catch { /* framing is a courtesy */ }
+            },
+          };
+        }
+        break;
+      }
+      // THE VERTICAL PROJECTION is the same timeline and the same window, so it
+      // stays where it is rather than being flipped to horizontal underneath
+      // the reader.
+      case 'vertical':
+        if (onTimeline) return toTimeline('vertical');
+        break;
+      case 'zoom':
+        if (onTimeline) return toTimeline('zoom');
+        break;
+      // People, the information horizon and Concepts draw no single named
+      // thing. Nothing to try — fall through to the timeline.
+      default: break;
+    }
+    return onTimeline ? toTimeline('zoom') : null;
+  }, [go, flashLayer]);
+
+  /**
+   * ONE QUERY, TWO KINDS OF ANSWER.
+   *
+   * Content comes from search.ts (the same corpus the canvas dims); views come
+   * from the VIEWS table, which only this file has. They are ranked as one list
+   * with content first — because "what happened" is the question this app is
+   * for, and the ten views are a fixed set the user learns once.
+   *
+   * The exception is a query that NAMES a view outright — "cube", "connections",
+   * "horizon", whatever is written on the rail. Someone who typed the whole word
+   * is navigating, and making them arrow past ten empires to reach the view they
+   * just named would be the wrong default.
+   *
+   * It has to be the WHOLE word, not a prefix. "empire" is a prefix of the
+   * Empires seg, and it also matches sixty-six empires in history — putting the
+   * view above them because of a shared stem gets the common case backwards.
+   * "cubism" is not a view at all, and leads with the movement either way.
+   */
+  const buildRows = useCallback((raw: string): { rows: SRow[]; total: number } => {
+    const q = raw.trim().toLowerCase();
+    if (q.length < 2) return { rows: [], total: 0 };
+    const { hits, total } = searchCorpus(raw, SEARCH_CAP);
+    const layers = searchLayers(raw, LAYER_CAP);
+    const views = ORDER.filter(v => {
+      const m = VIEWS[v];
+      return (m.name + ' ' + m.seg + ' ' + m.gist).toLowerCase().includes(q);
+    }).slice(0, VIEW_CAP);
+    const navFirst = views.some(v => {
+      const g = GROUPS.find(gr => gr.members.includes(v));
+      return VIEWS[v].seg.toLowerCase() === q
+        || VIEWS[v].name.toLowerCase() === q
+        || (g ? g.label.toLowerCase() === q : false);       // the word on the rail
+    });
+    // A LANE'S OWN NAME LEADS. "Literature" is not an ambiguous word in this
+    // app — it is a lane, and one of the four literary movements inside it is
+    // not what was asked for. Anything softer than an exact-ish name match
+    // (search.ts's tier 0) is a hint, and hints go under the content.
+    const laneFirst = layers.some(l => l.lead);
+    /* EACH HIT IS PLANNED AGAINST THE VIEW YOU ARE ON, here, once per keystroke.
+       The row has to know its destination before it is pressed — that is what
+       lets it say "shown on Cube" and what decides whether it is a choice at
+       all — and the answer is cheap: describe() and planReveal() are table
+       lookups, and the card's dests() is only consulted on the two views that
+       ask for it. takeRow re-plans from scratch when the row is actually taken,
+       because the board may have moved since. */
+    const cRows: SRow[] = hits.map(h => {
+      const p = planReveal(h.id);
+      const sub = describe(h.id);
+      return { k: 'c', h, p, to: sub ? (landingFor(view, sub, p)?.view ?? null) : null };
+    });
+    const lRows: SRow[] = layers.map(l => ({ k: 'l', l }));
+    const vRows: SRow[] = views.map(v => ({ k: 'v', v }));
+    const body = laneFirst ? [...lRows, ...cRows] : [...cRows, ...lRows];
+    return {
+      rows: navFirst ? [...vRows, ...body] : [...body, ...vRows],
+      total: total - hits.length,
+    };
+  }, [landingFor, view]);
+
+
+  /**
    * TAKE A ROW — and on the content branch, EARN THE FRAME FIRST.
    *
    * The founder: "Make sure its impossible to zoom in on something that does
    * not exist." So the order here is not decoration, it is the whole fix:
    *
    *   1. re-plan against the board AS IT IS NOW (the row was built a few
-   *      keystrokes ago, and the reader may have changed the board since);
-   *   2. if the plan is `never`, do nothing at all — no selection, no frame.
-   *      The row is disabled in the markup too, so this is a second lock on a
-   *      door that is already bolted;
-   *   3. reveal() — add the layer, open its eye, raise its dial, whatever the
-   *      verdict said, in ONE emit;
+   *      keystrokes ago, and the reader may have changed the board since), and
+   *      against the view as it is now;
+   *   2. if nothing anywhere can draw it, do nothing at all — no selection, no
+   *      frame. The row is disabled in the markup too, so this is a second lock
+   *      on a door that is already bolted;
+   *   3. inside the timeline branch, reveal() — add the layer, open its eye,
+   *      raise its dial, whatever the verdict said, in ONE emit;
    *   4. only now select and frame.
    *
    * Nothing between 3 and 4 can fail: reveal() has already made Layers.has,
    * Layers.visible and passesDetail all true for the layer that draws it.
    */
   const takeRow = useCallback((r: SRow) => {
-    if (r.k === 'c' && r.p.need === 'never') return;     // the door is bolted here too
+    if (r.k === 'c' && r.to === null) return;            // the door is bolted here too
     closeSearch();
     const box = document.getElementById('cmdk') as HTMLInputElement | null;
     if (box) { box.value = ''; box.blur(); }
@@ -1396,23 +1716,15 @@ export default function Lab() {
       return;
     }
 
-    const plan = planReveal(r.h.id);
-    if (!reveal(plan)) return;                           // not drawable — never frame
+    // WHERE IT LANDS IS DECIDED AGAINST THE VIEW YOU ARE ON, not against the
+    // timeline. landingFor() carries the whole rule and the whole fallback; the
+    // layer work, the framing and the panel-row flash all live inside the
+    // branch that needs them (only the timeline family does).
     const sub = describe(r.h.id);
-    SelCard.select(r.h.id, null);
-    if (sub) { const [a, b] = perspectiveSpan(sub); frameSettled(a, b); }
-    go('zoom');
-    // A LANE THAT WAS JUST TURNED ON IS AT THE BOTTOM OF THE BOARD. frameTo
-    // moves the window along TIME; it cannot move the surface DOWN, and a lane
-    // added by this gesture lands under every lane that was already there —
-    // below the fold on anything but a very tall window. The panel shares one
-    // scroller with the canvas (layerpanel.ts's whole design), so scrolling the
-    // lane's PANEL ROW into view brings the lane itself with it. Only when this
-    // gesture actually changed the board: a hit that was already showing is
-    // where the reader left it, and moving the surface under them would be a
-    // courtesy nobody asked for.
-    if (plan.need !== 'ready' && plan.layer) flashLayer(plan.layer);
-  }, [closeSearch, go, flashLayer]);
+    const land = sub ? landingFor(view, sub, planReveal(r.h.id)) : null;
+    if (!land) return;                                   // drawable nowhere — do nothing
+    land.act();
+  }, [closeSearch, landingFor, view, go, flashLayer]);
 
   // The box is markup this file owns but timeline.ts wires; these listeners are
   // additional, never replacements, so nothing about the dimming changes.
@@ -1552,16 +1864,34 @@ export default function Lab() {
     }
   };
 
-  // ── field notes ───────────────────────────────────────────────────────────
-  const openNotes = useCallback((open: boolean) => {
-    setNotesOpen(open);
-    if (!open) return;
-    if (!seen.current.has(viewRef.current)) {
-      seen.current.add(viewRef.current);
-      try { localStorage.setItem('tl-notes-seen', JSON.stringify([...seen.current])); } catch { /* ignore */ }
-    }
-    paintUnread(seen.current, viewRef.current);
-  }, []);
+
+  /* THE EXIT, LANDED — TWICE, AND THE SECOND ONE IS NOT BELT AND BRACES.
+     data-anim flips to "out" on the same frame the reader closes it, shell.css
+     §10 plays the 120ms leave, and something then has to take the element out
+     of the layout.
+
+     animationend is the precise answer and it is not a reliable one. A CSS
+     animation only runs while the page is being RENDERED: in a background tab,
+     an occluded window or a throttled one it never starts, so its end event
+     never arrives — the same class of failure frameSettled() exists to survive,
+     and it was reproduced here in a browser pane that had been hidden. The
+     popover then sits at opacity 0 with fill-mode `both`, invisible and still
+     mounted, holding pointer events over the top-right corner of the stage —
+     which is where Controls now lives. An animation that did not run must not
+     be able to eat the instrument.
+
+     So a timer is the authority and animationend is the early-out. Timers are
+     clamped in a background tab but they do run, which is exactly the property
+     that is wanted. 240ms is the 120ms leave with room to spare; landing late
+     costs nothing, because the thing is already invisible by then.
+     (shell.css also takes the pointer events away for the same duration, so
+     even a stuck exit cannot block a click.) */
+  const onNotesAnimEnd = useCallback(() => { setNotesVis(o => (notesOpen ? o : false)); }, [notesOpen]);
+  useEffect(() => {
+    if (notesOpen || !notesVis) return;
+    const t = setTimeout(() => setNotesVis(false), 240);
+    return () => clearTimeout(t);
+  }, [notesOpen, notesVis]);
 
   // ── theme: system → dark → light → system ─────────────────────────────────
   const cycleTheme = () => {
@@ -1642,25 +1972,58 @@ export default function Lab() {
     : meta.rail === 'span' ? 'railRange' : 'none';
   const yearCell = view === 'map' ? 'map' : view === 'pop' ? 'pop' : 'rail';
 
-  // THE HEADER CARRIES NAVIGATION AND GLOBAL CHROME, NOTHING ELSE.
+  // THE HEADER CARRIES THE SIX GROUPS AND GLOBAL CHROME, NOTHING ELSE.
   //
-  // Two of the three multi-member groups are genuinely navigation: Map's seg
-  // moves between three different questions (borders, people, what could be
-  // known), Flow's between two different subjects. The Timeline group's seg is
-  // the odd one out — the same timeline, drawn down the page or across it,
-  // sharing one span, one selection, one search and one set of layers. That is
-  // a CONTROL of the view, not a way to another one, and a control of the view
-  // does not belong in the application header. So the Timeline group shows no
-  // seg up here — it is the first row of the Controls panel instead, which is
-  // where every view now says how it is being drawn.
+  // "Flow still has the ugly Empires - Beliefs - should be in controls!"
+  //
+  // It was the last of three sub-switchers and the argument had already been
+  // made twice. The Timeline group's seg (Vertical | Horizontal) came out of
+  // the header two rounds ago and became the "Projection" row of Controls,
+  // because two drawings of one state is a control of the view rather than a
+  // way to another one. Flow's is the same object: Empires and Beliefs are one
+  // ribbon engine, one span, one selection, one set of regions, drawn over two
+  // corpora. So is Map's — Borders, People and Horizon are three readings of
+  // one atlas at one moment, and the rail already says you are in MAP.
+  //
+  // So EVERY group with siblings now states them the same way, as the first
+  // row of Controls, and the header is left with exactly one level: which of
+  // the six groups am I in. The breadcrumb chevron went with the seg — with
+  // nothing to point at, it was pointing at the fade.
   //
   // NOT THE TOP OF THE LAYER PANEL, the other candidate: every row in that
   // panel is positioned from the canvas's own lane geometry, every frame, and a
   // control row would be the one element in it with a height of its own —
   // against the 0.000px lock the whole panel is built on. It is also absent in
   // the vertical projection, which would make the switch a one-way door.
-  const seg = members.length > 1;
-  const segInHeader = seg && group !== 'g-time';
+  //
+  // THE ROW ITSELF, BUILT ONCE. Three groups have siblings — Timeline, Map and
+  // Flow — and Connections, Cube and Concepts have none, so this returns null
+  // for them and their Controls simply opens on its own first row. The label is
+  // the group's own word off GROUPS, so the row can never drift from the tab
+  // that leads to it, and `leaveSearch` is the same gesture the header tabs
+  // use: close the suggestion list, then move.
+  const groupSeg = (): React.ReactNode => {
+    if (members.length < 2) return null;
+    const timeline = group === 'g-time';
+    return (
+      <div className="tl-field-group">
+        <span className="tl-label">{timeline ? 'Projection' : groupLabel}</span>
+        <div className="tl-seg" id={timeline ? 'projSeg' : 'viewSeg'} role="group"
+          aria-label={timeline ? 'Projection' : `${groupLabel} views`}>
+          {members.map(m => (
+            <button key={m} className="tl-seg__item" aria-pressed={m === view}
+              aria-label={timeline ? `${VIEWS[m].seg} projection` : `${VIEWS[m].seg} — ${VIEWS[m].name}`}
+              title={timeline
+                ? `Draw the same timeline ${m === 'vertical' ? 'down the page' : 'across the page'}`
+                : VIEWS[m].gist}
+              onClick={() => leaveSearch(m)}>
+              {VIEWS[m].seg}
+            </button>
+          ))}
+        </div>
+      </div>
+    );
+  };
   // The engraving on the scale: the 18 world snapshots for Map and Cube, the
   // population slices for People, nothing for the span views (they get a bracket).
   const stopYears: number[] =
@@ -1675,15 +2038,15 @@ export default function Lab() {
   const panel = (corner: string, forViews: ViewId[], title: string, extra?: string) => ({
     className: `tl-panel tl-panel--${corner}${extra ? ' ' + extra : ''}`,
     'data-panelfor': forViews.join(' '),
-    // The collapse control belongs to the PRIMARY panel only. Connections now
-    // stacks a secondary panel at the top of the same column, and without this
-    // the chevron on Controls would fold "Related" away with it.
-    // WHICH PANEL THIS CHEVRON OWNS. Reading answers to its own switch on every
-    // view; the collapse control on a --tl panel belongs to the PRIMARY panel
-    // only, or the chevron on Controls would fold Connections' "Related" — which
-    // stacks in the same column — away with it.
+    // WHICH PANEL THIS CHEVRON OWNS — read off the TITLE, not off the corner.
+    // Controls and Reading are the only two collapsible objects in the app and
+    // each answers to its own switch; every other panel in either column
+    // ("Related", "In transit") is furniture that opens and closes by its own
+    // rules. Keying on the corner was only ever a proxy for "is this Controls",
+    // and it stopped being true the moment Controls moved to the right column
+    // and started sharing it with "Related".
     'data-collapsed': (title === 'Reading' ? readCollapsed
-      : corner === 'tl' && !(extra || '').includes('secondary') && collapsed) ? 'true' : undefined,
+      : title === 'Controls' && collapsed) ? 'true' : undefined,
     hidden: !forViews.includes(view),
     'aria-label': title,
   });
@@ -1738,34 +2101,12 @@ export default function Lab() {
               ))}
             </nav>
 
-            {/* THE JOIN. Without it the seg is a seventh control sitting beside
-                six tabs, and nothing in the rail says Borders is INSIDE Map —
-                which is half of "make the relationship read". A breadcrumb
-                chevron says it in 12px of ink-3 and costs no decision. Hidden
-                from the a11y tree because the seg's own label carries the same
-                fact in words. */}
-            {segInHeader && <span className="tl-switch__into" aria-hidden="true">{I.next}</span>}
-
-            {/* The seg is NAVIGATION between sibling views — Borders / People /
-                Horizon, Empires / Beliefs. The Timeline group's is not:
-                vertical and horizontal are two PROJECTIONS of one state, which
-                is a control of the view rather than a way to another one. It
-                lives in the time rail's control cluster instead, beside where
-                Play sits on the views that have one. See segInHeader. */}
-            <div className="tl-seg" id="viewSeg" role="group"
-              aria-label={groupLabel ? `${groupLabel} views` : 'View'}
-              style={segInHeader ? undefined : { display: 'none' }}>
-              {/* Rendered only when this seg is navigation. Keeping the Timeline
-                  members here under display:none would leave a second, silent
-                  copy of the projection switch in the header — the very control
-                  this is getting out of it. */}
-              {segInHeader && members.map(m => (
-                <button key={m} className="tl-seg__item" aria-pressed={m === view} onClick={() => leaveSearch(m)}>
-                  {VIEWS[m].seg}
-                </button>
-              ))}
-            </div>
-
+            {/* THE SEG IS GONE FROM HERE, and the breadcrumb chevron with it.
+                Empires | Beliefs, Borders | People | Horizon and the projection
+                switch are all rows of the Controls panel now (see groupSeg
+                above) — one level in the header, one place to say how a view is
+                being drawn. The chevron existed only to say "the seg belongs to
+                the tab on its left"; with no seg it had nothing to join. */}
           </div>
 
           {/* THE SCROLL AFFORDANCE — the second half of the data-ovf work above.
@@ -1855,7 +2196,7 @@ export default function Lab() {
               aria-label="Field notes for this view" title="Field notes  ?"
               data-unread="true"
               onClick={() => openNotes(!notesOpen)}>
-              {I.info}
+              {I.help}
             </button>
             <button className="tl-iconbtn" id="themeBtn" aria-label="Switch theme" title="Theme: system → dark → light"
               onClick={cycleTheme}>
@@ -1865,7 +2206,7 @@ export default function Lab() {
         </header>
 
         {/* ══ STAGE ════════════════════════════════════════════════════════ */}
-        <main className="tl-stage" id="stage" data-dock={DOCKED.has(view) ? 'left' : undefined}>
+        <main className="tl-stage" id="stage">
           <div className="tl-graticule" aria-hidden="true" />
 
           {/* ── Map · Borders ─────────────────────────────────────────────── */}
@@ -1959,8 +2300,94 @@ export default function Lab() {
               row: at 900x700 the People view's Names toggle was covered, not
               merely ugly. One flex column per side gives the pair a shared
               height budget they cannot exceed. Corner classes stay — they are
-              what the column reads to decide which panel hugs the bottom. */}
+              what the column reads to decide which panel hugs the bottom.
+
+              THE LEFT COLUMN IS READING'S, AND ONLY READING'S. "Put the
+              controls to top right … to be in same position as other tabs."
+              Controls used to head this column, and on the flagship view that
+              put it exactly where the LAYER PANEL is — the one instrument the
+              whole board is steered with. The reader had to fold the controls
+              away to steer, or steer around the controls. So Controls left,
+              and what stays here is the prose: bottom-left on every view, the
+              corner a reading has always had. */}
           <div className="tl-col tl-col--l">
+            <aside {...panel('bl', ['map'], 'Reading', 'tl-panel--secondary')}>
+              {hd('Reading')}
+              <div className="tl-panel__bd"><div className="caption" id="capsule" /></div>
+            </aside>
+            <aside {...panel('bl', ['pop'], 'Reading', 'tl-panel--secondary')}>
+              {hd('Reading')}
+              <div className="tl-panel__bd"><div className="caption" id="popCap" /></div>
+            </aside>
+            <aside {...panel('bl', ['horizon'], 'Reading', 'tl-panel--secondary')}>
+              {hd('Reading')}
+              <div className="tl-panel__bd"><div className="caption" id="hzCap" /></div>
+            </aside>
+            <aside {...panel('bl', ['flow'], 'Reading', 'tl-panel--secondary')}>
+              {hd('Reading')}
+              <div className="tl-panel__bd"><div className="caption" id="flowCap" /></div>
+            </aside>
+            {/* braid.ts writes #braidNote with a non-null assertion, so the id
+                has to exist — it just stopped being a stray .note at the foot
+                of Controls and became this view's reading, in the corner every
+                other view keeps its reading in. */}
+            <aside {...panel('bl', ['braid'], 'Reading', 'tl-panel--secondary')}>
+              {hd('Reading')}
+              <div className="tl-panel__bd"><div className="caption" id="braidNote" /></div>
+            </aside>
+
+            {/* CONNECTIONS' "RELATED" LIST IS NOT A PANEL ANY MORE.
+                "Connections > Related should be in the info icon."
+                #connPanel moved into the field-notes popover, under the help
+                button — see the disclosure at the foot of #fieldNotes. It kept
+                its id and its class, so connections.ts writes into exactly the
+                element it always wrote into. What it gave up is a permanent
+                third of a shared column for a list that is empty until you
+                click something. */}
+            <aside {...panel('bl', ['conn'], 'Reading', 'tl-panel--secondary')}>
+              {hd('Reading')}
+              <div className="tl-panel__bd"><div className="caption" id="connCap" /></div>
+            </aside>
+            {/* The frame meter lives in the HEADER, not the body. shell.css §
+                .tl-col gives a secondary panel a floor of "a header plus two
+                lines" and lets the controls take the rest — so anything in the
+                body below the first two lines needs a scroll, and a panel
+                called Reading must lead with the reading. .tl-panel__title
+                carries margin-right:auto, so a second header child sits flush
+                right without a new rule. Full build detail is in its title. */}
+            <aside {...panel('bl', ['cube'], 'Reading', 'tl-panel--secondary')}>
+              {hd('Reading', <span className="tl-cube-stats" id="cubeStats" />)}
+              <div className="tl-panel__bd"><div className="caption" id="cubeCap" /></div>
+            </aside>
+          </div>
+
+          {/* ══ THE RIGHT COLUMN IS CONTROLS' COLUMN, ON ALL TEN VIEWS ═══════
+              "Put the controls to top right to where layers are — to be in same
+              position as other tabs."
+
+              ONE CORNER, EVERY VIEW. Controls is the first child here and it is
+              the first child for map, people, horizon, both timeline
+              projections, flow, beliefs, connections and the cube alike. A
+              reader who learns where the instrument is on the map knows where
+              it is on the cube, and never has to look for it again — which is
+              the entire content of "same position as other tabs".
+
+              WHY THE RIGHT AND NOT THE LEFT. Every left-hand corner in this app
+              is already spoken for by the DRAWING: the layer column on the
+              horizontal timeline, the year axis on the vertical one, band names
+              on Connections, the earliest ribbons in Flow. The right-hand side
+              is the one edge no renderer parks furniture against — which is why
+              the three docked views now hand their strip to this side instead
+              (shell.css §04).
+
+              WHAT ELSE USED TO LIVE HERE, AND WHERE IT WENT. Nothing was
+              evicted: "Related" (timeline) and "In transit" (horizon) are both
+              secondary panels, so the column's own rule already applies —
+              Controls keeps its height and the prose yields — and they simply
+              stack below it. The field-notes popover still hangs off its button
+              in the rail and covers this column while it is open; it is a
+              popover, not a resident, and Escape gives the corner back. */}
+          <div className="tl-col tl-col--r">
             {/* THE TIMELINE GROUP'S CONTROLS — one panel for both projections,
                 because vertical and horizontal are two drawings of ONE state:
                 the same span, the same lanes, the same selection, the same
@@ -1969,23 +2396,11 @@ export default function Lab() {
                 the moment rather than about the view. It is the first row here
                 for the same reason Play is the first row on the map: the top of
                 Controls is where a view says how it is being drawn. */}
-            <aside {...panel('tl', ['zoom', 'vertical'], 'Controls')}>
+            <aside {...panel('tr', ['zoom', 'vertical'], 'Controls')}>
               <div className="tl-panel__grip" aria-hidden="true" />
               {hd('Controls')}
               <div className="tl-panel__bd">
-                <div className="tl-field-group">
-                  <span className="tl-label">Projection</span>
-                  <div className="tl-seg" id="projSeg" role="group" aria-label="Projection">
-                    {TIME_MEMBERS.map(m => (
-                      <button key={m} className="tl-seg__item" aria-pressed={m === view}
-                        aria-label={`${VIEWS[m].seg} projection`}
-                        title={`Draw the same timeline ${m === 'vertical' ? 'down the page' : 'across the page'}`}
-                        onClick={() => leaveSearch(m)}>
-                        {VIEWS[m].seg}
-                      </button>
-                    ))}
-                  </div>
-                </div>
+                {groupSeg()}
                 <div className="tl-cluster">
                   <button className="btn" id="tlReset" title="Frame the whole recorded span"
                     onClick={() => { TL.clearSearch(); frameSettled(TL_HOME[0], TL_HOME[1]); }}>Reset view</button>
@@ -1994,10 +2409,11 @@ export default function Lab() {
               </div>
             </aside>
             {/* map */}
-            <aside {...panel('tl', ['map'], 'Controls')}>
+            <aside {...panel('tr', ['map'], 'Controls')}>
               <div className="tl-panel__grip" aria-hidden="true" />
               {hd('Controls')}
               <div className="tl-panel__bd">
+                {groupSeg()}
                 {/* map.ts overwrites #btnPlay's textContent, so it must stay a TEXT button. */}
                 <div className="tl-cluster tl-transport">
                   <button className="tl-iconbtn" id="railPrev" aria-label="Previous snapshot" title="Previous  ←"
@@ -2013,13 +2429,14 @@ export default function Lab() {
               </div>
             </aside>
             {/* pop */}
-            <aside {...panel('tl', ['pop'], 'Controls')}>
+            <aside {...panel('tr', ['pop'], 'Controls')}>
               <div className="tl-panel__grip" aria-hidden="true" />
               {hd('Controls')}
               {/* population.ts appendChild()s its own rows into #popPanel, and writes
                   #popPlay's label — so that one must stay a TEXT button. The
                   transport is the FIRST child, before anything appended. */}
               <div className="tl-panel__bd" id="popPanel">
+                {groupSeg()}
                 <div className="tl-cluster tl-transport">
                   <button className="tl-iconbtn" id="railPrevP" aria-label="Previous slice" title="Previous  ←"
                     onClick={() => step(-1)}>{I.prev}</button>
@@ -2030,10 +2447,11 @@ export default function Lab() {
               </div>
             </aside>
             {/* horizon */}
-            <aside {...panel('tl', ['horizon'], 'Controls')}>
+            <aside {...panel('tr', ['horizon'], 'Controls')}>
               <div className="tl-panel__grip" aria-hidden="true" />
               {hd('Controls')}
               <div className="tl-panel__bd">
+                {groupSeg()}
                 <div className="tl-field-group">
                   <span className="tl-label">Standing in</span>
                   <select id="hzCity" aria-label="City" defaultValue="" style={{ width: '100%' }} />
@@ -2064,14 +2482,15 @@ export default function Lab() {
                 their absence costs nothing. The vertical projection loses the
                 panel too and takes the full stage width. */}
             {/* flow */}
-            <aside {...panel('tl', ['flow'], 'Controls')}>
+            <aside {...panel('tr', ['flow'], 'Controls')}>
               <div className="tl-panel__grip" aria-hidden="true" />
               {hd('Controls')}
               <div className="tl-panel__bd">
-                {/* THE SAME FIRST ROW AS EVERY OTHER VIEW: reset, then the
-                    controls this view alone needs. #flowAll already framed the
-                    whole span — it was called "Whole span", which is the same
-                    verb the map spells "Reset view". One word for one act. */}
+                {groupSeg()}
+                {/* THE GROUP'S SEG FIRST, then reset, then the controls this
+                    view alone needs. #flowAll already framed the whole span —
+                    it was called "Whole span", which is the same verb the map
+                    spells "Reset view". One word for one act. */}
                 <div className="tl-cluster">
                   <button className="btn" id="flowAll" title="Frame the whole span">Reset view</button>
                   <button className="btn" id="flowMode">Absolute scale</button>
@@ -2080,11 +2499,15 @@ export default function Lab() {
                   <button className="btn hero" id="flowRome">Follow Rome</button>
                   <button className="btn" id="flowSplit">The great split</button>
                 </div>
-                <div className="searchwrap">
-                  <input type="text" id="flowSearch" style={{ width: '100%' }}
-                    placeholder="Find a polity… (Rome, Persia, Mali)" />
-                  <span className="cnt" id="flowCnt" />
-                </div>
+                {/* "Find a polity…" IS GONE — ONE SEARCH. It was a second box
+                    three inches below the first, weaker in every direction: it
+                    matched a substring of a polity name and nothing else, it
+                    only dimmed, and it existed on this one view. The global
+                    field ranks the same 147 polities among everything else, and
+                    taking one of them while you are standing here now frames
+                    the ribbon and lights it (takeRow → revealHere). flow.ts
+                    kept the behaviour as Flow.setQuery() for the callers that
+                    still want a filter rather than a selection. */}
                 <hr className="tl-hr" />
                 <div className="tl-field-group">
                   <span className="tl-label">Regions</span>
@@ -2094,10 +2517,11 @@ export default function Lab() {
               </div>
             </aside>
             {/* braid */}
-            <aside {...panel('tl', ['braid'], 'Controls')}>
+            <aside {...panel('tr', ['braid'], 'Controls')}>
               <div className="tl-panel__grip" aria-hidden="true" />
               {hd('Controls')}
               <div className="tl-panel__bd">
+                {groupSeg()}
                 <div className="tl-cluster">
                   {/* Braid's framing belongs to whichever system is showing —
                       religions open on 1000 BCE, ideologies on 1650 — so the
@@ -2118,10 +2542,11 @@ export default function Lab() {
                 why Connections has no right-hand panels any more.
                 buildConnLegend() fills #connGrammar by id, so it does not care
                 that the element now lives inside a <details>. */}
-            <aside {...panel('tl', ['conn'], 'Controls')}>
+            <aside {...panel('tr', ['conn'], 'Controls')}>
               <div className="tl-panel__grip" aria-hidden="true" />
               {hd('Controls')}
               <div className="tl-panel__bd">
+                {groupSeg()}
                 {/* THE FIVE RANDOM CONTROLS ARE GONE — connections.ts asked for
                     this deletion in Lab.tsx and here it is. Two guided-tour
                     jumps and a zoom preset are what the ONE search box is for;
@@ -2182,10 +2607,11 @@ export default function Lab() {
                 rather than a fact about a scrollbar. cube.ts opens a group
                 whose contents are no longer at rest (paintDisc), so a closed
                 group can never hide a setting that is doing something. */}
-            <aside {...panel('tl', ['cube'], 'Controls')}>
+            <aside {...panel('tr', ['cube'], 'Controls')}>
               <div className="tl-panel__grip" aria-hidden="true" />
               {hd('Controls')}
               <div className="tl-panel__bd">
+                {groupSeg()}
                 {/* THE UNIFIED HEAD — projection, then reset, then the view's own
                     subject. Both rows came up out of "View & detail": the cube's
                     projection IS the projection switch every other view puts at
@@ -2210,13 +2636,24 @@ export default function Lab() {
                   <button className="chip" data-v="side">Side</button>
                   <button className="chip" data-v="low">Low</button>
                 </div>
+                {/* TRACE A POLITY — THE BOX IS GONE, THE BROWSE STAYS.
+                    "Search anything should be the same as 'Trace a polity
+                    search'." #cubeFilter ranked the same 147 polities the
+                    global field already ranks, and its only extra act was to
+                    hand the winner to Cube.select(). So the global field does
+                    that: take a polity there while you are standing on the cube
+                    and the block is traced from it, here, without leaving
+                    (takeRow → revealHere). #cubeCnt went with it — "N of M"
+                    only ever meant "this list is narrowed", and nothing narrows
+                    it now.
+
+                    THE <select> IS NOT A SEARCH AND IT SURVIVES. It is the
+                    alphabetical BROWSE — the way to find a polity whose name
+                    you do not know — and it is the readout of which one the
+                    block is traced from; cube.ts writes its value on every
+                    trace, from whichever direction the trace arrived. */}
                 <div className="tl-field-group">
                   <span className="tl-label">Trace a polity</span>
-                  <div className="searchwrap">
-                    <input type="text" id="cubeFilter" style={{ width: '100%' }} autoComplete="off" spellCheck={false}
-                      placeholder="rome, ottoman, han…" aria-label="Find a polity to trace" />
-                    <span className="cnt" id="cubeCnt" />
-                  </div>
                   <select id="cubeSov" aria-label="Polity to trace" defaultValue="" style={{ width: '100%' }} />
                   <span className="note" id="cubeNote" />
                 </div>
@@ -2323,73 +2760,6 @@ export default function Lab() {
                 </details>
               </div>
             </aside>
-            <aside {...panel('bl', ['map'], 'Reading', 'tl-panel--secondary')}>
-              {hd('Reading')}
-              <div className="tl-panel__bd"><div className="caption" id="capsule" /></div>
-            </aside>
-            <aside {...panel('bl', ['pop'], 'Reading', 'tl-panel--secondary')}>
-              {hd('Reading')}
-              <div className="tl-panel__bd"><div className="caption" id="popCap" /></div>
-            </aside>
-            <aside {...panel('bl', ['horizon'], 'Reading', 'tl-panel--secondary')}>
-              {hd('Reading')}
-              <div className="tl-panel__bd"><div className="caption" id="hzCap" /></div>
-            </aside>
-            <aside {...panel('bl', ['flow'], 'Reading', 'tl-panel--secondary')}>
-              {hd('Reading')}
-              <div className="tl-panel__bd"><div className="caption" id="flowCap" /></div>
-            </aside>
-            {/* braid.ts writes #braidNote with a non-null assertion, so the id
-                has to exist — it just stopped being a stray .note at the foot
-                of Controls and became this view's reading, in the corner every
-                other view keeps its reading in. */}
-            <aside {...panel('bl', ['braid'], 'Reading', 'tl-panel--secondary')}>
-              {hd('Reading')}
-              <div className="tl-panel__bd"><div className="caption" id="braidNote" /></div>
-            </aside>
-
-            {/* CONNECTIONS' "RELATED" LIST CAME OVER FROM THE RIGHT EDGE.
-                The dock (shell.css §04) was invented because a floating panel
-                is honest over a map and a lie over a chart — and Connections
-                floated two of them on the other edge, over 12–14% of a canvas
-                whose ribbons run the full width. Clipped ribbon labels were
-                legible underneath: "Newton's Principi", "Computing". Same bug,
-                same fix: the panels take a strip of their own and the canvas
-                takes the rest, which for a left-docked view means the left
-                column. Placed above the bottom-anchored Reading and below
-                Controls, because Related is what you look at while Reading is
-                what you look at last. It keeps every id and every title. */}
-            <aside {...panel('tl', ['conn'], 'Related', 'tl-panel--secondary')}>
-              <div className="tl-panel__hd"><span className="tl-panel__title">Related</span></div>
-              <div className="tl-panel__bd"><div className="relpanel" id="connPanel" /></div>
-            </aside>
-            <aside {...panel('bl', ['conn'], 'Reading', 'tl-panel--secondary')}>
-              {hd('Reading')}
-              <div className="tl-panel__bd"><div className="caption" id="connCap" /></div>
-            </aside>
-            {/* The frame meter lives in the HEADER, not the body. shell.css §
-                .tl-col gives a secondary panel a floor of "a header plus two
-                lines" and lets the controls take the rest — so anything in the
-                body below the first two lines needs a scroll, and a panel
-                called Reading must lead with the reading. .tl-panel__title
-                carries margin-right:auto, so a second header child sits flush
-                right without a new rule. Full build detail is in its title. */}
-            <aside {...panel('bl', ['cube'], 'Reading', 'tl-panel--secondary')}>
-              {hd('Reading', <span className="tl-cube-stats" id="cubeStats" />)}
-              <div className="tl-panel__bd"><div className="caption" id="cubeCap" /></div>
-            </aside>
-          </div>
-
-          {/* THE RIGHT COLUMN IS FOR VIEWS WHOSE CANVAS HAS NOTHING THERE.
-              Horizon floats "In transit" over ocean, and the horizontal
-              timeline's canvas is as tall as its bands (~466px) inside an
-              ~790px stage, so its "Grammar" hangs in empty stage space below
-              the plot. Both were verified covering nothing.
-
-              Connections is NOT that case and no longer lives here: its canvas
-              is 826px tall and its ribbons run the full width, so a --tr and a
-              --br panel sat on the chart. They moved into the left dock. */}
-          <div className="tl-col tl-col--r">
             {/* THE TIMELINE'S "RELATED" PANEL — the same pattern as Connections'.
                 Click a spread or an event on either projection and relations.ts
                 renders the ranked, grouped relation list (plus the Wikipedia link,
@@ -2449,7 +2819,8 @@ export default function Lab() {
 
           {/* ══ FIELD NOTES ═══════════════════════════════════════════════ */}
           <aside className="tl-pop" id="fieldNotes" role="dialog" aria-label="Field notes"
-            hidden={!notesOpen} style={{ top: 12, right: 12 }}>
+            hidden={!notesVis} data-anim={notesOpen ? 'in' : 'out'}
+            onAnimationEnd={onNotesAnimEnd} style={{ top: 12, right: 12 }}>
             <span className="tl-pop__arrow" style={{ right: 48 }} aria-hidden="true" />
             <div className="tl-pop__hd">
               <div style={{ flex: 1, minWidth: 0 }}>
@@ -2462,6 +2833,30 @@ export default function Lab() {
               </button>
             </div>
             <div className="tl-pop__bd">
+              {/* CONNECTIONS' "RELATED" LIST, WHERE THE FOUNDER PUT IT.
+                  "Connections > Related should be in the info icon."
+
+                  It is a <details> rather than a fourth paragraph because it is
+                  empty until something is selected, and an empty box under a
+                  read-once explanation is worse than no box. Closed, it is one
+                  summary line; open, it is the whole ranked list.
+
+                  RENDERED ON EVERY VIEW AND HIDDEN OFF CONNECTIONS, never
+                  conditionally mounted: connections.ts resolves #connPanel by
+                  id and writes into it, and this file's oldest rule is that a
+                  container a renderer writes into is in the DOM from boot. It
+                  keeps the id and the .relpanel class exactly, so nothing on
+                  the other side of that boundary changed at all.
+
+                  AND IT LEADS. The prose in this popover is read once; this
+                  list changes with every click and is the reason a reader opens
+                  the panel again. Under three paragraphs and a sources note it
+                  was below the fold of a 46vh scroller, which is the same
+                  burial the docked panel was rescued from. */}
+              <details className="tl-disc" id="connRelDisc" hidden={view !== 'conn'} open>
+                <summary>Related<span className="tl-disc__v">what is linked to the selection</span></summary>
+                <div className="tl-disc__bd"><div className="relpanel" id="connPanel" /></div>
+              </details>
               {NOTES[view].body}
               {NOTES[view].src && <p className="tl-pop__src">{NOTES[view].src}</p>}
             </div>
@@ -2606,12 +3001,22 @@ export default function Lab() {
                   // CHOICE. It stays in the list (it is a truthful answer to
                   // the word) and says why, but it cannot be clicked, cannot
                   // be arrowed onto and cannot frame anything.
-                  const dead = r.p.need === 'never';
-                  const note = needLine(r.p);
+                  const dead = r.to === null;
+                  const note = needLine(r, view);
                   return (
                     <button className="tl-sugg__row" role="option" aria-selected={sel} data-sel={String(sel)}
-                      data-need={r.p.need} disabled={dead} aria-disabled={dead || undefined}
-                      title={needTitle(r.p, r.h.name) || undefined}
+                      /* THE STYLING FOLLOWS THE LANDING, NOT THE TIMELINE'S
+                         PLAN. `p.need === 'never'` only ever meant "no layer on
+                         the timeline draws this", and on the Beliefs view — the
+                         one view whose entire subject is belief streams — that
+                         verdict was greying out a row that works perfectly.
+                         Once the row lands HERE, the layer plan has nothing
+                         left to say about it. */
+                      data-need={dead ? 'never'
+                        : r.to !== view ? 'elsewhere'
+                          : r.p.need === 'never' ? 'ready' : r.p.need}
+                      disabled={dead} aria-disabled={dead || undefined}
+                      title={needTitle(r, r.h.name, view) || undefined}
                       onMouseDown={e => e.preventDefault()}
                       onMouseEnter={() => { if (!dead) setSSel(i); }}
                       onClick={() => takeRow(r)}>

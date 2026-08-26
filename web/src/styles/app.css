@@ -725,16 +725,18 @@ body.tl-dragging { cursor: grabbing; }
 /* ═════════════════════════════════════════════════════════════════════════════
    THE PANEL COLUMN CLEARS THE VIEW'S OWN FURNITURE.
 
-   Controls sits top-left and Reading bottom-left on every view, because the
+   Controls sits TOP-RIGHT and Reading bottom-left on every view, because the
    founder asked for one frame rather than ten — "make sure the whole page is as
-   one, it flows." What "top-left" means, though, is the top-left of the WORKING
+   one, it flows", and "put the controls to top right … to be in same position
+   as other tabs". What a corner MEANS, though, is the corner of the WORKING
    AREA, and on a chart the working area does not start at the stage's corner:
    there is an axis there, and an axis is furniture the renderer cannot move.
 
-   The rule the dock was invented on is the same one (shell.css §04): a floating
-   panel may cover some plot, but it may never cover the legend. So the column is
-   inset by exactly what the active view has parked in that corner, measured off
-   the renderers rather than guessed:
+   One rule, and it is the rule the dock was invented on before Controls moved
+   out from over the furniture and the dock could be deleted: a floating panel
+   may cover some plot, but it may never cover the legend. So each column is
+   inset by exactly what the active view has parked against it, measured off the
+   renderers rather than guessed:
 
      · the HORIZONTAL timeline — the tick-label masthead is the top 22px of the
        canvas (timeline.ts AXIS_TOP), and the LAYER COLUMN is the left strip
@@ -744,9 +746,16 @@ body.tl-dragging { cursor: grabbing; }
        never disagree with the canvas about where the plot begins;
      · the VERTICAL timeline — a quarter turn of the same thing: the year axis
        is the left 96px and the column heads the top 44px (vertical.ts GX/GY);
-     · everything else — Map, People, Horizon, Cube have nothing in that corner
-       (verified sitting over ocean and over empty projection space), and the
-       three docked views take a strip of their own instead.
+     · everything else — Map, People, Horizon, Cube, Flow, Beliefs and
+       Connections have nothing in either corner (verified sitting over ocean,
+       over empty projection space, and over the last centuries of a ribbon
+       chart).
+
+   ONLY --tl-work-l HAS A VALUE ANYWHERE, and only the left column reads it:
+   every piece of fixed furniture in the app is in a canvas's LEFT gutter or
+   along its top. --tl-work-t insets BOTH columns, because a masthead runs the
+   full width; there is no --tl-work-r because nothing has ever been parked at a
+   right edge, which is exactly why Controls could take that corner on all ten.
 */
 @media (min-width: 760px) {
   .tl-stage { --tl-work-l: 0px; --tl-work-t: 0px; }
@@ -947,15 +956,31 @@ body.tl-dragging { cursor: grabbing; }
   text-overflow: ellipsis;
   white-space: nowrap;
 }
-/* NOT DRAWN ON THIS TIMELINE AT ALL — a belief stream, a spread with no
-   footprint. The row still answers the word (it is a true answer), but it is
-   not a choice: no pointer, no hover ground, no arrow-key stop, and takeRow()
-   refuses it even if something did click through. */
+/* NOT DRAWN ANYWHERE IN THE APP. The row still answers the word (it is a true
+   answer), but it is not a choice: no pointer, no hover ground, no arrow-key
+   stop, and takeRow() refuses it even if something did click through.
+
+   THE TEST MOVED FROM "the timeline cannot draw it" TO "nothing can". A belief
+   stream is never on the timeline and is the whole subject of the Beliefs view,
+   so the old verdict greyed out the one row that would have worked. */
 .tl-sugg__row[data-need="never"] {
   cursor: default;
   opacity: .55;
 }
 .tl-sugg__row[data-need="never"][data-sel="true"] { background: transparent; }
+
+/* IT WILL MOVE YOU. The hit is real and takeable, but this view cannot draw one
+   named thing (People and the information horizon draw aggregates) or does not
+   hold this one (a Roman polity searched from the Beliefs braid), so taking it
+   travels. Nothing is dimmed — it is a full answer — and the second line says
+   where it goes. The mark is a hairline lead-in on the destination line, the
+   same neutral rule the panels use; the accent means WHERE YOU ARE IN TIME and
+   is never spent on chrome. */
+.tl-sugg__row[data-need="elsewhere"] .tl-sugg__need {
+  color: var(--tl-ink-2);
+  padding-left: 9px;
+  border-left: var(--tl-border) solid var(--tl-rule-strong);
+}
 
 /* ── A LANE AS AN ANSWER ──────────────────────────────────────────────────────
    "so that I can type in also categories like 'Literature' and it will enable
@@ -1166,8 +1191,14 @@ body.tl-dragging { cursor: grabbing; }
 
   .tl-doc { padding: var(--tl-space-6) var(--tl-space-5) var(--tl-space-11); }
   /* Panels become bottom sheets in shell.css. Only the primary one survives;
-     stacking four sheets on a phone would bury the canvas entirely. */
-  .tl-panel--bl, .tl-panel--tr, .tl-panel--br { display: none; }
+     stacking four sheets on a phone would bury the canvas entirely.
+
+     KEYED ON THE ROLE, NOT ON THE CORNER, since Controls moved to --tr and a
+     corner list would have hidden the one panel that has to survive. The
+     survivor is exactly "Controls": every other panel in either column carries
+     .tl-panel--secondary, which shell.css §13 already folds away here — this
+     rule now only adds the bottom corners for good measure. */
+  .tl-panel--bl, .tl-panel--br, .tl-panel--secondary { display: none; }
   .tl-cmdk { grid-template-rows: 6vh auto 1fr; }
 }
 
