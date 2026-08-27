@@ -75,8 +75,9 @@
 
 /* ── Buttons ─────────────────────────────────────────────────────────────────
    .btn reads like .tl-btn; .btn.hero like .tl-btn--primary — solid INK, never
-   accent. braid.ts toggles 'hero' on [data-braid] to mark the active stream
-   set, so 'hero' has to keep working as the active modifier. */
+   accent. ('hero' used to be toggled on [data-braid] to mark the active belief
+   system; that markup is gone — the two systems are their own views now, and
+   the seg carries the state. The modifier stays because other buttons use it.) */
 .btn {
   appearance: none;
   display: inline-flex;

@@ -23,7 +23,7 @@
 
 import { useCallback, useEffect, useRef, useState, useSyncExternalStore } from 'react';
 import {
-  BELIEFS, catColor, clampDomain, fmtBig, fmtSpan, fmtY, initData, onAtlas, setGotoTab, setLanes, SelStore,
+  catColor, clampDomain, fmtBig, fmtSpan, fmtY, initData, onAtlas, setGotoTab, setLanes, SelStore,
   TimeStore, tokens, warmAtlas, YMAX, YMIN,
   type Datasets,
 } from '@/render/shared';
@@ -35,7 +35,7 @@ import { LayerPanel } from '@/render/layerpanel';
 import { VT } from '@/render/vertical';
 import { Flow, initFlow } from '@/render/flow';
 import { Cube } from '@/render/cube';
-import { Braid, initBraid } from '@/render/braid';
+import { beliefSystemOf, braidHome, BRAID_IDS, Braids, initBraid } from '@/render/braid';
 import { Horizon } from '@/render/horizon';
 import { Pop, loadPopulation } from '@/render/population';
 import { buildGallery } from '@/render/gallery';
@@ -61,7 +61,7 @@ const RAIL_FLOOR = -3000, RAIL_CEIL = 2060;
 type ViewId =
   | 'map' | 'pop' | 'horizon'
   | 'vertical' | 'zoom'
-  | 'flow' | 'braid'
+  | 'flow' | 'braid' | 'ideology'
   | 'conn' | 'cube' | 'concepts';
 
 type RailMode = 'live' | 'span' | 'legend' | 'off';
@@ -75,7 +75,11 @@ type RailMode = 'live' | 'span' | 'legend' | 'off';
 const GROUPS: { id: string; label: string; members: ViewId[] }[] = [
   { id: 'g-time', label: 'Timeline', members: ['vertical', 'zoom'] },
   { id: 'g-map', label: 'Map', members: ['map', 'pop', 'horizon'] },
-  { id: 'g-flow', label: 'Flow', members: ['flow', 'braid'] },
+  // EMPIRES · BELIEFS · IDEOLOGIES. "I think it should be Empires/Beliefs/
+  // Ideologies." The two belief corpora used to be one member of this seg with
+  // a preset chip inside its own panel — a view that offered to become another
+  // view. They are peers here now, which is what they always were.
+  { id: 'g-flow', label: 'Flow', members: ['flow', 'braid', 'ideology'] },
   { id: 'g-conn', label: 'Connections', members: ['conn'] },
   { id: 'g-cube', label: 'Cube', members: ['cube'] },
 ];
@@ -177,6 +181,15 @@ const VIEWS: Record<ViewId, ViewMeta> = {
     gist: 'Beliefs as streams that fork at schisms and occasionally merge again.',
     meta: 'thickness is an estimate',
   },
+  // The second belief corpus, as its own view rather than a preset inside the
+  // first. `name` carries "ideologies" AND "isms" so both find it by typing;
+  // `meta` prints the opening year, because 1848 is the one fact about this
+  // view a reader could not guess from the seg (see braid.ts for why 1848).
+  ideology: {
+    seg: 'Ideologies', name: 'Braided rivers of ideologies', rail: 'span',
+    gist: 'The isms as streams — liberalism, marxism, nationalism — forking out of one Enlightenment trunk.',
+    meta: 'opens at 1848 · thickness is an estimate',
+  },
   conn: {
     seg: 'Connections', name: 'Connections', rail: 'span',
     gist: 'Click anything — everything related stays lit in proportion to how related.',
@@ -194,7 +207,7 @@ const VIEWS: Record<ViewId, ViewMeta> = {
   },
 };
 
-const ORDER: ViewId[] = ['zoom', 'vertical', 'map', 'pop', 'horizon', 'flow', 'braid', 'conn', 'cube', 'concepts'];
+const ORDER: ViewId[] = ['zoom', 'vertical', 'map', 'pop', 'horizon', 'flow', 'braid', 'ideology', 'conn', 'cube', 'concepts'];
 
 // ── Which views dock the panel column instead of floating it ────────────────
 // A floating panel is honest over a MAP — it sits on ocean, and the map has no
@@ -283,6 +296,9 @@ const NOTES: Record<ViewId, Notes> = {
   braid: {
     body: <p>Beliefs as streams that fork at schisms and occasionally merge &mdash; Christianity at 1054 and 1517, Islam at 632. Thickness is reach. <strong>Hover one</strong> to light its lineage.</p>,
   },
+  ideology: {
+    body: <p>The same rivers, two centuries wide: liberalism, socialism, nationalism forking out of the Enlightenment. Thickness is reach. <strong>Hover one</strong> to light its lineage.</p>,
+  },
   conn: {
     body: <p>What is linked to what. Ribbons last, dots are moments inside them, and the four lanes overlap on purpose. <strong>Click anything</strong>: its relations stay lit and everything else dims to context.</p>,
   },
@@ -309,10 +325,11 @@ function boot() {
   initConn();
   WorldMap.render();
   // diagnostic handle for acceptance probes and console debugging — reads only
-  // Flow and Braid are both Ribbons() instances and were the only canvas views
-  // with no handle here, which made them the only ones a gesture probe could not
-  // measure. Reads only, like the rest.
-  (window as any).__tl = { TL, VT, Conn, WorldMap, Cube, Flow, Braid, TimeStore, SelStore, SelCard, Layers, LayerPanel };
+  // Flow and the braids are all Ribbons() instances and were the only canvas
+  // views with no handle here, which made them the only ones a gesture probe
+  // could not measure. `Braids` is the whole table — one probe reaches either
+  // belief view by name. Reads only, like the rest.
+  (window as any).__tl = { TL, VT, Conn, WorldMap, Cube, Flow, Braids, TimeStore, SelStore, SelCard, Layers, LayerPanel };
 }
 
 
@@ -338,7 +355,8 @@ function sizeRenderers() {
   const s = document.getElementById('stage');
   const W = s ? s.clientWidth : 0;
   const geoH = Math.max(300, Math.min(H, Math.round(W * 403 / 1000)));
-  Flow.H = H; Braid.H = H; Cube.H = H;
+  Flow.H = H; Cube.H = H;
+  for (const id of BRAID_IDS) Braids[id].H = H;
   TL.HMAX = H;                     // the lane-trim budget, not a fixed height
   // Below 760px every panel becomes a bottom SHEET fixed over the canvas
   // (shell.css §13). Every full-height view loses its bottom strip to it, but only
@@ -374,7 +392,8 @@ function renderTab(v: ViewId) {
     case 'zoom': TL.ensureYearVisible(); TL.render(); break;
     case 'vertical': TL.ensureYearVisible(); VT.render(); break;
     case 'flow': Flow.render(); break;
-    case 'braid': Braid.render(); break;
+    case 'braid': Braids.religion.render(); break;
+    case 'ideology': Braids.ideology.render(); break;
     case 'conn': Conn.dirty = true; Conn.render(); break;
     case 'cube': Cube.render(); break;
     case 'concepts': break;                       // no canvas
@@ -383,7 +402,8 @@ function renderTab(v: ViewId) {
 
 const rerenderAll = () => {
   sizeRenderers();
-  WorldMap.render(); TL.render(); VT.render(); Flow.render(); Cube.render(); Braid.render(); Horizon.render(); Pop.render();
+  WorldMap.render(); TL.render(); VT.render(); Flow.render(); Cube.render(); Horizon.render(); Pop.render();
+  for (const id of BRAID_IDS) Braids[id].render();
   Conn.dirty = true; Conn.render();
 };
 
@@ -647,55 +667,61 @@ function showInFlow(pid: string) {
 }
 
 /**
- * WHICH BELIEF SYSTEM HOLDS THIS STREAM — 'religion', 'ideology', or null when
- * the id is not a stream at all. Braid draws ONE system at a time, so this is
- * the difference between "the Beliefs view draws these" being true of the app
- * and being true of the canvas currently on screen.
+ * WHICH VIEW DRAWS THIS BELIEF STREAM — 'braid' for a religion, 'ideology' for
+ * an ideology, null when the id is not a stream at all.
+ *
+ * It used to answer a SYSTEM, because there was one canvas and the answer was
+ * "which corpus does it have to be switched to". Now the two corpora are two
+ * views, so the answer is a destination — and the routing is a lookup in the
+ * data rather than a chip press with a guard around it.
+ *
+ * The corpus is the authority, not either instance's `items`: the question has
+ * to be answerable before either canvas has ever rendered, and it must not
+ * change when a reader filters or pans. beliefSystemOf() is braid.ts's, so the
+ * table that says which streams a view holds and the routing that sends a
+ * reader there cannot disagree.
  */
-function beliefSystem(id: string): string | null {
+const BELIEF_VIEW_OF: Record<string, ViewId> = { religion: 'braid', ideology: 'ideology' };
+
+function beliefView(id: string): ViewId | null {
   if (!id.startsWith('belief:')) return null;
-  const local = id.slice(7);
-  for (const s of (BELIEFS.systems || [])) {
-    if ((s.streams || []).some((t: any) => t && t.id === local)) return s.id;
-  }
-  return null;
+  const sys = beliefSystemOf(id.slice(7));
+  return sys ? (BELIEF_VIEW_OF[sys] ?? null) : null;
 }
 
 /**
- * PUT A BELIEF STREAM ON THE BRAID CANVAS — the one implementation, shared by
+ * PUT A BELIEF STREAM ON THE BRAIDED RIVERS — the one implementation, shared by
  * the search and by the selection card's offer, exactly as showInFlow() above
  * is shared by the search and the card's Flow cell.
  *
- * It does NOT navigate; both callers decide that for themselves.
+ * It does NOT navigate; it RETURNS WHERE IT PUT THE THING, and both callers
+ * decide for themselves whether to travel there.
  *
- * AND THE OTHER SYSTEM COMES BACK ON. Braid holds religions OR ideologies, so
- * landing on it with the wrong one showing is the same broken promise as
- * landing on Flow with the region filtered out. Done by pressing braid's own
- * preset rather than by writing Braid.items: the item list, the pressed state on
- * the two switches, the note under the canvas and the system's own framing are
- * one thing kept in step by initBraid()'s private pick(), and reaching past it
- * would light a stream while the panel still claimed the other system was up.
- * Only sent when the system is genuinely not the one showing.
+ * THE SYSTEM SWITCH IS GONE, AND WITH IT THE THING THAT COULD GO WRONG. This
+ * used to press a preset chip on braid's own panel — the item list, the pressed
+ * state of the two switches, the note and the framing were one bundle kept in
+ * step by initBraid()'s private pick(), and the guard that decided whether to
+ * press read `aria-pressed` off the DOM. Every part of that was a way for a
+ * reader arriving from search to land on the wrong corpus: rename the attribute
+ * and the guard silently stops firing.
  *
- * WHICH ONE IS SHOWING IS aria-pressed NOW, not a `hero` class. The two systems
- * became a .tl-seg with the rest of the control unification — one exclusive
- * choice drawn the way every other exclusive choice in the app is drawn — and
- * this read has to follow, or the guard silently stops firing and a reader
- * arriving from search lands on the wrong corpus.
+ * Now the two corpora are two views, each holding its own items for the whole
+ * life of the page, so there is nothing to switch and nothing to keep in step.
+ * The routing is a table lookup against the corpus, the instance is picked by
+ * the same lookup, and being on the wrong view is not a state the app can
+ * reach — the caller navigates to the view this returns.
  */
-function showInBeliefs(id: string) {
-  const sys = beliefSystem(id);
-  if (sys) {
-    const b = document.querySelector<HTMLElement>(`[data-braid="${CSS.escape(sys)}"]`);
-    if (b && b.getAttribute('aria-pressed') !== 'true') b.click();
-  }
-  Braid.setQuery('');                          // a leftover filter would dim the stream
-  // 'search' rather than 'point': braid draws no anchor this card could hang
+function showInBeliefs(id: string): ViewId {
+  const v = beliefView(id) ?? 'braid';
+  const b = Braids[v === 'ideology' ? 'ideology' : 'religion'];
+  b.setQuery('');                              // a leftover filter would dim the stream
+  // 'search' rather than 'point': the braids draw no anchor this card could hang
   // off (Lab's anchorOf answers only for the timeline family and Connections),
   // and the parked corner is the one place the reader can predict.
   SelCard.select(id, null, null, 'search');
   const sub = describe(id);
-  if (sub) { const [f0, f1] = padSpan(...perspectiveSpan(sub)); Braid.animTo(f0, f1); }
+  if (sub) { const [f0, f1] = padSpan(...perspectiveSpan(sub)); b.animTo(f0, f1); }
+  return v;
 }
 
 /* ── THE NOTICE ───────────────────────────────────────────────────────────────
@@ -1222,11 +1248,18 @@ export default function Lab() {
           /* SHOW THIS IN BELIEFS. "Remove the 'Show in Beliefs' - instead the
              card should be able to reach ALL the views." The doing did not
              change at all — showInBeliefs() above is the same function that
-             used to hang off the notice's button, switching braid's system on
-             the way in. Only the control it hangs off did: it is a cell in the
-             card's destination row now, beside Timeline and Cube, permanent
-             rather than a button that appears for twelve seconds. */
-          showInBeliefs: (id) => { showInBeliefs(id); go('braid'); },
+             used to hang off the notice's button. Only the control it hangs off
+             did: it is a cell in the card's destination row now, beside Timeline
+             and Cube, permanent rather than a button that appears for twelve
+             seconds.
+
+             AND IT IS ONE CELL LANDING ON TWO VIEWS. The card offers "Beliefs"
+             for anything describe() calls a stream, and half those streams are
+             ideologies — so where the cell goes is a fact about the SUBJECT, not
+             a constant. showInBeliefs() answers with the view it put the stream
+             on and go() takes that, which is why the card can keep one cell and
+             one label while the app has two belief views. */
+          showInBeliefs: (id) => go(showInBeliefs(id)),
           allConnections: () => setRelOpen(true),
           mapYear: () => (WorldMap as any).year(),
           anchorOf: (id) => {
@@ -1432,7 +1465,8 @@ export default function Lab() {
        rail now says exactly what the plot says. Same reason the flag and the
        span caption use fmtBig and fmtSpan: those are the other two places in
        this rail where a year or a count of years reaches the screen. */
-    const src: any = v === 'flow' ? Flow : v === 'braid' ? Braid : v === 'conn' ? Conn : TL;
+    const src: any = v === 'flow' ? Flow : v === 'braid' ? Braids.religion
+      : v === 'ideology' ? Braids.ideology : v === 'conn' ? Conn : TL;
     const d0 = Number(src.d0), d1 = Number(src.d1);
     const a = railPos(d0), b = railPos(d1);
     const cur = cursorYear(v);
@@ -1640,9 +1674,10 @@ export default function Lab() {
         : v === 'pop' ? `p${Pop.ix.toFixed(3)}`
           : v === 'horizon' ? `h${Horizon.year}`
             : v === 'flow' ? `f${Flow.d0}|${Flow.d1}`
-              : v === 'braid' ? `b${Braid.d0}|${Braid.d1}`
-                : v === 'conn' ? `c${Conn.d0}|${Conn.d1}`
-                  : `t${TL.d0}|${TL.d1}|${TL.log}`)
+              : v === 'braid' ? `b${Braids.religion.d0}|${Braids.religion.d1}`
+                : v === 'ideology' ? `i${Braids.ideology.d0}|${Braids.ideology.d1}`
+                  : v === 'conn' ? `c${Conn.d0}|${Conn.d1}`
+                    : `t${TL.d0}|${TL.d1}|${TL.log}`)
         + `|${TimeStore.year}|${SelStore.id ?? ''}`   // the global stores nudge the rail too
         // …and so does the CURSOR, on the four span views whose index follows it.
         // Without this the rail would only notice the pointer when the window or
@@ -1722,7 +1757,8 @@ export default function Lab() {
       if (inp) { inp.value = String(y); inp.dispatchEvent(new Event('input', { bubbles: true })); }
       return;
     }
-    const src: any = v === 'flow' ? Flow : v === 'braid' ? Braid : v === 'conn' ? Conn : TL;
+    const src: any = v === 'flow' ? Flow : v === 'braid' ? Braids.religion
+      : v === 'ideology' ? Braids.ideology : v === 'conn' ? Conn : TL;
     const half = (Number(src.d1) - Number(src.d0)) / 2;
     // the same domain clamp-shift the wheel enforces — a rail grab near the
     // edge must not centre the window past YMIN/YMAX (defect: d1 landed at 4464)
@@ -2045,8 +2081,14 @@ export default function Lab() {
     // It navigates on its own, unlike the cases above: those only ever fire
     // when the landing IS the view you are standing on, and this one fires from
     // anywhere — including the timeline, where the row would otherwise be dead.
+    // The card's one Beliefs act lands on whichever of the two belief views
+    // holds the stream, so the view named here is read the same way the act
+    // itself reads it — never assumed to be the religions one.
     if (destOpen(sub, 'braid')) {
-      return { view: 'braid', act: () => { SelCard.select(id, null, null, from); SelCard.act('braid'); } };
+      return {
+        view: beliefView(id) ?? 'braid',
+        act: () => { SelCard.select(id, null, null, from); SelCard.act('braid'); },
+      };
     }
     return onTimeline ? toTimeline('zoom') : null;
   }, [goToSubject]);
@@ -2878,6 +2920,16 @@ export default function Lab() {
             <div className="tl-canvasbox"><canvas id="braidCanvas" height={440} /></div>
           </section>
 
+          {/* ── Flow · Ideologies ─────────────────────────────────────────
+              ITS OWN CANVAS, WHICH IS THE WHOLE SPLIT. The two belief corpora
+              shared #braidCanvas and took turns on it, so they also shared one
+              window, one hover, one selection and one pan: panning the isms
+              moved the religions. Two elements, two Ribbons instances, and
+              neither view can move the other. */}
+          <section {...sect('ideology')}>
+            <div className="tl-canvasbox"><canvas id="ideologyCanvas" height={440} /></div>
+          </section>
+
           {/* ── Connections ───────────────────────────────────────────────── */}
           <section {...sect('conn')}>
             <div className="tl-canvasbox"><canvas id="connCanvas" height={826} /></div>
@@ -2954,6 +3006,13 @@ export default function Lab() {
             <aside {...panel('bl', ['braid'], 'Reading', 'tl-panel--secondary')}>
               {hd('Reading')}
               <div className="tl-panel__bd"><div className="caption" id="braidNote" /></div>
+            </aside>
+            {/* Same shape for the second belief corpus: braid.ts writes one note
+                per view from its own row of BELIEF_VIEWS, so neither caption is
+                ever describing the other view's contents. */}
+            <aside {...panel('bl', ['ideology'], 'Reading', 'tl-panel--secondary')}>
+              {hd('Reading')}
+              <div className="tl-panel__bd"><div className="caption" id="ideologyNote" /></div>
             </aside>
 
             {/* CONNECTIONS' "RELATED" LIST IS NOT A PANEL ANY MORE.
@@ -3184,28 +3243,39 @@ export default function Lab() {
                 <div className="tl-cluster" id="flowRegionRow" />
               )),
             })}
-            {/* braid */}
-            {/* BELIEFS NOW WEARS EMPIRES' PANEL, ROW FOR ROW. The two views are
-                one engine (Ribbons) and they were reading as two products: Flow
-                had a scale switch and Braid did not, so braid.ts minted itself
-                one at runtime and appended it into whatever .tl-cluster it found
-                first. It is declared here now, identical to Flow's, in the same
-                spine group — and the runtime injection is gone.
+            {/* braid + ideology */}
+            {/* BELIEFS WEARS EMPIRES' PANEL, ROW FOR ROW, AND SO DOES ITS NEW
+                SIBLING. The three views are one engine (Ribbons) and they were
+                reading as two products: Flow had a scale switch and Braid did
+                not, so braid.ts minted itself one at runtime and appended it into
+                whatever .tl-cluster it found first. Both are declared here now,
+                identical to Flow's, in the same spine group.
 
-                THE TWO SYSTEMS BECAME A SEG. They are one exclusive choice, and
-                every other exclusive choice in the app is a .tl-seg; these two
-                were .btn / .btn.hero, which is the shape of an ACTION and gave
-                the reader an accent where DESIGN.md allows none. */}
+                AND "WHAT IS IN IT" IS EMPTY ON BOTH, WHICH IS THE SPLIT. That
+                group used to hold a System seg — Religions | Ideologies — the
+                one control this pair of views replaces. A view that IS the
+                ideologies should not also offer to become the religions; that
+                is the seg's job, and the seg is in the masthead above. So the
+                row is OMITTED rather than filled with something else, exactly as
+                the spine says: Connections has no HOW and no WHAT and its panel
+                is simply short. These two are now short in the same way, and
+                Empires keeps its Regions row because Empires genuinely has
+                contents to filter.
+
+                The two panels are one call each rather than one call for both,
+                because the ids differ (#braidMode / #ideologyMode) and each seg
+                must drive its own instance — a shared id would give the pair one
+                scale between them, which is the bug the split exists to end. */}
             {ctrlPanel(['braid'], {
               seg: groupSeg(),
               where: (
                 <div className="tl-cluster">
-                  {/* Braid's framing belongs to whichever system is showing —
-                      religions open on 1000 BCE, ideologies on 1848 — so the
-                      reset is the live system re-picked rather than a second,
-                      disagreeing copy of those two numbers here. */}
-                  <ResetBtn title="Frame the whole span of the system showing"
-                    onClick={() => document.querySelector<HTMLElement>('#braidSystem [aria-pressed="true"]')?.click()} />
+                  {/* The framing belongs to the VIEW now — religions open on
+                      1000 BCE — so the reset states that year through braid.ts's
+                      own table instead of re-pressing a preset and inheriting
+                      whatever it happened to set. */}
+                  <ResetBtn title="Frame the whole span of the religions"
+                    onClick={() => braidHome('religion')} />
                 </div>
               ),
               how: field('Scale', (
@@ -3214,10 +3284,19 @@ export default function Lab() {
                   <button className="tl-seg__item" data-v="abs">Absolute</button>
                 </div>
               )),
-              what: field('System', (
-                <div className="tl-seg" id="braidSystem" role="group" aria-label="Belief system">
-                  <button className="tl-seg__item" data-braid="religion">Religions</button>
-                  <button className="tl-seg__item" data-braid="ideology">Ideologies</button>
+            })}
+            {ctrlPanel(['ideology'], {
+              seg: groupSeg(),
+              where: (
+                <div className="tl-cluster">
+                  <ResetBtn title="Frame the whole span of the ideologies"
+                    onClick={() => braidHome('ideology')} />
+                </div>
+              ),
+              how: field('Scale', (
+                <div className="tl-seg" id="ideologyMode" role="group" aria-label="Scale">
+                  <button className="tl-seg__item" data-v="norm">Share of world</button>
+                  <button className="tl-seg__item" data-v="abs">Absolute</button>
                 </div>
               )),
             })}

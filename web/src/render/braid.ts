@@ -1,41 +1,38 @@
 /* eslint-disable @typescript-eslint/no-explicit-any */
 // ================= ⑥a BRAIDED RIVERS =================
-// Ported verbatim from prototypes/partB.html — the same Ribbons engine as ③.
+// Ported from prototypes/partB.html — the same Ribbons engine as ③.
 import { $, BELIEFS } from './shared';
 import { bindModeSeg, Ribbons } from './flow';
 
-// selKind 'belief': a braid stream is a belief, not a polity, and the card already
-// describes 'belief:<id>'. Everything else — the fixed absolute reference, the click
-// that writes the global selection, the highlight that answers one made elsewhere —
-// is the shared Ribbons engine, so the two views cannot drift apart.
-//
-// AND IT OPENS ON THE ABSOLUTE SCALE, like Empires. "Make sure Beliefs have also an
-// Absolute view option (and its default)." The reference is NOT the empires' 130.66:
-// refMaxTotal() is computed from whatever items it is handed, and this instance is
-// handed belief streams, so the ruler is the belief corpus's own peak — 49.70 for the
-// religions (2026) and 31.57 for the ideologies (1975). Measured fills below.
-export const Braid = Ribbons({
-  canvas: '#braidCanvas', d0: -1000, d1: 2026, height: 440, mode: 'abs', colorBy: 'root', selKind: 'belief',
-});
+/* ── TWO VIEWS, NOT ONE VIEW WITH A SWITCH ────────────────────────────────────
+   "I think it should be Empires/Beliefs/Ideologies."
 
-/* THE MODE TOGGLE IS NO LONGER MINTED HERE.
+   This file used to export ONE `Braid` — a single Ribbons instance on a single
+   canvas — and a preset chip inside its own Controls panel swapped six things
+   underneath the reader at once: the item set, the framing, the note, and the
+   pressed state of the chip that did it. Religions and ideologies were two
+   corpora wearing one instrument, and everything that made them different had
+   to be re-applied on every press.
 
-   This file used to build its own scale button at runtime: it went looking for
-   `aside[data-panelfor~="braid"] .tl-panel__bd`, found the first .tl-cluster in
-   it, and appended a second .btn into whatever row that happened to be. It did
-   that because Lab.tsx had given Braid a Reset cluster and no scale switch — one
-   of the two views on the same engine had the control and the other did not.
+   They are peers in the Flow group's seg now, beside Empires, so each gets what
+   a view gets: its own canvas, its own window, its own hover and selection and
+   pan, its own scale switch, its own note. Nothing is "currently set to" any
+   more — a caller says `Braids.ideology.render()` and means it.
 
-   That is exactly the fragmentation this round set out to end. Lab.tsx declares
-   the switch now, in the HOW IT IS DRAWN group where Empires keeps its identical
-   one, and this file binds it — the honest division: the shell owns the shape of
-   the panel, the renderer owns the state behind it. bindModeSeg is flow.ts's, so
-   there is literally one implementation of "relative or absolute" in the app.  */
+   THE DIFFERENCE BETWEEN THEM IS THIS TABLE AND NOTHING ELSE. Same engine, same
+   mode, same height, same colouring, same selKind. A third belief corpus would
+   be a row here plus a section in Lab.tsx, and no branch anywhere.
+
+   selKind STAYS 'belief' ON BOTH. The two systems share zero stream ids (32
+   religions, 8 ideologies, no collision), so 'belief:<id>' is still unambiguous
+   across the split — and a selection made before the split, or written by the
+   card, or restored from a URL, still names exactly one stream. A second
+   namespace would buy nothing and break every one of those. */
 
 /* ── WHERE EACH BELIEF SYSTEM OPENS ────────────────────────────────────────────
    A property OF THE SYSTEM, not a branch inside a click handler: the framing is a fact
-   about that corpus, and it has to survive being lifted out if these two ever become two
-   views of their own.
+   about that corpus, and it had to survive being lifted out when these two became two
+   views of their own. It has now been.
 
    "Well just make it look as religions — you see the evolution over time, but if you pan
    around, the heights do not change." That is a description of the absolute scale, which
@@ -63,26 +60,87 @@ export const Braid = Ribbons({
 
    NOTHING IS HIDDEN BY THIS. It is where the view OPENS, not what it holds: the item set
    is untouched, so panning left or zooming out still reaches 1789, 1650 and beyond, and
-   Reset view returns here. */
-const OPENS_AT: Record<string, number> = { religion: -1000, ideology: 1848 };
+   Reset view returns here.
+
+   AND IT OPENS ON THE ABSOLUTE SCALE, like Empires. "Make sure Beliefs have also an
+   Absolute view option (and its default)." The reference is NOT the empires' 130.66:
+   refMaxTotal() is computed from whatever items an instance is handed, and each of these
+   is handed one system's streams, so each ruler is its own corpus's peak — 49.70 for the
+   religions (2026) and 31.57 for the ideologies (1975). Splitting the instance in two did
+   not change either number, because neither was ever computed from the union. */
+export interface BeliefView {
+  /** the system id in BELIEFS.systems — also the key callers use */
+  sys: string;
+  canvas: string;
+  /** the scale .tl-seg Lab.tsx declares for this view */
+  mode: string;
+  /** the Reading caption this view writes */
+  note: string;
+  /** the year this view opens on, and the year Reset view returns to */
+  d0: number;
+}
+
 const OPENS_UNTIL = 2026;
 
+export const BELIEF_VIEWS: Record<string, BeliefView> = {
+  religion: { sys: 'religion', canvas: '#braidCanvas', mode: '#braidMode', note: '#braidNote', d0: -1000 },
+  ideology: { sys: 'ideology', canvas: '#ideologyCanvas', mode: '#ideologyMode', note: '#ideologyNote', d0: 1848 },
+};
+
+const makeBraid = (v: BeliefView) => Ribbons({
+  canvas: v.canvas, d0: v.d0, d1: OPENS_UNTIL, height: 440, mode: 'abs', colorBy: 'root', selKind: 'belief',
+});
+
+/* THE MODE TOGGLE IS NOT MINTED HERE.
+
+   This file used to build its own scale button at runtime: it went looking for
+   `aside[data-panelfor~="braid"] .tl-panel__bd`, found the first .tl-cluster in
+   it, and appended a second .btn into whatever row that happened to be. It did
+   that because Lab.tsx had given Braid a Reset cluster and no scale switch — one
+   of the two views on the same engine had the control and the other did not.
+
+   That is exactly the fragmentation that round set out to end. Lab.tsx declares
+   the switch now, one per view, in the HOW IT IS DRAWN group where Empires keeps
+   its identical one, and this file binds it — the honest division: the shell owns
+   the shape of the panel, the renderer owns the state behind it. bindModeSeg is
+   flow.ts's, so there is literally one implementation of "relative or absolute"
+   in the app, and now three instruments wearing it.  */
+
+export const Braids: Record<string, ReturnType<typeof makeBraid>> = {
+  religion: makeBraid(BELIEF_VIEWS.religion),
+  ideology: makeBraid(BELIEF_VIEWS.ideology),
+};
+
+/** Every belief view, for the callers that must touch all of them (sizing, repaint). */
+export const BRAID_IDS = Object.keys(BELIEF_VIEWS);
+
+/**
+ * WHICH SYSTEM HOLDS THIS STREAM — 'religion', 'ideology', or null when the id is
+ * not a stream at all. Read from the CORPUS, never from an instance's `items`: the
+ * question is which VIEW draws it, and that has to be answerable before either view
+ * has ever been rendered.
+ */
+export function beliefSystemOf(localId: string): string | null {
+  for (const s of (BELIEFS.systems || [])) {
+    if ((s.streams || []).some((t: any) => t && t.id === localId)) return s.id;
+  }
+  return null;
+}
+
+/** Put a view back on its own opening framing — what Reset view means here. */
+export function braidHome(id: string) {
+  const v = BELIEF_VIEWS[id]; const b = Braids[id];
+  if (v && b) b.animTo(v.d0, OPENS_UNTIL);
+}
+
 export function initBraid() {
-  Braid.init();
-  bindModeSeg('#braidMode', () => Braid.mode, m => { Braid.mode = m as any; Braid.render(); });
-  const pick = (id: string) => {
-    const sys = (BELIEFS.systems || []).find((s: any) => s.id === id);
-    Braid.items = sys ? sys.streams : [];
-    Braid.d0 = OPENS_AT[id] ?? -1000; Braid.d1 = OPENS_UNTIL;
-    $('#braidNote')!.textContent = sys ? `${sys.label} · ${sys.streams.length} streams` : 'no data';
-    // A .tl-seg carries its selection in aria-pressed, like every other
-    // exclusive choice in the app. It used to be a .hero class on a .btn, which
-    // put an accent on a panel control — and an accent means "where you are in
-    // TIME" here, nothing else.
-    document.querySelectorAll<HTMLElement>('[data-braid]')
-      .forEach(b => b.setAttribute('aria-pressed', String(b.dataset.braid === id)));
-    Braid.render();
-  };
-  document.querySelectorAll<HTMLElement>('[data-braid]').forEach(b => b.addEventListener('click', () => pick(b.dataset.braid!)));
-  pick('religion');
+  for (const id of BRAID_IDS) {
+    const v = BELIEF_VIEWS[id], b = Braids[id];
+    b.init();
+    bindModeSeg(v.mode, () => b.mode, m => { b.mode = m as any; b.render(); });
+    const sys = (BELIEFS.systems || []).find((s: any) => s.id === v.sys);
+    b.items = sys ? sys.streams : [];
+    $(v.note)!.textContent = sys ? `${sys.label} · ${sys.streams.length} streams` : 'no data';
+    b.render();
+  }
 }

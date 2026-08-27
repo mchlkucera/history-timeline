@@ -892,7 +892,18 @@ export const SelCard = {
     // on, and nothing else. Timeline is not specially styled — it just keeps
     // the first slot. So exactly one cell is ever inverted, and on a view that
     // is not a destination at all (Flow, Braid, …) none of them is.
-    for (const d of out) d.current = LANDS_ON[d.act] === this.view;
+    for (const d of out) {
+      // BELIEFS IS TWO VIEWS NOW. The Flow group's seg split into Empires ·
+      // Beliefs · Ideologies, so one destination lands on whichever of the two
+      // belief views holds this stream — Lab.tsx routes it by corpus, not by
+      // chip. LANDS_ON is a static id-to-view map and cannot express "either",
+      // so the Beliefs cell asks the pair. Without this it never inverted on
+      // Ideologies: routing was right, but the row would not say "you are here"
+      // for a view you were plainly standing on.
+      d.current = d.act === 'braid'
+        ? (this.view === 'braid' || this.view === 'ideology')
+        : LANDS_ON[d.act] === this.view;
+    }
     return out;
   },
 
