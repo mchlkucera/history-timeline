@@ -317,30 +317,56 @@ export function Ribbons(cfg: RibbonCfg) {
       // it outright; once the card is dismissed the pointer has it back and the selection
       // keeps only what it had before — its ribbon lit whenever nothing is being hovered.
       const hold = this.selShown();
-      const kin = hold ? this.kin(selId!) : (this.hover ? this.kin(this.hover) : (selId ? this.kin(selId) : null));
-      // a hover is a passing glance and may dim hard; a selection is a standing state and
-      // has to leave the rest of the picture readable underneath it
-      const DIM = hold || !this.hover ? 0.34 : 0.13;
+      // WHO IS DRIVING THE EMPHASIS, named, because how loud it is allowed to be follows
+      // from that and from nothing else.
+      const from = hold ? 'sel' : (this.hover ? 'hover' : (selId ? 'sel' : null));
+      const kin = from === 'sel' ? this.kin(selId!) : (from === 'hover' ? this.kin(this.hover!) : null);
+      /* A HOVER IS A GLANCE AND MUST BE THE QUIETEST THING IN THE VIEW. "Make the hover
+         highlight less aggressive, it's hard to use now." It was inverted: the involuntary
+         gesture dropped everything else to 0.13 while the deliberate one — a selection —
+         only went to 0.34, so a pointer crossing the plate on its way somewhere kept
+         collapsing the picture to near-black without being asked. Worse than the alpha,
+         `dim` was also suppressing the ribbon NAMES, so hovering to find something deleted
+         the labels you were navigating by.
+         Now: a hover leaves the rest of the plate at HOVER_DIM, which is a shading rather
+         than a blackout, AND KEEPS EVERY NAME. What makes the hovered lineage read is the
+         lift — full ink plus a crisper outline on the ribbon actually under the pointer —
+         not the loss of everything around it. Lifting one is cheaper than pushing down
+         forty and it cannot damage legibility anywhere else.
+         A SELECTION KEEPS ITS FOCUS at 0.34 with the context names dropped: that is a
+         decision the reader made and it has earned the right to quiet the rest. A search
+         query dims at the same strength for the same reason — it is also asked for. */
+      const HOVER_DIM = 0.62, FOCUS_DIM = 0.34;
+      const kinDim = from === 'hover' ? HOVER_DIM : FOCUS_DIM;
       this.bands = [];
       const labels: { text: string; x: number; y: number; min: number; max: number; size: number }[] = [];
       for (const [id, a] of this.lay.paths) {
         if (a.top.length < 2) continue;
         const p = a.p, col = this.colorOf(p, T);
-        const dim = (kin && !kin.has(id)) || (q && !p.name.toLowerCase().includes(q));
-        ctx.globalAlpha = dim ? DIM : (kin && kin.has(id) ? 0.98 : 0.86);
+        const offKin = !!(kin && !kin.has(id));
+        const offQuery = !!(q && !p.name.toLowerCase().includes(q));
+        // …and a name survives a hover. It is only dropped by the two acts the reader
+        // asked for: a selection being read, and a query filtering the plate.
+        const mute = offQuery || (offKin && from === 'sel');
+        ctx.globalAlpha = offQuery ? FOCUS_DIM : (offKin ? kinDim : (kin && kin.has(id) ? 0.98 : 0.86));
         ctx.beginPath();
         ctx.moveTo(X(a.top[0][0]), TOP + a.top[0][1]);
         for (let i = 1; i < a.top.length; i++) ctx.lineTo(X(a.top[i][0]), TOP + a.top[i][1]);
         for (let i = a.bot.length - 1; i >= 0; i--) ctx.lineTo(X(a.bot[i][0]), TOP + a.bot[i][1]);
         ctx.closePath(); ctx.fillStyle = col; ctx.fill();
+        // THE LIFT, in ink and alpha only — never the accent, which means "where you are in
+        // time". The one under the pointer gets the crisp outline, its lineage a fainter
+        // one: with the dim this gentle, the outline is what says WHICH, so it has to be
+        // legible on a 6px ribbon at the full span.
         if (id === selId) { ctx.strokeStyle = T.ink; ctx.lineWidth = 2; ctx.globalAlpha = .95; ctx.stroke(); }
+        else if (id === this.hover && from === 'hover') { ctx.strokeStyle = T.ink; ctx.lineWidth = 1.6; ctx.globalAlpha = .8; ctx.stroke(); }
         else if (kin && kin.has(id)) { ctx.strokeStyle = T.ink; ctx.lineWidth = 1.1; ctx.globalAlpha = .5; ctx.stroke(); }
         // label inside the ribbon at its thickest point
         let bi = 0, bt = 0;
         for (let i = 0; i < a.top.length; i++) { const t = a.bot[i][1] - a.top[i][1]; if (t > bt) { bt = t; bi = i; } }
         const bx = X(a.top[bi][0]), by = TOP + (a.top[bi][1] + a.bot[bi][1]) / 2;
         const x0 = X(a.top[0][0]), x1 = X(a.top[a.top.length - 1][0]);
-        if (bt >= 11 && x1 - x0 > 44 && !dim)
+        if (bt >= 11 && x1 - x0 > 44 && !mute)
           labels.push({ text: p.name, x: bx, y: by, min: x0, max: x1, size: clamp(bt * 0.55, 10, 13) });
         this.bands.push({ id, a, p, col });
         ctx.globalAlpha = 1;
