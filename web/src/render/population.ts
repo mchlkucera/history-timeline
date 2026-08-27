@@ -490,7 +490,7 @@ export const Pop = {
   names: true,
   playing: null as any,
   _init: false,
-  _path: null as Path2D | null, _pw: 0, _ph: 0,
+  _path: null as Path2D | null, _pw: 0, _ph: 0, _pg: null as any[] | null,
   proj: { ox: 0, oy: 0, mw: 1, mh: 1 },
   _capAt: 0, _capNamed: true,
   _off: null as HTMLCanvasElement | null,
@@ -644,15 +644,28 @@ export const Pop = {
     ctx.fillStyle = T.sea; ctx.fillRect(ox, oy, mw, mh);
 
     // land silhouette (present-day coastline; coastlines are the one thing that barely moves)
-    if (!this._path || this._pw !== mw || this._ph !== mh) {
-      const p = new Path2D(); const geo = GEO[1994] || [];
+    //
+    // KEYED ON THE GEOMETRY AS WELL AS THE PLATE. The path is a function of both, but
+    // the memo used to be keyed on the size alone. Habitation paints before the atlas
+    // lands (Lab warms it after first paint and repaints every view through onAtlas),
+    // and on that first pass GEO answers with the empty snapshot — so an EMPTY Path2D
+    // was latched and, the size being unchanged when the geometry arrived, never
+    // rebuilt. Plate only fills and strokes this path, and filling nothing is a silent
+    // no-op, so it merely lost its coastline; Field CLIPS to it, and an empty clip
+    // discards the entire density raster, leaving the blank plate with the place names
+    // still on it (they are drawn after the clip is restored). Same failure map.ts
+    // documents at buildPaths(); GEO's arrays are built once and never replaced, so
+    // identity is the honest key.
+    const geo = GEO[1994] || [];
+    if (!this._path || this._pw !== mw || this._ph !== mh || this._pg !== geo) {
+      const p = new Path2D();
       const px = (lo: number) => (lo + 180) / 360 * mw, py = (la: number) => (85 - la) / 145 * mh;
       for (const f of geo) for (const r of f.rings) {
         p.moveTo(px(r[0]), py(r[1]));
         for (let i = 2; i < r.length; i += 2) p.lineTo(px(r[i]), py(r[i + 1]));
         p.closePath();
       }
-      this._path = p; this._pw = mw; this._ph = mh;
+      this._path = p; this._pw = mw; this._ph = mh; this._pg = geo;
     }
     ctx.save();
     ctx.translate(ox, oy);
