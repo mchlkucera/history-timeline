@@ -3,9 +3,9 @@
 // Ported from prototypes/partB.html. Only change: `cv` is resolved in init() instead of
 // at module load, because in Next the module is evaluated before the DOM exists.
 import {
-  $, GEO, YEARS, CAPSULES, SelStore, TimeStore, clamp, fitCanvas, fmtY, featureAt, fontUI,
-  hexHsl, hexOklch, hslHex, maxChroma, mix, oklchHex, repaintOnFonts, showTip, hideTip,
-  sovColor, textW, tokens,
+  $, GEO, YEARS, CAPSULES, SelStore, TimeStore, atlasState, clamp, ensureAtlas, fitCanvas,
+  fmtY, featureAt, fontUI, hasAtlas, hexHsl, hexOklch, hslHex, maxChroma, mix, oklchHex,
+  onAtlas, repaintOnFonts, showTip, hideTip, sovColor, textW, tokens,
 } from './shared';
 import {
   bindPinch, slopFor, armSafariGestureGuard, refuseSafariGestures,
@@ -125,7 +125,13 @@ export const WorldMap = {
    */
   buildPaths(y: number) {
     if (this.paths[y]) return this.paths[y];
-    const built = GEO[y].map((f: any) => {
+    const geo = GEO[y] || [];
+    // NOTHING TO MEMOISE YET. Before the atlas lands GEO answers with the empty
+    // snapshot, and caching that would leave this year permanently blank after
+    // the geometry arrived. init() clears the cache on arrival too; this is the
+    // belt to that brace, and it costs one length check per paint.
+    if (!geo.length && !hasAtlas()) return [];
+    const built = geo.map((f: any) => {
       const p = new Path2D();
       for (const r of f.rings) {
         p.moveTo(this.px(r[0]), this.py(r[1]));
@@ -234,7 +240,15 @@ export const WorldMap = {
     return { cw: d.cw, ch, ctx: d.ctx, s0: Math.max(d.cw / this.MW, ch / this.MH) };
   },
   render() {
+    // A HIDDEN VIEW MEASURES ZERO, and size() returns null for it — which makes
+    // this line the one place in the app that knows the map is actually being
+    // looked at. So the atlas is demanded HERE and nowhere else: boot()'s
+    // unconditional first render on the timeline asks for nothing, `?v=map`
+    // asks for it before the reader has seen a frame, and pressing Map long
+    // after the idle prefetch finds it already in hand. ensureAtlas() is
+    // idempotent, so a repaint per pointer-move costs a promise lookup.
     const dim = this.size(); if (!dim) return;
+    if (!hasAtlas()) void ensureAtlas();
     // The world is now bigger than the frame, so the pan is load-bearing: it is
     // re-fitted on every paint (cheap, and idempotent) so a resize or a theme
     // repaint can never leave the viewport parked off the edge of the world.
@@ -310,6 +324,18 @@ export const WorldMap = {
       lede = n
         ? `<b>${sel.name}</b> · ${span} · ${n} ${n === 1 ? 'territory' : 'territories'} highlighted in ${when}.<br>`
         : `<b>${sel.name}</b> · ${span} · <b>not on the map in ${when}</b>.<br>`;
+    }
+    // WHAT THE READER IS LOOKING AT WHEN THERE ARE NO BORDERS ON IT. The atlas
+    // is a separate download now, so an empty world means one of two things and
+    // the capsule has to say which — an unexplained blank sea is the one thing
+    // this view may never show. The prose about the year is dropped in both
+    // cases: it describes a map that is not on screen.
+    const st = atlasState();
+    if (st !== 'ready') {
+      $('#capsule')!.innerHTML = `${lede}${near}` + (st === 'failed'
+        ? `<b>The borders could not be loaded.</b> The atlas is unavailable — everything else still works.`
+        : `<b>The world in ${fmtY(y)}.</b> Drawing the borders…`);
+      return;
     }
     $('#capsule')!.innerHTML = `${lede}${near}<b>The world in ${fmtY(y)}.</b> ${CAPSULES[String(y)] || ''}`;
   },
@@ -395,6 +421,10 @@ export const WorldMap = {
   },
   init() {
     const cv = this.cv = $<HTMLCanvasElement>('#mapCanvas')!;
+    // THE ATLAS ARRIVING IS A REPAINT. Path2Ds built before it landed describe
+    // an empty world, so the memo is dropped whole — cheap, once, and it also
+    // covers the failure case, where the capsule has a new sentence to print.
+    onAtlas(() => { this.paths = {}; this.render(); });
     TimeStore.subscribe(() => {
       if (TimeStore.source === 'map') return;          // our own write — no-op (anti-loop)
       this.stop();

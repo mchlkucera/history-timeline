@@ -18,8 +18,101 @@ export let POPS: any = null;
 export let PLACES: Record<string, any> = {};
 
 export let WORLDS: Record<string, any[]> = {};
-export let YEARS: number[] = [];
-export const GEO: Record<number, any[]> = {};
+
+/**
+ * THE EIGHTEEN SNAPSHOT YEARS, COMPILED IN — the one thing the atlas used to
+ * hold hostage.
+ *
+ * These are 18 integers, and they were being derived from Object.keys() of a
+ * 2.3 MB geometry file. That made the timeline wait on the map: the rail's
+ * snapshot engraving and the selection card's `firstMapYear()` both need this
+ * ladder, and neither of them draws a single polygon. So the ladder is a
+ * constant and the geometry is a download.
+ *
+ * WHY A CONSTANT AND NOT A MANIFEST. A `atlas-years.json` would be honest but
+ * costs a request on the critical path for 130 bytes; a head section of
+ * worlds.json still costs the atlas. A constant costs nothing and is available
+ * synchronously at module scope, which is what YEARS' callers assume — and the
+ * app ALREADY compiles this in three other places (rail.ts's SNAPSHOTS, the
+ * "…/18" readout, the slider's max of 17). The atlas is a build artefact of the
+ * same corpus, so the file is checked against this list on arrival in dev.
+ *
+ * (Note the −1: the atlas's turn-of-era snapshot is 1 BCE, while rail.ts's
+ * SNAPSHOTS engraves 1 CE. The two lists are otherwise identical and rail.ts
+ * should read this one — a one-line change in a file this agent does not own.)
+ */
+export const ATLAS_YEARS: readonly number[] = Object.freeze([
+  -3000, -1000, -323, -1, 400, 800, 1000, 1279, 1492, 1600, 1715, 1783, 1815, 1880, 1914, 1938, 1960, 1994,
+]);
+/** The snapshot ladder every view indexes into. Full from module scope: it never
+ *  waits for a fetch, and it is never empty. */
+export const YEARS: number[] = ATLAS_YEARS.slice();
+
+const _atlasSet = new Set<number>(ATLAS_YEARS);
+/** Shared, frozen, and returned for a real snapshot whose geometry has not
+ *  arrived — so `for (const f of GEO[y])` degrades to drawing nothing rather
+ *  than throwing. Frozen because every reader of GEO only ever iterates it. */
+const NO_GEOMETRY = Object.freeze([]) as unknown as any[];
+const _geo: Record<number, any[]> = {};
+
+/**
+ * DELTA-DECODED WORLD GEOMETRY, ONE SNAPSHOT AT A TIME.
+ *
+ * Reads the same as it always did — `GEO[1492]` — but the decode now happens on
+ * the first read of each year instead of in one synchronous 18-snapshot block
+ * during boot. The proxy is deliberate: five files index this thing directly
+ * (map, horizon, population, subject, featureAt below) and a lazy store that
+ * needed a call site change in each of them would have been the same work
+ * spread over five files that disagree about the guard.
+ *
+ * Three answers, in order: the decoded snapshot; a freshly decoded one if the
+ * atlas is here; NO_GEOMETRY if it is a real snapshot year whose atlas has not
+ * landed (or failed). Anything that is not a snapshot year is `undefined`,
+ * exactly as it was when this was a plain object.
+ */
+export const GEO: Record<number, any[]> = new Proxy(_geo, {
+  get(t, k, r) {
+    if (typeof k === 'string') {
+      const y = +k;
+      if (Number.isInteger(y) && String(y) === k) return ensureGeo(y);
+    }
+    return Reflect.get(t, k, r);
+  },
+});
+
+/** Decode one snapshot, memoised. The biggest of the eighteen (1600, 617
+ *  features) measures 1.7 ms — which is why this can be done on demand. */
+function ensureGeo(y: number): any[] | undefined {
+  const hit = _geo[y]; if (hit) return hit;
+  const raw = WORLDS[String(y)];
+  if (!raw) return _atlasSet.has(y) ? NO_GEOMETRY : undefined;
+  return (_geo[y] = decodeSnapshot(raw));
+}
+
+/** decimetre-degrees, delta-encoded -> degrees, absolute, as Float64Array rings,
+ *  plus the bounding box / label centre / extent every renderer ranks by. */
+function decodeSnapshot(features: any[]): any[] {
+  return features.map((f: any) => {
+    const rings = f[2].map((d: number[]) => {
+      const out = new Float64Array(d.length);
+      let x = d[0], yv = d[1]; out[0] = x / 10; out[1] = yv / 10;
+      for (let i = 2; i < d.length; i += 2) { x += d[i]; yv += d[i + 1]; out[i] = x / 10; out[i + 1] = yv / 10; }
+      return out;
+    });
+    let x0 = 1e9, x1 = -1e9, y0 = 1e9, y1 = -1e9, lc: number[] | null = null, lcArea = -1;
+    for (const r of rings) {
+      let a0 = 1e9, a1 = -1e9, b0 = 1e9, b1 = -1e9;
+      for (let i = 0; i < r.length; i += 2) {
+        const x = r[i], y2 = r[i + 1];
+        if (x < a0) a0 = x; if (x > a1) a1 = x; if (y2 < b0) b0 = y2; if (y2 > b1) b1 = y2;
+      }
+      if (a0 < x0) x0 = a0; if (a1 > x1) x1 = a1; if (b0 < y0) y0 = b0; if (b1 > y1) y1 = b1;
+      const ra = (a1 - a0) * (b1 - b0);
+      if (ra > lcArea) { lcArea = ra; lc = [(a0 + a1) / 2, (b0 + b1) / 2]; }
+    }
+    return { name: f[0], sov: f[1] === 0 ? f[0] : f[1], rings, bb: [x0, y0, x1, y1], lc, lw: lcArea ? Math.sqrt(lcArea) : 0, area: (x1 - x0) * (y1 - y0) };
+  });
+}
 
 let dataReady = false;
 export const isReady = () => dataReady;
@@ -33,39 +126,20 @@ export interface Datasets {
   PLACEMAP: Record<string, any>;
 }
 
-export function initData(worlds: Record<string, any[]>, ds: Datasets) {
+/**
+ * THE CORPUS — everything the timeline draws, and nothing the map does.
+ *
+ * The atlas used to be the first argument here, which meant `ready` waited on
+ * 599 KB of border geometry to show a view that draws no borders. It is fetched
+ * separately now (ensureAtlas below) and decoded a snapshot at a time.
+ */
+export function initData(ds: Datasets) {
   if (dataReady) return;
   CAT_MAP = ds.CATMAP || {};
   POLITIES = ds.POLIS || [];
   BELIEFS = ds.BELIEF || { systems: [] };
   POPS = ds.POPDATA || null;
   PLACES = ds.PLACEMAP || {};
-  WORLDS = worlds;
-
-  // ---------- world geometry (delta-decoded, decimetre-degrees -> degrees) ----------
-  YEARS = Object.keys(WORLDS).map(Number).sort((a, b) => a - b);
-  for (const y of YEARS) {
-    GEO[y] = WORLDS[String(y)].map((f: any) => {
-      const rings = f[2].map((d: number[]) => {
-        const out = new Float64Array(d.length);
-        let x = d[0], yv = d[1]; out[0] = x / 10; out[1] = yv / 10;
-        for (let i = 2; i < d.length; i += 2) { x += d[i]; yv += d[i + 1]; out[i] = x / 10; out[i + 1] = yv / 10; }
-        return out;
-      });
-      let x0 = 1e9, x1 = -1e9, y0 = 1e9, y1 = -1e9, lc: number[] | null = null, lcArea = -1;
-      for (const r of rings) {
-        let a0 = 1e9, a1 = -1e9, b0 = 1e9, b1 = -1e9;
-        for (let i = 0; i < r.length; i += 2) {
-          const x = r[i], y2 = r[i + 1];
-          if (x < a0) a0 = x; if (x > a1) a1 = x; if (y2 < b0) b0 = y2; if (y2 > b1) b1 = y2;
-        }
-        if (a0 < x0) x0 = a0; if (a1 > x1) x1 = a1; if (b0 < y0) y0 = b0; if (b1 > y1) y1 = b1;
-        const ra = (a1 - a0) * (b1 - b0);
-        if (ra > lcArea) { lcArea = ra; lc = [(a0 + a1) / 2, (b0 + b1) / 2]; }
-      }
-      return { name: f[0], sov: f[1] === 0 ? f[0] : f[1], rings, bb: [x0, y0, x1, y1], lc, lw: lcArea ? Math.sqrt(lcArea) : 0, area: (x1 - x0) * (y1 - y0) };
-    });
-  }
 
   // lifespans live in their own dataset so partA's EVENTS array stays hand-editable
   for (const L of ds.LIVES || []) EVENTS.push(L.slice());
@@ -78,6 +152,143 @@ export function initData(worlds: Record<string, any[]>, ds: Datasets) {
   }
   dataReady = true;
   resetCatRanks();                         // the corpus just changed; so did every rank
+}
+
+/* =============================================================================
+   THE ATLAS — 599 KB of border geometry, off the critical path.
+
+   MEASURED, on a production build at localhost. The boot used to be one
+   Promise.all over five files and `ready` waited on all of them:
+
+     worlds.json    599.3 KB   finished 358 ms      <- 87% of the payload
+     lanes.json      34.7 KB   finished 223 ms
+     datasets.json   28.8 KB   finished 223 ms
+     polities.json   14.3 KB   finished 221 ms
+     relations.json   9.4 KB   finished 223 ms
+
+   The default view is the TIMELINE, which draws no map. So the first-time
+   reader waited for 599 KB they were not looking at — and then for the
+   synchronous delta-decode of all eighteen snapshots on top of it.
+
+   THE DECODE IS LAZY, NOT WORKERED, AND THAT IS A MEASUREMENT TOO. Decoding
+   the whole atlas costs 8.2 ms and the worst single snapshot (1600, 617
+   features) costs 1.7 ms; JSON.parse of the file costs another 10 ms. A worker
+   would move ~20 ms off the main thread at the price of a second chunk, a
+   second copy of the corpus and a structured clone of 2.3 MB — and it would
+   still have to rebuild the per-feature objects that map.ts holds BY IDENTITY
+   (soloFeature). Per-snapshot on demand plus an idle warm-up gets the same
+   result with no task longer than 2 ms: whichever snapshot the reader opens is
+   decoded in under two milliseconds if the warm-up has not reached it yet, and
+   every year step after that is already in hand.
+
+   WHAT TRIGGERS THE FETCH. warmAtlas() on the first idle after first paint —
+   so the reader who never opens the map pays nothing before their timeline is
+   on screen, and the reader who does opens it against a warm cache. Any view
+   that actually needs borders forces it (WorldMap.render calls ensureAtlas
+   once it knows it is visible), which is also what makes `?v=map&y=…` work: the
+   restore lands on the right snapshot immediately, because YEARS never left.
+
+   IF IT NEVER ARRIVES, the timeline is untouched. GEO answers NO_GEOMETRY for
+   every real snapshot year, so nothing throws, the map says so in its own
+   capsule, and the rail keeps its engraving because the engraving was never
+   geometry in the first place.
+============================================================================= */
+export type AtlasState = 'idle' | 'loading' | 'ready' | 'failed';
+let _atlas: AtlasState = 'idle';
+let _atlasAt = 0;
+let _atlasP: Promise<boolean> | null = null;
+const _atlasSubs = new Set<(ok: boolean) => void>();
+/** how long a failure stands before the next ensureAtlas() is allowed to retry */
+const ATLAS_RETRY_MS = 4000;
+
+/** 'idle' | 'loading' | 'ready' | 'failed' — what a view can honestly say. */
+export const atlasState = () => _atlas;
+/** true once GEO can answer with real geometry. */
+export const hasAtlas = () => _atlas === 'ready';
+/** Fires once per resolution, with whether it worked. Returns an unsubscribe. */
+export function onAtlas(fn: (ok: boolean) => void) {
+  _atlasSubs.add(fn);
+  return () => { _atlasSubs.delete(fn); };
+}
+function announceAtlas(ok: boolean) {
+  for (const f of [..._atlasSubs]) { try { f(ok); } catch (e) { console.error(e); } }
+}
+
+type IdleDeadline = { timeRemaining(): number };
+const idle = (fn: (d?: IdleDeadline) => void, timeout = 400) => {
+  if (typeof requestIdleCallback === 'function') requestIdleCallback(fn as IdleRequestCallback, { timeout });
+  else setTimeout(fn, 1);
+};
+
+/**
+ * Fetch and hold the atlas. Idempotent, and safe to call from anywhere: the
+ * in-flight promise is shared. A failure stands for ATLAS_RETRY_MS before the
+ * next caller is allowed to try again, so a flaky first byte does not cost the
+ * reader the map for the rest of the session — and a permanently missing file
+ * cannot be hammered by a repainting view.
+ */
+export function ensureAtlas(): Promise<boolean> {
+  if (_atlas === 'ready') return Promise.resolve(true);
+  const stale = _atlas === 'failed' && Date.now() - _atlasAt > ATLAS_RETRY_MS;
+  if (_atlasP && !stale) return _atlasP;
+  _atlas = 'loading';
+  return (_atlasP = (async () => {
+    try {
+      const r = await fetch('/data/worlds.json');
+      if (!r.ok) throw new Error(`worlds.json → HTTP ${r.status}`);
+      WORLDS = await r.json();
+      _atlas = 'ready'; _atlasAt = Date.now();
+      if (process.env.NODE_ENV !== 'production') {
+        const keys = Object.keys(WORLDS).map(Number).sort((a, b) => a - b);
+        if (keys.length !== YEARS.length || keys.some((y, i) => y !== YEARS[i])) {
+          console.warn('[atlas] ATLAS_YEARS has drifted from worlds.json', { compiled: YEARS, file: keys });
+        }
+      }
+      announceAtlas(true);
+      warmGeo();
+      return true;
+    } catch (e) {
+      console.error('[atlas] ' + String((e as Error)?.message || e));
+      _atlas = 'failed'; _atlasAt = Date.now();
+      announceAtlas(false);
+      return false;
+    }
+  })());
+}
+
+let _armed = false;
+/**
+ * THE PREFETCH. Call with no argument after first paint: the atlas is fetched
+ * on the first idle the browser has, so opening the map later is instant in
+ * practice rather than merely correct. Call with `true` from something that is
+ * looking at borders RIGHT NOW.
+ */
+export function warmAtlas(now = false): void {
+  if (now) { void ensureAtlas(); return; }
+  if (_armed || _atlas === 'ready' || _atlas === 'loading') return;
+  _armed = true;
+  const go = () => idle(() => { void ensureAtlas(); }, 1500);
+  // one frame first: rAF fires before paint, so the idle is queued from a
+  // callback that is already past React's commit and lands after the pixels.
+  if (typeof requestAnimationFrame === 'function') requestAnimationFrame(go); else go();
+}
+
+/**
+ * Decode the remaining snapshots one at a time in idle slices, so the reader
+ * who opens the map two seconds later never decodes anything at all. Each
+ * slice is one snapshot — 0.2–1.7 ms — and it stops the moment the browser
+ * says the idle period is spent.
+ */
+function warmGeo() {
+  let i = 0;
+  const step = (d?: IdleDeadline) => {
+    while (i < YEARS.length) {
+      ensureGeo(YEARS[i++]);
+      if (d && d.timeRemaining() < 2) break;
+    }
+    if (i < YEARS.length) idle(step);
+  };
+  idle(step);
 }
 
 // ---------- shared helpers ----------
@@ -919,7 +1130,7 @@ export function pip(lon: number, lat: number, f: any) {
 }
 export function featureAt(year: number, lon: number, lat: number) {
   let best: any = null;
-  for (const f of GEO[year]) if (pip(lon, lat, f)) if (!best || f.area < best.area) best = f;
+  for (const f of (GEO[year] || [])) if (pip(lon, lat, f)) if (!best || f.area < best.area) best = f;
   return best;
 }
 

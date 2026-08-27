@@ -74,19 +74,63 @@ export function flowLayout(items: any[], W: number, H: number, d0: number, d1: n
     for (const t of (it.to || [])) if (set.has(t) && t !== it.id) kids.get(it.id)!.push(t);
     for (const f of (it.from || [])) if (set.has(f) && f !== it.id) pars.get(it.id)!.push(f);
   }
-  const REG = ['EU', 'ME', 'AS', 'AM', 'AF'];
+  /* WEST AT THE TOP, EAST AT THE BOTTOM — ROUGHLY, WHICH IS THE WORD HE USED.
+     "Make sure roughly the Flow view is from West on top all the way to East on bottom
+     (roughly) so that we can orient in it a little bit."
+
+     The old sequence — EU, ME, AS, AM, AF — was a list, not a direction: measured against
+     a west-to-east ranking it scored a correlation of −0.06, i.e. no geography at all, so
+     a reader had nothing to hold. This one runs by the region's longitude on the map every
+     atlas prints and this app draws (equirectangular, Greenwich in the middle, the Americas
+     down the left edge): AM ≈ 90°W, EU ≈ 12°E, AF ≈ 19°E, ME ≈ 40°E, AS ≈ 100°E. Reading
+     that map left to right IS this order top to bottom, which is the whole point — the two
+     views agree about where things are.
+
+     WHY REGION AND NOT LONGITUDE ITSELF, which is the more literal reading: the corpus has
+     no longitude for about half of these — a polity gets one only where it matches a
+     feature in the map's 18 snapshots, and the ancient half never does. Worse, the ones
+     that would have it are the ones it fits least: a single number for the British Empire,
+     the Mongols or Portugal-and-Brazil is a fiction, and it would MOVE as the territory
+     moved, which is layout changing without a click. Region is on 147 of 147 polities, it
+     never moves, and five bands are what a reader can actually hold.
+
+     THE AMERICAS ARE THE DELIBERATE CHOICE. By raw longitude they run to 172°W, so a
+     strict sort would put them above Europe — which is where they are on the map, and also
+     where the Pacific ones (Australia, Aotearoa, Hawai'i, the Lapita expansion: 5 of the
+     33) are NOT. The region is 85% American, the reader's mental map is the Atlantic-
+     centred one, and the alternative — Europe on top and the Americas at the bottom,
+     reached by going east across the Pacific — makes the fifth of the plate a reader
+     recognises fastest the hardest to find. So: Americas first, Oceania travelling with
+     them, stated rather than hidden.
+
+     LINEAGE STILL OWNS EVERYTHING BELOW A ROOT. Only the ROOTS are sorted; each root's
+     descendants are then visited depth-first, so a fork stays beside its parent even when
+     the child sits in another region — a Portuguese Brazil stays under Portugal. That is
+     the trade, and measured it is not a loss: mean parent-child distance in the stack
+     falls from 18.75 to 13.97 rows and the worst from 108 to 77, because the colonial
+     lineages that leap Europe→Americas now leap between neighbouring bands. Edges within
+     three rows (56.2%) and component spread (1.183) are unchanged to three decimals. */
+  const REG = ['AM', 'EU', 'AF', 'ME', 'AS'];
+  const rank = (p: any) => { const r = REG.indexOf(p.region); return r < 0 ? REG.length : r; };
   const roots = items.filter(i => pars.get(i.id)!.length === 0)
-    .sort((a, b) => {
-      const ra = REG.indexOf(a.region), rb = REG.indexOf(b.region);
-      return (ra < 0 ? 9 : ra) - (rb < 0 ? 9 : rb) || a.start - b.start;
-    });
+    .sort((a, b) => rank(a) - rank(b) || a.start - b.start);
   const order = new Map<string, number>(); let n = 0;
   const visit = (id: string) => {
     if (order.has(id)) return; order.set(id, n++);
-    for (const k of kids.get(id)!.slice().sort((a, b) => set.get(a).start - set.get(b).start)) visit(k);
+    // siblings go west to east as well, and only then by date. A fork costs nothing to
+    // order this way — each child is visited with its whole subtree before the next one
+    // starts, so adjacency to the parent is untouched — and it measurably tightens both
+    // readings at once: mean parent-child distance 13.97 → 13.58 rows, edges landing
+    // within three rows 56.2% → 58.4%, region blocks 31 → 28.
+    const ks = kids.get(id)!.slice().sort((a, b) =>
+      rank(set.get(a)) - rank(set.get(b)) || set.get(a).start - set.get(b).start);
+    for (const k of ks) visit(k);
   };
   roots.forEach(r => visit(r.id));
-  items.slice().sort((a, b) => a.start - b.start).forEach(i => visit(i.id));
+  // whatever the roots could not reach — anything whose every parent is also its
+  // descendant — lands in its own band too, rather than in a start-ordered tail that
+  // would drop a European polity underneath Asia and undo the reading above.
+  items.slice().sort((a, b) => rank(a) - rank(b) || a.start - b.start).forEach(i => visit(i.id));
   const ord = [...items].sort((a, b) => order.get(a.id)! - order.get(b.id)!);
   const REF = mode === 'norm' ? 0 : refMaxTotal(items);
   const STEP = Math.max(2, (d1 - d0) / Math.max(W, 1) * 2);
@@ -181,6 +225,28 @@ export function Ribbons(cfg: RibbonCfg) {
       const pre = this.selKind + ':';
       return g.startsWith(pre) ? g.slice(pre.length) : null;
     },
+    /** Is a ribbon THIS canvas draws being held up for reading right now? The one switch
+     *  behind the hover suspension, and deliberately not a flag of our own: it is read from
+     *  SelStore every time it is asked, so a selection made on the map or the timeline
+     *  suspends the hover here too, and clearing it anywhere restores the hover here.
+     *
+     *  THE CARD IS PART OF THE CONDITION, because the reader was told it is the way out:
+     *  "if you dont want it highlighted you should just close it via cross, then you can
+     *  hover as you like". The card's × dismisses the card and — today — leaves the
+     *  selection standing in the store, so a suspension keyed to the store alone would
+     *  answer that × with a picture that still refuses the pointer. Keyed to the card being
+     *  ON SCREEN, the × is the exit he says it is, and Escape (which drops the selection as
+     *  well) is the other one. Should the × ever clear the selection outright, `localSel()`
+     *  goes null and this clause quietly stops mattering — it cannot go wrong in that
+     *  direction.
+     *
+     *  It is also false while the selected ribbon is panned off the window or its region is
+     *  switched off — nothing is lit then, and a view that answers neither the pointer nor
+     *  the selection reads as broken rather than as focused. */
+    selShown(): boolean {
+      const s = this.localSel();
+      return !!(s && SelCard.open && this.lay && this.lay.paths.has(s));
+    },
     /** Where a ribbon is on screen — the rect the card is placed beside. A ribbon can be
      *  a metre wide, so the anchor is the slice UNDER THE POINTER when there was one, and
      *  the thickest slice otherwise (a selection arriving from another view). Anchoring a
@@ -237,10 +303,24 @@ export function Ribbons(cfg: RibbonCfg) {
       // which reads as broken rather than as focused.
       const sel = this.localSel();
       const selId = sel && this.lay.paths.has(sel) ? sel : null;
-      const kin = this.hover ? this.kin(this.hover) : (selId ? this.kin(selId) : null);
+      // AND WHILE A SELECTION IS LIVE, THE HOVER STANDS DOWN. "When I have something
+      // selected, I shouldn't be able to hover over others. Just keep one selected with
+      // all the connections. If I close it, go back to the hover to see view."
+      // Two emphases at once is two answers to one question: the pointer kept re-lighting
+      // a second lineage over the top of the chosen one, and the picture argued with
+      // itself. So the selection wins outright for as long as it stands, and the moment it
+      // is cleared the hover has it back — no timer, no easing and nothing to remember,
+      // because `hover` goes on tracking the pointer the whole time and only its EFFECT is
+      // withheld.
+      // `hold` is the same switch the pointer handlers ask, so the paint and the tooltip can
+      // never disagree about who owns the picture: while the card stands the selection owns
+      // it outright; once the card is dismissed the pointer has it back and the selection
+      // keeps only what it had before — its ribbon lit whenever nothing is being hovered.
+      const hold = this.selShown();
+      const kin = hold ? this.kin(selId!) : (this.hover ? this.kin(this.hover) : (selId ? this.kin(selId) : null));
       // a hover is a passing glance and may dim hard; a selection is a standing state and
       // has to leave the rest of the picture readable underneath it
-      const DIM = this.hover ? 0.13 : 0.34;
+      const DIM = hold || !this.hover ? 0.34 : 0.13;
       this.bands = [];
       const labels: { text: string; x: number; y: number; min: number; max: number; size: number }[] = [];
       for (const [id, a] of this.lay.paths) {
@@ -363,6 +443,13 @@ export function Ribbons(cfg: RibbonCfg) {
       const startDrag = (p: { clientX: number; clientY: number }) => {
         drag = { x: p.clientX, y: p.clientY, d0: this.d0, d1: this.d1, moved: false };
       };
+      /** Is this move a PAN rather than a look? Asked of the event itself rather than read
+       *  off `drag.moved`, because the hover listener runs BEFORE the pan listener on the
+       *  same event — trusting the flag would leave the first slid frame lit. Same slop as
+       *  the pan uses (3px mouse, 10px touch), so the two can never disagree about whether
+       *  a gesture has begun. */
+      const panning = (e: PointerEvent) => !!drag
+        && (drag.moved || Math.abs(e.clientX - drag.x) > slopFor(e) || Math.abs(e.clientY - drag.y) > slopFor(e));
       refuseSafariGestures(cv);
       const P = bindPinch(cv, {
         onStart: () => { drag = null; hideTip(); },
@@ -388,9 +475,35 @@ export function Ribbons(cfg: RibbonCfg) {
         // ribbon it describes. The tap path below opens the same tooltip, offset
         // from the touch, and the next tap on empty ground dismisses it.
         if (e.pointerType !== 'mouse') return;
+        // AND NO HOVER WHILE THE WORLD IS MOVING UNDER THE POINTER. "When you have
+        // something highlighted and you move/pan around you get all different entities
+        // highlighted." The pointer is not looking during a drag — it is holding the sheet —
+        // but every ribbon that slid past it was hit-tested, lit, and given a tooltip, so a
+        // pan strobed through a dozen highlights and lost the one that was chosen. A drag is
+        // navigation, not inspection, in either state: with a selection standing it would
+        // fight the selection, and with none it is still noise. Emphasis resumes on the next
+        // move after the button comes up, which is a look again.
+        // No render() here: the pan listener below paints this same event, and clearing
+        // `hover` first is what that paint reads.
+        if (panning(e)) { this.hover = null; hideTip(); return; }
         const b = this.at(mx, my);
         const id = b ? b.id : null;
-        this.hover = id; this.render();
+        // `hover` keeps tracking even while a selection holds the picture — render()
+        // withholds the emphasis, and clearing the selection brings it straight back under
+        // a pointer that never moved.
+        this.hover = id;
+        // THE TOOLTIP GOES WITH THE EMPHASIS. It is the same act read twice: describing the
+        // ribbon under the pointer while the card describes the chosen one puts two answers
+        // on screen to one question. The CURSOR does not go with it — this still says
+        // `pointer` over every ribbon, because clicking another one must still pick it, and
+        // the hit test underneath is untouched.
+        if (this.selShown()) {
+          hideTip();
+          cv.style.cursor = b ? 'pointer' : 'crosshair';
+          this.render();                                   // the year pill still follows the pointer
+          return;
+        }
+        this.render();
         if (b) {
           showTip(e.clientX, e.clientY, this.tipFor(b));
           cv.style.cursor = 'pointer';
@@ -433,8 +546,12 @@ export function Ribbons(cfg: RibbonCfg) {
         const mx = e.clientX - r.left;
         const b = this.at(mx, e.clientY - r.top);
         if (e.pointerType !== 'mouse') {
+          // ON A FINGER THE TAP IS BOTH: the tooltip AND the selection. There is no hover to
+          // suspend here, and this tooltip describes the very ribbon being selected, so it
+          // is one answer and not two — it is the only way a touch reader ever sees a
+          // polity's dates and lineage.
           if (b) showTip(e.clientX, e.clientY, this.tipFor(b)); else hideTip();
-        }
+        } else if (b) hideTip();      // ...whereas on a mouse the card is about to say it
         // the SelStore subscriber below repaints — no render() here, or the card
         // would be anchored against a canvas the store is about to redraw anyway
         SelCard.select(b ? this.selIdOf(b.id) : null, b ? this.rectOf(b, mx) : null);
@@ -480,8 +597,14 @@ export function Ribbons(cfg: RibbonCfg) {
 }
 
 // ================= ③ FLOW OF EMPIRES =================
+// THE VIEW OPENS ON THE ABSOLUTE SCALE. "Flow is awesome! Keep it as-is and make the
+// Absolute view the default." Share of world answers "who dominated THIS century", which
+// is a second question; absolute answers the first one — how big, against everything else
+// — and it is the one the ribbons are shaped to tell. Nothing remembers the reader's
+// choice (no mode is written to localStorage anywhere in this app), so this constant is
+// the whole of the default: every reload starts here, and the toggle is one click away.
 export const Flow = Ribbons({
-  canvas: '#flowCanvas', d0: -1200, d1: 2026, height: 600, mode: 'norm', colorBy: 'region',
+  canvas: '#flowCanvas', d0: -1200, d1: 2026, height: 600, mode: 'abs', colorBy: 'region',
   onRender(r) {
     const n = r.items.length;
     $('#flowCap')!.innerHTML = `<b>${n} polities, ${r.mode === 'norm' ? 'share of world weight' : 'absolute weight'}.</b> ` +
@@ -489,6 +612,18 @@ export const Flow = Ribbons({
       `Dashed curves are lineage links that jump across the stack: a conquest, a partition, a revival.`;
   },
 });
+
+/** ONE VOCABULARY FOR THE TWO VIEWS THAT CARRY THIS TOGGLE. Empires and Beliefs draw the
+ *  same two scales out of the same engine, so they must not describe them in two different
+ *  sets of words — and neither of them may hardcode a resting label, because the label
+ *  names the mode a click would GO TO, which is a function of the live mode and nothing
+ *  else. Braid's button is minted in braid.ts and lands here for its wording. */
+export function labelModeButton(btn: HTMLButtonElement, mode: string) {
+  btn.textContent = mode === 'norm' ? 'Absolute scale' : 'Share of world';
+  btn.title = mode === 'norm'
+    ? 'Every year fills the plate — thickness is a share of that year’s world. Switch to one fixed scale for the whole span.'
+    : 'One fixed scale for the whole span — equal weight, equal thickness in every year. Switch to each year filling the plate.';
+}
 
 export const REGIONNAMES: Record<string, string> = { EU: 'Europe', ME: 'MidEast & Africa', AS: 'Asia', AM: 'Americas & Oceania', AF: 'Africa' };
 
@@ -613,9 +748,17 @@ export function initFlow() {
   $('#flowRome')!.addEventListener('click', () => { Flow.setQuery(''); Flow.animTo(-300, 900); });
   $('#flowSplit')!.addEventListener('click', () => Flow.animTo(180, 820));
   $('#flowAll')!.addEventListener('click', () => Flow.animTo(-1200, 2026));
-  $('#flowMode')!.addEventListener('click', (e: any) => {
+  /* THE BUTTON NAMES WHAT A CLICK WILL DO, not what is on the plate — so its resting
+     label is the OTHER mode. Lab.tsx ships it reading "Absolute scale", which was right
+     while this view booted in share-of-world and is a lie the moment the default changes.
+     The label is therefore written from the LIVE mode at init, by the same expression the
+     click uses, and there is nothing left to keep in step by hand. */
+  const modeBtn = $<HTMLButtonElement>('#flowMode')!;
+  const syncModeBtn = () => labelModeButton(modeBtn, Flow.mode);
+  syncModeBtn();
+  modeBtn.addEventListener('click', () => {
     Flow.mode = Flow.mode === 'norm' ? 'abs' : 'norm';
-    e.target.textContent = Flow.mode === 'norm' ? 'Absolute scale' : 'Share of world';
+    syncModeBtn();
     Flow.render();
   });
   /* THIS VIEW NO LONGER HAS A SEARCH FIELD OF ITS OWN. #flowSearch and #flowCnt

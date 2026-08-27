@@ -1,0 +1,702 @@
+/* =============================================================================
+   lanepicker — lp.css
+
+   PROTOTYPE CHROME ONLY. Everything the selection card itself is made of comes
+   from ../../design/selcard/selcard.css; every value below resolves to a
+   --tl-* token from ../../design/tokens.css. No hex, no font stack, no
+   duration of its own, so the page follows the three-state theming (bare
+   :root / prefers-color-scheme / [data-theme]) for free.
+
+   ACCENT BUDGET. --tl-accent (Minium) means WHERE YOU ARE IN TIME and nothing
+   else. This file spends it exactly where selcard.css already does — the
+   keyboard focus ring — and nowhere else. No lane row is accented. No button
+   is accented. A chosen row is marked with INK (DESIGN.md §7: "solid ink. The
+   accent is not for buttons"), which is the same signal the destination strip
+   uses for "you are here".
+
+   NAMESPACE: .lp-*, plus a handful of `.lp-stage .tl-selcard*` overrides that
+   do positioning only — the real card is `position: fixed`, and this page lays
+   it out itself.
+   ============================================================================= */
+
+*, *::before, *::after { box-sizing: border-box; }
+html { -webkit-text-size-adjust: 100%; }
+body {
+  margin: 0;
+  background: var(--tl-canvas-bg);
+  color: var(--tl-ink);
+  font-family: var(--tl-font-ui);
+  font-size: var(--tl-text-base);
+  line-height: var(--tl-lh-ui);
+}
+:where(h1, h2, h3, h4, p, ul, ol, figure, dl, dd) { margin: 0; }
+:where(ul, ol) { padding: 0; list-style: none; }
+:where(button) { font: inherit; color: inherit; background: none; border: 0; text-align: left; cursor: pointer; }
+:where(code, kbd) {
+  font-family: var(--tl-font-mono);
+  font-size: 0.92em;
+  color: var(--tl-ink-2);
+}
+
+/* THE PAGE'S OWN FOCUS RING — the same one the card carries, for the same
+   reason: focus IS "where you are". The prototype's one sanctioned accent. */
+:where(button, a[href], input, summary, [tabindex]):focus-visible {
+  outline: 2px solid var(--tl-focus-ring);
+  outline-offset: 2px;
+  border-radius: var(--tl-radius-xs);
+}
+
+.lp {
+  max-width: 1240px;
+  margin: 0 auto;
+  padding: var(--tl-space-8) var(--tl-space-6) var(--tl-space-11);
+  display: flex;
+  flex-direction: column;
+  gap: var(--tl-space-9);
+}
+
+/* ── page head ───────────────────────────────────────────────────────────── */
+.lp-head { display: flex; flex-direction: column; gap: var(--tl-space-4); }
+.lp-head__top {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: var(--tl-space-6);
+  flex-wrap: wrap;
+}
+.lp-kicker {
+  font-family: var(--tl-font-mono);
+  font-size: var(--tl-text-2xs);
+  letter-spacing: var(--tl-track-caps);
+  text-transform: uppercase;
+  color: var(--tl-ink-3);
+}
+.lp-title {
+  font-family: var(--tl-font-mark);
+  font-size: var(--tl-text-3xl);
+  font-weight: var(--tl-w-regular);
+  line-height: var(--tl-lh-tight);
+  letter-spacing: var(--tl-track-tight);
+  color: var(--tl-ink);
+  max-width: 22ch;
+}
+.lp-lede {
+  max-width: var(--tl-measure);
+  font-size: var(--tl-text-prose);
+  line-height: var(--tl-lh-prose);
+  color: var(--tl-ink-2);
+}
+.lp-lede + .lp-lede { margin-top: var(--tl-space-4); }
+.lp-lede b { font-weight: var(--tl-w-semi); color: var(--tl-ink); }
+
+/* theme switch — three states, because the page has three */
+.lp-theme { display: inline-flex; flex: none; }
+.lp-theme button {
+  height: var(--tl-ctl-sm);
+  padding: 0 var(--tl-space-4);
+  margin-left: calc(var(--tl-border) * -1);
+  border: var(--tl-border) solid var(--tl-rule);
+  background: var(--tl-surface);
+  color: var(--tl-ink-2);
+  font-size: var(--tl-text-2xs);
+  font-weight: var(--tl-w-semi);
+  letter-spacing: var(--tl-track-caps);
+  text-transform: uppercase;
+}
+.lp-theme button:first-child { margin-left: 0; border-radius: var(--tl-radius-sm) 0 0 var(--tl-radius-sm); }
+.lp-theme button:last-child { border-radius: 0 var(--tl-radius-sm) var(--tl-radius-sm) 0; }
+.lp-theme button:hover { background: var(--tl-surface-3); color: var(--tl-ink); }
+.lp-theme button[aria-pressed="true"] {
+  background: var(--tl-ink); border-color: var(--tl-ink); color: var(--tl-ink-invert); z-index: 1;
+}
+
+/* ── a panel: the neutral ground a section sits on ───────────────────────── */
+/* NOT --tl-plate. That token is the engraved blue-black the whole palette hangs
+   its INK on (`--tl-ink: var(--tl-plate)`), so using it as a background paints
+   ink on ink. The chrome's own ground for a block of content is --tl-surface. */
+.lp-plate {
+  padding: var(--tl-space-6);
+  background: var(--tl-surface);
+  border: var(--tl-border) solid var(--tl-rule);
+  border-radius: var(--tl-radius-md);
+}
+
+.lp-sechd { display: flex; flex-direction: column; gap: var(--tl-space-3); margin-bottom: var(--tl-space-5); }
+.lp-sechd h2 {
+  font-size: var(--tl-text-lg);
+  font-weight: var(--tl-w-semi);
+  letter-spacing: var(--tl-track-tight);
+  color: var(--tl-ink);
+}
+.lp-sechd p { max-width: var(--tl-measure); font-size: var(--tl-text-sm); color: var(--tl-ink-2); }
+
+/* ── evidence table: the facts this design was built against ─────────────── */
+.lp-facts { display: grid; gap: 0; }
+.lp-fact {
+  display: grid;
+  grid-template-columns: 13ch 1fr;
+  gap: var(--tl-space-5);
+  padding: var(--tl-space-4) 0;
+  border-top: var(--tl-border) solid var(--tl-rule-soft);
+  font-size: var(--tl-text-sm);
+  color: var(--tl-ink-2);
+}
+.lp-fact:last-child { border-bottom: var(--tl-border) solid var(--tl-rule-soft); }
+.lp-fact dt {
+  font-family: var(--tl-font-mono);
+  font-size: var(--tl-text-2xs);
+  letter-spacing: var(--tl-track-caps);
+  text-transform: uppercase;
+  color: var(--tl-ink-3);
+  padding-top: 2px;
+}
+.lp-fact b { font-weight: var(--tl-w-semi); color: var(--tl-ink); }
+.lp-fact code { white-space: nowrap; }
+
+/* ── the comparison grid: three arrangements, side by side ───────────────── */
+.lp-compare {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: var(--tl-space-6);
+  align-items: start;
+}
+@media (max-width: 1100px) { .lp-compare { grid-template-columns: minmax(0, 1fr); } }
+
+.lp-col { display: flex; flex-direction: column; gap: var(--tl-space-5); min-width: 0; }
+.lp-col__hd { display: flex; flex-direction: column; gap: var(--tl-space-2); }
+.lp-col__tag {
+  font-family: var(--tl-font-mono);
+  font-size: var(--tl-text-2xs);
+  letter-spacing: var(--tl-track-caps);
+  text-transform: uppercase;
+  color: var(--tl-ink-3);
+}
+.lp-col__name {
+  font-size: var(--tl-text-md);
+  font-weight: var(--tl-w-semi);
+  letter-spacing: var(--tl-track-tight);
+  color: var(--tl-ink);
+}
+/* THE ONE LINE UNDER EACH — what it is good at, what it costs. Two clauses,
+   ruled apart, because the founder is choosing between them and the cost is
+   the half that gets skipped when it is set in the same weight as the praise. */
+.lp-verdict {
+  display: grid;
+  grid-template-columns: 6ch 1fr;
+  gap: var(--tl-space-2) var(--tl-space-4);
+  padding: var(--tl-space-4);
+  background: var(--tl-surface-2);
+  border: var(--tl-border) solid var(--tl-rule-soft);
+  border-radius: var(--tl-radius-sm);
+  font-size: var(--tl-text-xs);
+  line-height: var(--tl-lh-ui);
+  color: var(--tl-ink-2);
+}
+.lp-verdict dt {
+  font-family: var(--tl-font-mono);
+  font-size: var(--tl-text-2xs);
+  letter-spacing: var(--tl-track-caps);
+  text-transform: uppercase;
+  color: var(--tl-ink-3);
+}
+
+/* ── the stage: canvas-coloured ground the card is placed on ─────────────── */
+.lp-stage {
+  position: relative;
+  padding: var(--tl-space-5);
+  background: var(--tl-canvas-bg);
+  border: var(--tl-border) solid var(--tl-rule-soft);
+  border-radius: var(--tl-radius-sm);
+  display: flex;
+  flex-direction: column;
+  gap: var(--tl-space-4);
+  align-items: center;
+}
+.lp-stage__label {
+  align-self: stretch;
+  font-family: var(--tl-font-mono);
+  font-size: var(--tl-text-2xs);
+  letter-spacing: var(--tl-track-caps);
+  text-transform: uppercase;
+  color: var(--tl-ink-3);
+}
+/* Positioning only. The card is `position: fixed` in the app because the app
+   places it against the mark you clicked; here the page lays it out. Every
+   other rule in selcard.css applies untouched — and `--flow` is the class the
+   component already ships for exactly this host. */
+.lp-stage .tl-selcard {
+  position: relative; inset: auto;
+  /* The real cap is min(58vh, 480px) and the card scrolls its relations list
+     inside it. These specimens are measured un-capped ON PURPOSE, so the page
+     can print each arrangement's true height and the reader can see which ones
+     would have to scroll. See §Heights in the note. */
+  max-height: none;
+}
+.lp-measure {
+  align-self: stretch;
+  font-family: var(--tl-font-mono);
+  font-size: var(--tl-text-2xs);
+  font-variant-numeric: tabular-nums;
+  letter-spacing: var(--tl-track-xs);
+  color: var(--tl-ink-3);
+  display: flex;
+  justify-content: space-between;
+  gap: var(--tl-space-4);
+}
+.lp-measure b { font-weight: var(--tl-w-medium); color: var(--tl-ink-2); }
+.lp-measure[data-over="true"] b { color: var(--tl-ink); }
+
+/* ═══ THE NEW COMPONENT — the lane offer, in three arrangements ═══════════
+   All three are built from the same three parts, so the comparison is about
+   ARRANGEMENT and not about styling:
+     .lp-say    the plain statement that it is not on the board
+     .lp-lane   one candidate lane: name, count, why, and a glimpse inside
+     .lp-do     the one button that acts
+   ══════════════════════════════════════════════════════════════════════════ */
+
+.lp-offer {
+  display: flex;
+  flex-direction: column;
+  gap: var(--tl-space-3);
+  padding-top: var(--tl-space-4);
+  border-top: var(--tl-border) solid var(--tl-rule-soft);
+}
+
+/* THE STATEMENT. Not a warning: an absence is data, not an error (selcard.css
+   §04 says this about the presence line and it is the same rule here). No box,
+   no tint, no icon, no accent. Mono, because "in 0 lanes" is a measurement. */
+.lp-say {
+  font-family: var(--tl-font-mono);
+  font-size: var(--tl-text-xs);
+  font-variant-numeric: tabular-nums;
+  letter-spacing: var(--tl-track-xs);
+  line-height: var(--tl-lh-tight);
+  color: var(--tl-ink-2);
+}
+.lp-say b { font-weight: var(--tl-w-medium); color: var(--tl-ink); }
+
+.lp-hd {
+  display: flex; align-items: baseline; justify-content: space-between; gap: var(--tl-space-4);
+}
+.lp-hd .tl-selcard__section { flex: none; }
+.lp-hd__n {
+  font-family: var(--tl-font-mono);
+  font-size: var(--tl-text-2xs);
+  font-variant-numeric: tabular-nums;
+  letter-spacing: var(--tl-track-caps);
+  text-transform: uppercase;
+  color: var(--tl-ink-3);
+}
+
+/* ── one candidate lane ──────────────────────────────────────────────────── */
+.lp-lane {
+  position: relative;
+  display: grid;
+  /* minmax(0, 1fr), not 1fr: the glimpse line spans both tracks, and a spanning
+     item's min-content would otherwise push the grid wider than the card and
+     defeat its own ellipsis. */
+  grid-template-columns: minmax(0, 1fr) auto;
+  gap: 2px var(--tl-space-4);
+  width: 100%;
+  padding: var(--tl-space-3);
+  margin-inline: calc(var(--tl-space-3) * -1);
+  width: calc(100% + var(--tl-space-3) * 2);
+  border-radius: var(--tl-radius-xs);
+  transition: background var(--tl-dur-fast) var(--tl-ease);
+}
+.lp-lane:hover { background: var(--tl-hover); }
+.lp-lane input { position: absolute; opacity: 0; pointer-events: none; }
+
+.lp-lane__n {
+  grid-column: 1;
+  min-width: 0;
+  overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+  font-size: var(--tl-text-sm);
+  font-weight: var(--tl-w-medium);
+  color: var(--tl-ink-2);
+}
+.lp-lane:hover .lp-lane__n { color: var(--tl-ink); }
+/* HOW MANY THINGS ARE IN THERE — a count is a measurement, so mono, tabular,
+   and right-aligned against the name so three rows compare down the column. */
+.lp-lane__ct {
+  grid-column: 2; grid-row: 1;
+  flex: none;
+  font-family: var(--tl-font-mono);
+  font-size: var(--tl-text-2xs);
+  font-variant-numeric: tabular-nums;
+  letter-spacing: var(--tl-track-xs);
+  color: var(--tl-ink-3);
+  white-space: nowrap;
+  align-self: center;
+}
+/* WHY IT IS ON THE LIST. The rule is visible or it is magic. */
+.lp-lane__why {
+  grid-column: 1 / -1;
+  min-width: 0;
+  font-size: var(--tl-text-2xs);
+  line-height: var(--tl-lh-tight);
+  color: var(--tl-ink-3);
+}
+/* WHAT ELSE IS IN THERE — the founder's real question. Three neighbours in
+   time, mono for the years, ellipsed rather than wrapped to three lines. */
+.lp-lane__near {
+  grid-column: 1 / -1;
+  min-width: 0;
+  margin-top: 2px;
+  font-size: var(--tl-text-2xs);
+  line-height: var(--tl-lh-tight);
+  color: var(--tl-ink-3);
+  overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+}
+.lp-lane__near i { font-style: normal; color: var(--tl-ink-2); }
+.lp-lane__near time { font-family: var(--tl-font-mono); font-variant-numeric: tabular-nums; }
+
+/* THE MARK OF THE DEFAULT and the mark of the CHOSEN row are both ink — the
+   same signal the destination strip spends on "you are here", and for the same
+   reason: a hue here would be a second meaning for a colour that has one. */
+.lp-lane[data-default="true"] .lp-lane__n::after {
+  content: "suggested";
+  margin-left: var(--tl-space-3);
+  padding: 1px var(--tl-space-2);
+  border-radius: var(--tl-radius-xs);
+  background: var(--tl-ink);
+  color: var(--tl-ink-invert);
+  font-family: var(--tl-font-mono);
+  font-size: var(--tl-text-2xs);
+  font-weight: var(--tl-w-medium);
+  letter-spacing: var(--tl-track-caps);
+  text-transform: uppercase;
+  vertical-align: 1px;
+}
+.lp-lane:has(input:checked) { background: var(--tl-selected); }
+.lp-lane:has(input:checked) .lp-lane__n { color: var(--tl-ink); }
+.lp-lane:has(input:checked)::before {
+  content: "";
+  position: absolute; left: 0; top: var(--tl-space-2); bottom: var(--tl-space-2);
+  width: 2px; border-radius: 1px;
+  background: var(--tl-ink);
+}
+.lp-lane:has(input:focus-visible) { outline: 2px solid var(--tl-focus-ring); outline-offset: -1px; }
+
+/* A LANE OF YOUR OWN — the future, sketched. Dashed, because it does not
+   exist yet, and the dash is the app's own "approximate" stroke. */
+.lp-lane--mine { border: var(--tl-border) dashed var(--tl-rule-strong); }
+.lp-lane--mine .lp-lane__n { color: var(--tl-ink-2); }
+.lp-lane--mine .lp-lane__why { color: var(--tl-ink-3); }
+
+/* ── the button that acts ────────────────────────────────────────────────── */
+.lp-do {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: var(--tl-space-3);
+  height: var(--tl-ctl);
+  padding: 0 var(--tl-space-5);
+  border: var(--tl-border) solid var(--tl-ink);
+  border-radius: var(--tl-radius-sm);
+  background: var(--tl-ink);
+  color: var(--tl-ink-invert);
+  font-size: var(--tl-text-xs);
+  font-weight: var(--tl-w-semi);
+  letter-spacing: var(--tl-track-caps);
+  text-transform: uppercase;
+  white-space: nowrap;
+  overflow: hidden; text-overflow: ellipsis;
+}
+.lp-do:hover { box-shadow: inset 0 0 0 999px rgba(128, 128, 128, .16); }
+.lp-do:active { box-shadow: inset 0 0 0 999px rgba(128, 128, 128, .26); }
+.lp-do--wide { width: 100%; }
+/* The quiet twin: same metrics, no fill. "Other lanes", "Cancel". */
+.lp-do--ghost {
+  background: var(--tl-surface);
+  border-color: var(--tl-rule);
+  color: var(--tl-ink);
+}
+.lp-do--ghost:hover { background: var(--tl-surface-3); border-color: var(--tl-rule-strong); box-shadow: none; }
+.lp-do--ghost:active { background: var(--tl-press); box-shadow: none; }
+.lp-row { display: flex; gap: var(--tl-space-3); }
+.lp-row .lp-do { flex: 1 1 auto; min-width: 0; }
+.lp-row .lp-do--flex0 { flex: 0 0 auto; }
+
+/* ── A: the disclosure ───────────────────────────────────────────────────── */
+.lp-menu {
+  display: flex; flex-direction: column; gap: var(--tl-space-1);
+  padding: var(--tl-space-3);
+  margin-top: var(--tl-space-1);
+  background: var(--tl-surface-2);
+  border: var(--tl-border) solid var(--tl-rule);
+  border-radius: var(--tl-radius-sm);
+  box-shadow: var(--tl-shadow-panel);
+}
+.lp-menu[hidden] { display: none; }
+.lp-menu .lp-lane { margin-inline: 0; width: 100%; }
+
+/* ── C: the two axes ─────────────────────────────────────────────────────── */
+.lp-axis { display: flex; flex-direction: column; gap: var(--tl-space-2); }
+.lp-axis + .lp-axis { margin-top: var(--tl-space-4); }
+.lp-axis__hd {
+  display: flex; align-items: baseline; justify-content: space-between; gap: var(--tl-space-3);
+  padding-bottom: var(--tl-space-2);
+  border-bottom: var(--tl-border) solid var(--tl-rule-soft);
+}
+.lp-axis__t {
+  font-size: var(--tl-text-2xs);
+  font-weight: var(--tl-w-semi);
+  letter-spacing: var(--tl-track-caps);
+  text-transform: uppercase;
+  color: var(--tl-ink-3);
+}
+.lp-axis__sub {
+  font-family: var(--tl-font-mono);
+  font-size: var(--tl-text-2xs);
+  color: var(--tl-ink-3);
+  text-align: right;
+}
+/* AN EMPTY AXIS IS THE POINT, NOT A GAP. Daoism has no "where". Saying so in
+   the column where the answer would have been is the most useful thing this
+   arrangement does, so it is set as a sentence and not as a dash. */
+.lp-empty {
+  padding: var(--tl-space-3);
+  border: var(--tl-border) dashed var(--tl-rule);
+  border-radius: var(--tl-radius-xs);
+  font-size: var(--tl-text-2xs);
+  line-height: var(--tl-lh-ui);
+  color: var(--tl-ink-3);
+}
+.lp-empty b { font-weight: var(--tl-w-medium); color: var(--tl-ink-2); }
+
+/* ── after: what the card says once the lane is on the board ─────────────── */
+.lp-done {
+  display: flex; flex-direction: column; gap: var(--tl-space-3);
+  padding-top: var(--tl-space-4);
+  border-top: var(--tl-border) solid var(--tl-rule-soft);
+}
+
+/* ── the notice, verbatim from the app ───────────────────────────────────── */
+/* app.css §Notice, transplanted with ONLY the positioning changed: in the app
+   it is absolutely placed in the strip of canvas between the two panel
+   columns; here it sits at the foot of the stage it belongs to. Everything
+   else — the surface, the blur, the one line with ellipsis, the quiet Undo,
+   the entry keyframe, the ×, the 12s life — is the shipped component. */
+.lp-notice {
+  align-self: stretch;
+  display: flex;
+  align-items: center;
+  gap: var(--tl-space-4);
+  padding: var(--tl-space-2) var(--tl-space-2) var(--tl-space-2) var(--tl-space-5);
+  background: var(--tl-surface-over);
+  -webkit-backdrop-filter: blur(14px) saturate(1.3);
+  backdrop-filter: blur(14px) saturate(1.3);
+  border: var(--tl-border) solid var(--tl-rule);
+  border-radius: var(--tl-radius-sm);
+  box-shadow: var(--tl-shadow-panel);
+  font-family: var(--tl-font-ui);
+  font-size: var(--tl-text-sm);
+  line-height: var(--tl-lh-ui);
+  color: var(--tl-ink-2);
+  animation: lp-notice-in var(--tl-dur-base) var(--tl-ease) both;
+}
+@keyframes lp-notice-in { from { opacity: 0; transform: translateY(6px); } to { opacity: 1; transform: none; } }
+.lp-notice__msg { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; flex: 1 1 auto; }
+.lp-notice__msg b { font-weight: var(--tl-w-medium); color: var(--tl-ink); }
+.lp-notice__act {
+  flex: none;
+  height: var(--tl-ctl-sm);
+  padding: 0 var(--tl-space-4);
+  border: var(--tl-border) solid var(--tl-rule);
+  border-radius: var(--tl-radius-xs);
+  background: var(--tl-surface);
+  font: inherit;
+  font-weight: var(--tl-w-medium);
+  color: var(--tl-ink);
+  white-space: nowrap;
+}
+.lp-notice__act:hover { background: var(--tl-hover); border-color: var(--tl-rule-strong); }
+.lp-notice__act:active { background: var(--tl-press); }
+.lp-notice__x {
+  flex: none;
+  display: grid; place-items: center;
+  width: 20px; height: 20px;
+  border-radius: var(--tl-radius-xs);
+  color: var(--tl-ink-3);
+}
+.lp-notice__x:hover { background: var(--tl-hover); color: var(--tl-ink); }
+.lp-notice__x svg { width: 12px; height: 12px; display: block; }
+.lp-notice[hidden] { display: none; }
+
+/* ── the written note at the foot of the page ────────────────────────────── */
+.lp-note { display: flex; flex-direction: column; gap: var(--tl-space-6); }
+.lp-note h3 {
+  font-size: var(--tl-text-sm);
+  font-weight: var(--tl-w-semi);
+  letter-spacing: var(--tl-track-caps);
+  text-transform: uppercase;
+  color: var(--tl-ink-3);
+  margin-bottom: var(--tl-space-3);
+}
+.lp-note p, .lp-note li {
+  max-width: var(--tl-measure);
+  font-size: var(--tl-text-sm);
+  line-height: var(--tl-lh-prose);
+  color: var(--tl-ink-2);
+}
+.lp-note p + p { margin-top: var(--tl-space-3); }
+.lp-note b { font-weight: var(--tl-w-semi); color: var(--tl-ink); }
+.lp-note ol { counter-reset: lp; display: flex; flex-direction: column; gap: var(--tl-space-3); }
+.lp-note ol > li {
+  counter-increment: lp;
+  padding-left: var(--tl-space-7);
+  position: relative;
+}
+.lp-note ol > li::before {
+  content: counter(lp);
+  position: absolute; left: 0; top: 0;
+  width: var(--tl-space-6); text-align: right;
+  font-family: var(--tl-font-mono);
+  font-size: var(--tl-text-2xs);
+  color: var(--tl-ink-3);
+  line-height: calc(var(--tl-lh-prose) * 1em);
+}
+.lp-note ul { display: flex; flex-direction: column; gap: var(--tl-space-3); }
+.lp-note ul > li { padding-left: var(--tl-space-5); position: relative; }
+.lp-note ul > li::before {
+  content: "—"; position: absolute; left: 0; color: var(--tl-ink-3);
+}
+.lp-cols { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: var(--tl-space-7); }
+@media (max-width: 860px) { .lp-cols { grid-template-columns: minmax(0, 1fr); } }
+
+.lp-foot {
+  padding-top: var(--tl-space-5);
+  border-top: var(--tl-border) solid var(--tl-rule-soft);
+  font-family: var(--tl-font-mono);
+  font-size: var(--tl-text-2xs);
+  letter-spacing: var(--tl-track-xs);
+  color: var(--tl-ink-3);
+}
+
+
+/* ═══ ARRANGEMENT D — THE FOUNDER'S CUT ════════════════════════════════════
+   "We just have a list of views. […] The moment we have him open in Timeline
+   […] we should see an expanded view to specify which lanes in the Timeline it
+   is a part of. Just show their names, nothing else, no other explanations."
+
+   So this block adds NO new vocabulary. It hangs off the destination strip the
+   card already has, it borrows that strip's two existing states, and it carries
+   nothing but names:
+
+     ON YOUR BOARD    the inverted ink block — the strip's own "this one is
+                      live", which is the same thing membership means here.
+     COULD ADD        the plain bordered cell — the strip's own "a door you can
+                      press", unchanged.
+
+   No hue, no accent, no count, no reason. The Minium is nowhere near it.
+   ══════════════════════════════════════════════════════════════════════════ */
+
+/* IT BELONGS TO THE TIMELINE CELL, so it is drawn attached to the strip rather
+   than floating under it: the strip's bottom corners go square and this block
+   picks up the radius, so the two read as one control that has opened. */
+.lp-lanes {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--tl-space-2);
+  padding: var(--tl-space-3);
+  margin-top: calc(var(--tl-border) * -1);
+  border: var(--tl-border) solid var(--tl-rule);
+  border-radius: 0 0 var(--tl-radius-sm) var(--tl-radius-sm);
+  background: var(--tl-surface-2);
+}
+.lp-selcard--open .tl-selcard__dest:first-child { border-bottom-left-radius: 0; }
+.lp-selcard--open .tl-selcard__dest:last-child { border-bottom-right-radius: 0; }
+
+.lp-chip {
+  flex: 0 1 auto;
+  min-width: 0;
+  max-width: 100%;
+  height: var(--tl-ctl-sm);
+  padding: 0 var(--tl-space-4);
+  display: inline-flex;
+  align-items: center;
+  border: var(--tl-border) solid var(--tl-rule);
+  border-radius: var(--tl-radius-xs);
+  background: var(--tl-surface);
+  color: var(--tl-ink-2);
+  font-size: var(--tl-text-xs);
+  font-weight: var(--tl-w-medium);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  transition: background var(--tl-dur-fast) var(--tl-ease),
+              border-color var(--tl-dur-fast) var(--tl-ease),
+              color var(--tl-dur-fast) var(--tl-ease);
+}
+.lp-chip:hover { background: var(--tl-surface-3); border-color: var(--tl-rule-strong); color: var(--tl-ink); }
+.lp-chip:active { background: var(--tl-press); }
+
+/* ON YOUR BOARD. The destination strip's inverted block, verbatim — including
+   its neutral grey overlay on hover, which darkens a light block and lightens a
+   dark one and so cannot introduce a second hue. */
+.lp-chip[data-on="true"] {
+  background: var(--tl-ink);
+  border-color: var(--tl-ink);
+  color: var(--tl-ink-invert);
+  cursor: default;
+}
+.lp-chip[data-on="true"]:hover { box-shadow: inset 0 0 0 999px rgba(128, 128, 128, .16); }
+
+/* A lane of your own: the same chip, dashed, because it does not exist yet. */
+.lp-chip--new { border-style: dashed; border-color: var(--tl-rule-strong); color: var(--tl-ink-3); }
+.lp-chip--new:hover { color: var(--tl-ink-2); }
+
+/* ── prototype chrome: which view is active ──────────────────────────────── */
+/* NOT part of the card. The card cannot switch views — it reports the one you
+   are standing in — so the switch lives on the stage, where the page's own
+   furniture lives, and drives the specimen the way the app's top rail would. */
+.lp-viewwrap { display: inline-flex; align-items: center; gap: var(--tl-space-3); flex: none; }
+.lp-viewwrap__t { color: var(--tl-ink-3); }
+.lp-view { display: inline-flex; flex: none; }
+.lp-view button {
+  height: 22px;
+  padding: 0 var(--tl-space-3);
+  margin-left: calc(var(--tl-border) * -1);
+  border: var(--tl-border) solid var(--tl-rule);
+  background: var(--tl-surface);
+  color: var(--tl-ink-3);
+  font-family: var(--tl-font-mono);
+  font-size: var(--tl-text-2xs);
+  letter-spacing: var(--tl-track-caps);
+  text-transform: uppercase;
+}
+.lp-view button:first-child { margin-left: 0; border-radius: var(--tl-radius-xs) 0 0 var(--tl-radius-xs); }
+.lp-view button:last-child { border-radius: 0 var(--tl-radius-xs) var(--tl-radius-xs) 0; }
+.lp-view button:hover { background: var(--tl-surface-3); color: var(--tl-ink); }
+.lp-view button[aria-pressed="true"] {
+  background: var(--tl-ink); border-color: var(--tl-ink); color: var(--tl-ink-invert); z-index: 1;
+}
+.lp-stage__label {
+  display: flex; align-items: center; justify-content: space-between;
+  flex-wrap: wrap; gap: var(--tl-space-2) var(--tl-space-4);
+}
+.lp-stage__label > span:first-child { flex: 1 1 auto; min-width: 0; }
+
+/* ── the recommended arrangement gets the full width, above the comparison ── */
+.lp-lead-row {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 360px));
+  gap: var(--tl-space-6);
+  align-items: start;
+}
+@media (max-width: 800px) { .lp-lead-row { grid-template-columns: minmax(0, 1fr); } }
+.lp-badge {
+  display: inline-block;
+  padding: 2px var(--tl-space-3);
+  border-radius: var(--tl-radius-xs);
+  background: var(--tl-ink);
+  color: var(--tl-ink-invert);
+  font-family: var(--tl-font-mono);
+  font-size: var(--tl-text-2xs);
+  font-weight: var(--tl-w-medium);
+  letter-spacing: var(--tl-track-caps);
+  text-transform: uppercase;
+  margin-left: var(--tl-space-3);
+  vertical-align: 2px;
+}

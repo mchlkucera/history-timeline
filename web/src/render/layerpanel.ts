@@ -178,10 +178,23 @@ export const LayerPanel = {
       const add = this.addBtn = mk('+', 'Add layer');
       add.dataset.lbar = 'add';
       add.addEventListener('click', () => openLibrary(add));
+      /* "+ GROUP IS HIDDEN, NOT GONE. "Also hide the + Group button for now" —
+         and `for now` is load-bearing, so nothing behind it is touched. The
+         button is still built, still titled and still wired to Layers.newGroup;
+         it is only kept out of the reader's way. DELETE THE `grp.hidden` LINE
+         AND IT IS BACK, with its place on the strip and its behaviour intact.
+
+         WHAT A READER CAN STILL DO. Grouping is a whole feature and only its
+         front door is shut: a group that already exists in a saved layout still
+         draws its own row with its chevron, its eye, its count and its × to
+         ungroup, and layers still drag into and out of it. The one thing that
+         cannot be done is making a NEW empty group — which is exactly the verb
+         on the button. So nothing anybody has can be stranded by this. */
       const grp = mk('+', 'Group');
       grp.dataset.lbar = 'group';
       grp.title = 'Make an empty group, then drag layers into it';
       grp.addEventListener('click', () => { Layers.newGroup(); TL.ease(); });
+      grp.hidden = true;
       const cnt = el('span', 'tl-lcount'); cnt.id = 'layerCount';
       /* THE SWITCH GOES FIRST, and it is the only member of this strip that
          survives the strip being closed — when the panel is away the bar keeps

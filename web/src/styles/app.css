@@ -265,6 +265,10 @@
   color: var(--tl-ink-3);
   transition: color var(--tl-dur-fast) var(--tl-ease);
 }
+/* display:inline-flex above beats the UA's [hidden] rule, so a hidden verb has
+   to be told twice. "+ Group" is hidden and not deleted (layerpanel.ts), and
+   this is what makes hiding it work at all. */
+.tl-lbtn[hidden] { display: none; }
 .tl-lbtn:hover { background: var(--tl-surface-3); border-color: var(--tl-ink-3); }
 .tl-lbtn:hover .tl-lbtn__plus { color: var(--tl-ink); }
 .tl-lbtn:active { background: var(--tl-press); }
@@ -278,6 +282,38 @@
   color: var(--tl-ink-3);
 }
 .tl-lbtn[data-empty="true"]:hover { background: var(--tl-hover); border-color: var(--tl-ink-3); }
+/* ── THE ONE VERB TAKES THE STRIP ────────────────────────────────────────────
+   "Make the + Add layer more in-design."
+
+   It was one of two pills floating in a 34px strip, and with "+ Group" hidden
+   it would have been one pill floating in a 34px strip — a control parked ON
+   the panel rather than part of it. So it stops being a pill and becomes the
+   panel's FOOTER ACTION: it takes all the width the strip has left between the
+   Layers chip and the count, and centres its label in it.
+
+   WHY THAT IS THE PANEL'S OWN LANGUAGE AND NOT A NEW ONE. Everything above it
+   in this column is a full-width row — chevron, eye, name, count — and the
+   column reads top to bottom as a stack of them. A full-width action at the
+   foot is the same shape doing the one thing the rows cannot do. Nothing else
+   changes: the same 22px height, the same surface-2 fill, the same rule-strong
+   hairline, the same radius, the same mono "+" against the same UI word, and
+   the same step-up-on-hover as every other control in this file. NO ACCENT —
+   minium means where you are in TIME, and this is not a place in time.
+
+   IT IS NOT IN THE LIST ITSELF, and that was considered. The rows in this panel
+   are not a list: place() positions every one of them against the lane geometry
+   timeline.ts hands it, which is the 0.000px lock the whole panel exists to
+   hold. A row at the foot with no lane behind it would be the one row in the
+   column that is not locked to anything.
+
+   The tap target needs no rule of its own: the coarse-pointer block below
+   already raises every .tl-lbtn to --tl-tap, and this one is now the widest
+   control on the strip. */
+.tl-lbtn[data-lbar="add"] {
+  flex: 1 1 auto;
+  min-width: 0;
+  justify-content: center;
+}
 .tl-lcount {
   margin-left: auto;
   min-width: 0;
@@ -725,7 +761,7 @@ body.tl-dragging { cursor: grabbing; }
 /* ═════════════════════════════════════════════════════════════════════════════
    THE PANEL COLUMN CLEARS THE VIEW'S OWN FURNITURE.
 
-   Controls sits TOP-RIGHT and Reading bottom-left on every view, because the
+   Controls sits BOTTOM-RIGHT and Reading bottom-left on every view, because the
    founder asked for one frame rather than ten — "make sure the whole page is as
    one, it flows", and "put the controls to top right … to be in same position
    as other tabs". What a corner MEANS, though, is the corner of the WORKING
@@ -746,24 +782,44 @@ body.tl-dragging { cursor: grabbing; }
        never disagree with the canvas about where the plot begins;
      · the VERTICAL timeline — a quarter turn of the same thing: the year axis
        is the left 96px and the column heads the top 44px (vertical.ts GX/GY);
-     · everything else — Map, People, Horizon, Cube, Flow, Beliefs and
+     · everything else — Map, Habitation, Horizon, Cube, Flow, Beliefs and
        Connections have nothing in either corner (verified sitting over ocean,
        over empty projection space, and over the last centuries of a ribbon
        chart).
 
-   ONLY --tl-work-l HAS A VALUE ANYWHERE, and only the left column reads it:
-   every piece of fixed furniture in the app is in a canvas's LEFT gutter or
-   along its top. --tl-work-t insets BOTH columns, because a masthead runs the
-   full width; there is no --tl-work-r because nothing has ever been parked at a
-   right edge, which is exactly why Controls could take that corner on all ten.
+   --tl-work-t insets BOTH columns, because a masthead runs the full width;
+   there is still no --tl-work-r, because nothing is parked along a right edge
+   for its whole height — which is why Controls can take that side on all ten.
+
+   AND NOW A FOURTH SIDE, because Controls moved to the BOTTOM of that side.
+   "Lets put controls to bottom right corner." One thing lives in a bottom-right
+   corner in this app and it is the horizontal timeline's SCROLL CUE — "▾ more
+   below — hold ⇧ and scroll", drawn by timeline.ts at right:20px bottom:12px of
+   the shared scroller, ~22px tall, and shown exactly when the reader is at the
+   top of a sheet that continues below the fold. It is the sentence that says
+   the plot is taller than the window, so it is the legend of the whole vertical
+   dimension, and the rule above ("may cover plot, may never cover a legend")
+   decides this on its own. 34px is what the cue occupies, measured off the
+   renderer: 12px of its own inset plus 22px of box (measured at 1440x900: cue
+   top 801.5, panel bottom 790 — 11.5px of daylight).
+
+   The rail's TRACK needs no inset of its own, and this was measured rather than
+   assumed. The column's right edge lands 12px short of the canvas edge; the
+   track is 20px wide against that edge, its bar right:4px and 9px wide, its
+   thumb 6px inside that. So the bar's outermost 1px passes under the panel's
+   edge and the THUMB — the part that is read and grabbed — clears it entirely
+   (thumb 1428.5–1434.5 against a panel edge at 1428). That 1px is the same 1px
+   any right-column panel has always taken; moving Controls down the column
+   changed which stretch of the bar it borders, not how much.
 */
 @media (min-width: 760px) {
-  .tl-stage { --tl-work-l: 0px; --tl-work-t: 0px; }
-  .tl-stage:has(.tl-view[data-view="zoom"][data-active="true"]) { --tl-work-t: 22px; }
+  .tl-stage { --tl-work-l: 0px; --tl-work-t: 0px; --tl-work-b: 0px; }
+  .tl-stage:has(.tl-view[data-view="zoom"][data-active="true"]) { --tl-work-t: 22px; --tl-work-b: 34px; }
   .tl-stage:has(.tl-view[data-active="true"] .tl-layers[data-open="true"]) { --tl-work-l: var(--tl-layers-w); }
   .tl-stage:has(.tl-view[data-view="vertical"][data-active="true"]) { --tl-work-l: 96px; --tl-work-t: 44px; }
   .tl-col { top: calc(var(--tl-gutter) + var(--tl-work-t)); }
   .tl-col--l { left: calc(var(--tl-gutter) + var(--tl-work-l)); }
+  .tl-col--r { bottom: calc(var(--tl-gutter) + var(--tl-work-b)); }
 }
 
 /* A FOLDED PANEL IS A HEADER, NOT A PANEL. shell.css gives a secondary panel a
@@ -970,7 +1026,7 @@ body.tl-dragging { cursor: grabbing; }
 .tl-sugg__row[data-need="never"][data-sel="true"] { background: transparent; }
 
 /* IT WILL MOVE YOU. The hit is real and takeable, but this view cannot draw one
-   named thing (People and the information horizon draw aggregates) or does not
+   named thing (Habitation and the information horizon draw aggregates) or does not
    hold this one (a Roman polity searched from the Beliefs braid), so taking it
    travels. Nothing is dimmed — it is a full answer — and the second line says
    where it goes. The mark is a hairline lead-in on the destination line, the
@@ -1252,11 +1308,12 @@ body.tl-dragging { cursor: grabbing; }
 }
 
 /* ── THE OVERFLOW, MADE LEGIBLE — AT EVERY WIDTH NOW ──────────────────────────
-   At 390px the switcher row wants 623px and has 390: six group names fill it
-   and the Map group's seg (Borders / People / Horizon) begins 3px past the
-   right edge. It cannot be made to fit — see the note on readOvf() in Lab.tsx —
-   so the row scrolls, and the job of these rules is to make that visible
-   instead of leaving three controls silently amputated.
+   At 390px the switcher row wants more than it has: six group names fill it and
+   the Map group's seg (Borders / Habitation / Horizon — 206px measured at 1024,
+   up 16px since that seg was called People) begins past the right edge. It
+   cannot be made to fit — see the note on readOvf() in Lab.tsx — so it scrolls,
+   and the job of these rules is to make that visible instead of leaving three
+   controls silently amputated.
 
    shell.css fades the right edge unconditionally. Unconditional is the bug: on
    the Map view the last group name ends 22px short of the edge, so the 28px
@@ -1315,21 +1372,22 @@ body.tl-dragging { cursor: grabbing; }
 }
 
 @media (max-width: 759px) {
-  /* The selection chip takes row 2 here (shell.css §13), pushing the switcher
-     row to 3 — and the chevrons are pinned to the switcher row, so they move
-     with it or they end up floating over the chip. */
-  .tl-app[data-sel="on"] .tl-rail__more { grid-row: 3; }
-
   .tl-doc { padding: var(--tl-space-6) var(--tl-space-5) var(--tl-space-11); }
-  /* Panels become bottom sheets in shell.css. Only the primary one survives;
-     stacking four sheets on a phone would bury the canvas entirely.
+  /* Panels become bottom sheets in shell.css. Only ONE may survive; stacking
+     four sheets on a phone would bury the canvas entirely, and the one that
+     has to survive is Controls — it is the only panel that is an instrument
+     rather than a reading.
 
-     KEYED ON THE ROLE, NOT ON THE CORNER, since Controls moved to --tr and a
-     corner list would have hidden the one panel that has to survive. The
-     survivor is exactly "Controls": every other panel in either column carries
-     .tl-panel--secondary, which shell.css §13 already folds away here — this
-     rule now only adds the bottom corners for good measure. */
-  .tl-panel--bl, .tl-panel--br, .tl-panel--secondary { display: none; }
+     KEYED ON THE ROLE, NOT ON THE CORNER, and that distinction has now been
+     paid for twice. This rule used to read
+     `.tl-panel--bl, .tl-panel--br, .tl-panel--secondary`, which is a corner
+     list wearing a role's clothes: it worked only for as long as Controls
+     happened to sit in a TOP corner, and the moment it moved to the bottom
+     right — "lets put controls to bottom right corner" — that list hid the one
+     panel a phone cannot do without. aria-label carries the panel's title
+     straight from Lab's panel() helper, so the survivor is now named by what it
+     IS and cannot drift with the geometry again. */
+  .tl-panel:not([aria-label="Controls"]) { display: none; }
   .tl-cmdk { grid-template-rows: 6vh auto 1fr; }
 }
 

@@ -21,10 +21,10 @@
    below therefore covers all ten ids.
    ============================================================================= */
 
-import { type CSSProperties, useCallback, useEffect, useRef, useState, useSyncExternalStore } from 'react';
+import { useCallback, useEffect, useRef, useState, useSyncExternalStore } from 'react';
 import {
-  BELIEFS, catColor, clampDomain, fmtBig, fmtY, initData, setGotoTab, setLanes, SelStore, TimeStore,
-  tokens, YMAX, YMIN,
+  BELIEFS, catColor, clampDomain, fmtBig, fmtSpan, fmtY, initData, onAtlas, setGotoTab, setLanes, SelStore,
+  TimeStore, tokens, warmAtlas, YMAX, YMIN,
   type Datasets,
 } from '@/render/shared';
 import { buildRelIndex } from '@/render/relations';
@@ -120,9 +120,28 @@ const VIEWS: Record<ViewId, ViewMeta> = {
     gist: 'Fix a moment, show me everywhere — drag the index to move the world.',
     meta: '18 snapshots · 3000 BCE – 1994',
   },
+  // HABITATION, NOT "PEOPLE". "People shuold be called something else, it seems
+  // like it will show positions of people. instead it should be like people
+  // density or habitation or something." The seg row reads Borders | Habitation
+  // | Horizon — three concrete nouns of the same kind, which is why this and not
+  // "Density": only the eight macro-region TOTALS are measured scholarship
+  // (McEvedy & Jones · Biraben · UN), and the distribution inside a region is a
+  // hand-written table of 101 centres plus a geography field — population.ts's
+  // own words: "Nobody measured this." "Density" names a measured field this
+  // view does not have; "Population" names the measured QUANTITY and hands the
+  // honest word to the modelled half, which is the shape. Habitation claims only
+  // "people lived here", which is exactly what the data will carry.
+  //
+  // `name` keeps the word "people" so a reader who types it still finds this
+  // view (buildRows matches name + seg + gist), and drops the "not land"
+  // contrast, which only ever made sense against a seg called People. `gist`
+  // loses "actually are" for the file's own register — an illustration of
+  // shape, not a census. `meta` stands: "density field · 2° cells" describes how
+  // the picture is DRAWN, and beside a name that no longer promises measurement
+  // it reads as the technique rather than as a claim.
   pop: {
-    seg: 'People', name: 'People, not land', rail: 'live',
-    gist: 'Where the people actually are — four thousand years of it, cell by cell.',
+    seg: 'Habitation', name: 'Where people lived', rail: 'live',
+    gist: 'Where people concentrated — an illustration of shape, cell by cell, not a census.',
     meta: 'density field · 2° cells',
   },
   horizon: {
@@ -208,86 +227,62 @@ const ORDER: ViewId[] = ['zoom', 'vertical', 'map', 'pop', 'horizon', 'flow', 'b
 
 
 // ── Field notes ─────────────────────────────────────────────────────────────
-// Everything the old <p class="lede"> and the hand-authored captions used to
-// say, moved verbatim behind a popover. Onboarding is read once; a docked strip
-// taxes every session after that and costs 8–10% of the viewport.
+// "Make the field notes way shorter, they should be 5s introduction what am I
+// seeing, not in depth manual."
+//
+// THEY OPEN BY THEMSELVES ON A FIRST VISIT, and that is the whole argument. A
+// popover a reader ASKED for may be a page; one that appears unbidden over the
+// thing it is describing has about five seconds of goodwill, and 200 words spent
+// them before the first line was read. So each view gets at most three short
+// sentences, in a fixed order that is the same order on all ten:
+//
+//   1. WHAT THIS IS      — one clause naming the view
+//   2. WHAT A MARK MEANS — the grammar, because nothing else on screen says it
+//   3. ONE GESTURE       — the single move this view is operated with
+//
+// AND NOTHING ELSE. Everything cut was one of four things: the reasoning behind
+// a design (which belongs in this file, and is in this file), a caveat about the
+// data (the Habitation caption prints its own every frame; the cube's readout says
+// "interpolated" while it is interpolating), a keyboard list (every cube camera
+// move is also a button in its own Controls panel), or a sentence defending the
+// view to a critic rather than introducing it to a newcomer.
+//
+// `src` SURVIVES IN ONE PLACE ONLY. It is now what the name always said it was —
+// a source line — and the map's is an attribution to a GPL-3.0 dataset, which is
+// an obligation rather than an explanation. Every other one was prose.
 interface Notes { body: React.ReactNode; src?: React.ReactNode }
 
 const NOTES: Record<ViewId, Notes> = {
   map: {
-    body: <>
-      <p>The <strong>&ldquo;Google Earth of history&rdquo;</strong> answer to <em>&ldquo;I see 1776 and can&rsquo;t imagine the world.&rdquo;</em> Drag the index along the bottom rail and every border on the map moves with it.</p>
-      <p>Territories are real research data &mdash; 18 snapshots between 3000 BCE and 1994 &mdash; coloured by sovereign, the British Empire in its traditional atlas pink. Scroll to zoom, drag to pan, and <strong>click any territory to select it</strong> &mdash; the card that comes up can drill a core sample through everything that ever happened at that exact spot.</p>
-    </>,
-    src: <>Snapshots: 3000 · 1000 · 323 BCE · 1 CE · 400 · 800 · 1000 · 1279 · 1492 · 1600 · 1715 · 1783 · 1815 · 1880 · 1914 · 1938 · 1960 · 1994. Border data: aourednik/historical-basemaps (GPL-3.0) &mdash; scholarly approximation, since historical borders are fuzzy and contested by nature.</>,
+    body: <p>Every border on Earth at eighteen real dates, 3000 BCE to 1994, coloured by whoever ruled. <strong>Drag the rail along the bottom</strong> and the world moves with it.</p>,
+    src: <>Borders: aourednik/historical-basemaps (GPL-3.0) &mdash; a scholarly approximation, since historical borders are fuzzy and contested by nature.</>,
   },
   pop: {
-    body: <>
-      <p>Not area, not borders &mdash; <strong>where the people actually are</strong>. A coarse density field over the land, one cell at a time. Asia holds two thirds of humanity for four thousand years, the Americas collapse after 1492, Africa surges in the last century. <strong>Press play.</strong></p>
-      <p>The grid is deliberately visible, because the cell size <em>is</em> the resolution of the claim. &ldquo;Field&rdquo; smooths the same numbers for legibility; &ldquo;Plate&rdquo; shows you what was actually computed.</p>
-    </>,
-    src: <>What is data and what is model: the eight macro-region totals per slice are scholarly estimates (McEvedy &amp; Jones, Biraben, the UN &mdash; wide error bars before 1500), and every region&rsquo;s field is normalised to sum back to exactly that published number. The distribution <em>inside</em> a region is a hand-written table of 101 population centres plus desert, ice, altitude and latitude rules. Nobody measured that. Read it for shape and concentration, never for a local figure.</>,
+    body: <p>Where people concentrated, not who owned the ground &mdash; a density field, one cell at a time. It is an illustration of shape, not a census. <strong>Press play.</strong></p>,
   },
   horizon: {
-    body: <>
-      <p>The most novel idea on the list: not <em>what happened</em>, but <strong>what a person standing here could possibly have known yet</strong>. News moved at the speed of a horse, then a ship, then a telegraph.</p>
-      <p>Pick a city and a year. The rings are how far word had travelled after a week, a month, six months; the list on the right is the world still in transit toward you.</p>
-    </>,
-    src: <>Calibrated against known cases: news of the Declaration of 4 July 1776 was printed in London on 17 August &mdash; about 5,900 km in 44 days, so roughly 130 km/day for an important dispatch in 1776.</>,
+    body: <p>Not what happened &mdash; what word had reached you yet. The rings are how far news had travelled after a week, a month, six months. <strong>Pick a city and a year.</strong></p>,
   },
   vertical: {
-    body: <>
-      <p>The scroll projection of the timeline. It reads down the page, which is how a person actually reads a chronology &mdash; and <strong>past is always at the top</strong>, in every state, with no flip.</p>
-      <p>Rotating it buys one enormous thing: <strong>a label no longer has to fit inside the time it describes.</strong> Every mark gets its own full line of text beside it, at whatever length the title actually is, instead of being cut to the gap before the next event. On the <strong>Mozart&rsquo;s world</strong> preset that is <strong>nine of his thirteen life events named on screen at 1280&times;800 and ten at 1440&times;900, against six either way in the horizontal view</strong> &mdash; half again as many, and the ones that are there are not abbreviated.</p>
-      <p><strong>Neither projection fits all thirteen in a laptop window, and this one does not claim to.</strong> Eight of them fall between 1778 and 1791 &mdash; thirteen years, about a seventh of the plot at that zoom. A label may step aside by up to 64px to find a clear line, drawing a hairline back to its true year; past that it is dropped rather than parked against the wrong decade, and the mark stays on the axis, hoverable and clickable. Twelve fit at 1920&times;1080, all thirteen at 2560&times;1440.</p>
-      <p>The bands are now <strong>columns, each as wide as its own longest label needs</strong>, so the surface is usually wider than the window. <strong>Drag it like a map</strong> &mdash; up and down through time, left and right across the world, in one gesture. The strip under the plot is the whole surface in miniature; the bright frame is what you can see, and you can drag that too. A chip at an edge names the next column off-screen; click it to bring it in &mdash; and <strong>turning a lens on brings its own column in for you</strong>, so the thing you just asked to see is never the thing off the right edge.</p>
-      <p><strong>It shares this group&rsquo;s controls on purpose:</strong> vertical and horizontal are two projections of one timeline state &mdash; the same span, the same lanes, the same domains, the same search. The <strong>Projection</strong> switch sits in the time rail, bottom right; flipping it changes the projection, never the subject.</p>
-      <p>This projection still draws the older shape grammar and only the hand-curated corpus; the new spread lanes, sharpness fades, and the polity rows land here next round.</p>
-    </>,
-    src: <>Faint hairlines mean a label had to step aside to stay legible &mdash; the mark is always at the true year, and a mark whose label was dropped is still drawn, still hoverable and still clickable. Column widths are measured over a window padded by a screenful of time above and below, so travelling does not make the columns breathe under your hand. A lens column sits next to the time axis rather than at the far end, because a lens is something you asked for.</>,
+    body: <p>The same timeline read downward, past at the top, so every mark has a full line for its name. <strong>Drag it like a map</strong> &mdash; through time, and across the world.</p>,
   },
   zoom: {
-    body: <>
-      <p>Your core vision: <strong>a map of time with level of detail</strong>. Zoomed out you see only what matters most; scroll to zoom in and smaller things fade in, exactly like streets appearing on Google Maps &mdash; and the wheel alone now runs from a decade to the Big Bang on one continuous scale.</p>
-      <p><strong>Two kinds of thing.</strong> A <strong>spread</strong> is anything with duration &mdash; an empire, a war, a life, a movement, an era &mdash; drawn as a rectangle in its own row, biggest first, never overlapping another. Its edges carry its nature: a dynasty founded on a date ends crisply, the Renaissance dissolves at both ends. An <strong>event</strong> is a moment: a dot, in its own stratum below the spreads. Colour says which domain; height says how much it mattered.</p>
-      <p><strong>Click anything to select it</strong> &mdash; everything related stays lit in proportion to how strongly it is related (the same weighted links as the Connections view), the Related panel lists them, and Wikipedia is one click away in that panel. Click empty canvas to clear.</p>
-    </>,
-    src: <>Importance is an editorial ladder, not a measurement. The five levels are thresholds on the visible span, so the same thing appears and disappears with the zoom rather than with the data. Rows are packed once, importance first, so zooming reveals more without reshuffling what you were looking at.</>,
+    body: <p>A map of time with level of detail: zoom in and smaller things fade in. A bar lasted, a dot is a moment, colour says which domain. <strong>Click anything to select it</strong> &mdash; everything related stays lit.</p>,
   },
   flow: {
-    body: <>
-      <p>Empires as <strong>flowing ribbons whose thickness is their weight in the world</strong>, and lineage as forks: the Roman Empire splits into West and East, the East runs on for a thousand years as Byzantium, and the Ottomans absorb it.</p>
-      <p>The 1931 Histomap idea, rebuilt with real lineage links. <strong>Hover any ribbon to light up its whole ancestry.</strong></p>
-    </>,
-    src: <>Weights are editorial estimates of reach and consequence, hand-curated for this prototype &mdash; not measurements.</>,
+    body: <p>Empires as ribbons whose thickness is their weight in the world, forking and merging as they inherit one another. <strong>Hover one</strong> to light its whole ancestry.</p>,
   },
   braid: {
-    body: <>
-      <p>Your own sketch, working: beliefs as streams that <strong>fork at schisms and occasionally merge</strong>. Christianity splits at 1054 and again at 1517; Islam at 632.</p>
-      <p>The same engine as the flow of empires &mdash; because a schism and an imperial partition are the same shape of event.</p>
-    </>,
-    src: <>Thickness is an editorial estimate of reach, not a measurement of adherents.</>,
+    body: <p>Beliefs as streams that fork at schisms and occasionally merge &mdash; Christianity at 1054 and 1517, Islam at 632. Thickness is reach. <strong>Hover one</strong> to light its lineage.</p>,
   },
   conn: {
-    body: <>
-      <p>An <strong>event</strong> happens at a point in time. An <strong>entity</strong> persists and is in one place at a time. A <strong>spread</strong> persists and is in <em>many</em> places at once, with a footprint that moves and an intensity that waxes and wanes &mdash; printing, an empire, a religion.</p>
-      <p>Spreads are drawn with the same ribbon engine as the flow of empires, so they swell and taper instead of sitting in a rectangle, and the events that belong to one are drawn <em>inside</em> it: Mainz 1439 is a point within the printing ribbon. <strong>Click anything</strong> &mdash; everything related stays lit in proportion to how strongly it is related, everything else dims but stays on screen as context.</p>
-    </>,
-    src: <>The four lanes are <strong>queries, and they overlap on purpose</strong>: Europe is a region match, the other three are category matches. An item is drawn solid in whichever lane matches it most strongly and hollow wherever else it also matches, so the British Empire appears once in <em>Europe</em> as a filled ribbon and again in <em>Power &amp; economy</em> as an outline. Selecting it threads every copy together, so the repetition reads as information.</>,
+    body: <p>What is linked to what. Ribbons last, dots are moments inside them, and the four lanes overlap on purpose. <strong>Click anything</strong>: its relations stay lit and everything else dims to context.</p>,
   },
   cube: {
-    body: <>
-      <p>Your third take, built for real this time: <strong>latitude × longitude × time as one solid block.</strong> The map is a horizontal slice through it, the core sample is a vertical drill, the timeline is its shadow on the wall.</p>
-      <p><strong>Reading the block:</strong> the translucent stack is eighteen world maps as real extruded sheets, oldest at the bottom. The traced polity is not drawn on those sheets &mdash; it is a <strong>volume</strong> through them, so an empire that persists is a column, one that grows is a cone, and a conquest is where one body swallows another.</p>
-      <p><strong>Drag</strong> to orbit whatever is under the cursor &mdash; the pivot moves to the depth you clicked, so what you are looking at stays on screen. <strong>Right-drag</strong> pans, <strong>scroll</strong> zooms toward the pointer, <strong>double-click</strong> flies somewhere. <kbd>R</kbd> home &middot; <kbd>T</kbd> top &middot; <kbd>F</kbd> front &middot; <kbd>E</kbd> side &middot; <kbd>Z</kbd> frame the trace &middot; <kbd>I</kbd> isometric &middot; <kbd>A</kbd> single slice &middot; <kbd>P</kbd> play.</p>
-    </>,
-    src: <>What is data and what is inference: the <strong>bright rules</strong> around the solid are the eighteen dates somebody actually mapped; everything between them is a signed-distance blend and the material is deliberately darker there. <strong>Cut through time</strong> is capped with a lighter section face, the way a technical drawing distinguishes a cut from a surface. In <strong>single slice</strong> the ghost world cross-fades between two real snapshots and never invents a map for an in-between date &mdash; the readout says &ldquo;interpolated&rdquo; for exactly as long as that is what you are seeing. The rail below is a legend for the block&rsquo;s third axis, not a control.</>,
+    body: <p>Latitude &times; longitude &times; time as one solid block: eighteen world maps stacked, and a traced empire is a volume through them. <strong>Drag to orbit, scroll to zoom.</strong></p>,
   },
   concepts: {
-    body: <>
-      <p>The divergent set, scored and pruned. The unlock: they aren&rsquo;t competitors. <strong>History is one 3-D block (place × place × time), and every good view is a slice or projection of it.</strong></p>
-      <p>The map is a horizontal slice, the core sample a vertical drill, the timeline a shadow &mdash; and the cube, now built, is the block itself.</p>
-    </>,
+    body: <p>The divergent ideas, scored and pruned &mdash; and the unlock underneath them: <strong>history is one 3-D block, and every good view is a slice of it.</strong></p>,
   },
 };
 
@@ -394,19 +389,12 @@ const subNarrow = (cb: () => void) => {
   return () => m.removeEventListener('change', cb);
 };
 
-// THE SELECTION, READ AS AN EXTERNAL STORE — same reasoning as subNarrow, and
-// the same shape. SelStore is a plain observable owned by src/render, so this
-// is the one honest way to let the chrome re-render off it: the snapshot is the
-// id string itself (stable by value, so React can bail out), and the server
-// snapshot is null because nothing is selected before the user clicks anything.
-const subSel = (cb: () => void) => SelStore.subscribe(cb);
-const selSnapshot = () => SelStore.id;
-const selServerSnapshot = () => null;
-// Escape and the chip's ✕ mean the same thing, and this is that thing: drop the
-// selection, which releases the map highlight, the cube trace and the timeline
-// dimming with it. SelCard hides itself from its own subscription to the store,
-// so there is nothing else to call. (selcard.ts, "ESC CLEARS THE SELECTION".)
-const clearSel = () => SelStore.set(null);
+// THE SELECTION IS NO LONGER READ BY THE CHROME. subSel/selSnapshot existed so
+// the rail could re-render its chip on every selection; with the chip gone the
+// shell has nothing that names a selection, and SelStore is read where it is
+// drawn — by the renderers and by the card. Dropping a selection is Escape
+// (selcard.ts, "ESC CLEARS THE SELECTION") or a click on empty canvas, both of
+// which live at the same level as the drawing they release.
 
 // The one transient minium dot: this view's field notes have not been read yet.
 // Painted imperatively so the seen-set never has to be React state — the markup
@@ -492,7 +480,7 @@ function needTitle(r: { p: RevealPlan; to: ViewId | null }, name: string, here: 
   const p = r.p;
   const raise = p.detailWord ? ` and sets it to “${p.detailWord}”` : '';
   if (r.to === null) return `${name} is ${p.why || 'not drawn on this timeline'}, and no other view draws it either — there is nothing to go to.`;
-  // THE HONEST SENTENCE FOR A VIEW THAT CANNOT SHOW IT. People and the
+  // THE HONEST SENTENCE FOR A VIEW THAT CANNOT SHOW IT. Habitation and the
   // information horizon draw aggregates, Concepts is documentation: none of
   // them can put one named thing on screen, so taking the row travels, and it
   // says where and why before it is pressed rather than after.
@@ -528,7 +516,7 @@ function needTitle(r: { p: RevealPlan; to: ViewId | null }, name: string, here: 
      · the renderer's own item list — flow and beliefs: is it in this corpus
 
    AND WHEN THE VIEW GENUINELY CANNOT: fall back to the horizontal timeline,
-   which is the one destination that exists for everything with a span. People,
+   which is the one destination that exists for everything with a span. Habitation,
    the information horizon and Concepts can never show one named thing — they
    draw aggregates and documentation — so a hit taken there always travels. The
    row says so before it is taken (needLine / needTitle below).
@@ -541,6 +529,73 @@ const destsOf = (sub: Subject): { act: string; off?: boolean }[] => {
 };
 const destOpen = (sub: Subject, act: string) =>
   destsOf(sub).some(d => d.act === act && !d.off);
+
+/**
+ * DOES CONNECTIONS DRAW THIS THING? — the view's own two answers, in order.
+ *
+ * anchorOf() is the LIVE one: a rect means the mark is on that canvas at this
+ * instant, which is the only unarguable form of "yes". The corpus is the second,
+ * and it is why this is not simply `nodes.has(id)`: a landing on Connections
+ * FRAMES the subject before you look at it (animTo), so a thing the corpus
+ * carries and a lane will take is a mark this view is about to draw, even though
+ * the current window has scrolled past it. What the corpus cannot promise is the
+ * lane: connections.ts scores every item against four lane queries and leaves
+ * home = -1 when none of them wants it (a non-European `nature` event is the
+ * live example), and an item with no lane is drawn at no span, no pan and no
+ * zoom. Counting it would put the reader on a canvas with nothing lit.
+ */
+const connDraws = (id: string): boolean => {
+  const C = Conn as unknown as {
+    anchorOf?: (id: string) => DOMRect | null;
+    nodes?: Map<string, { home?: number }>;
+  };
+  try { if (C?.anchorOf?.(id)) return true; } catch { /* mid-redraw: ask the corpus */ }
+  const n = C?.nodes?.get?.(id);
+  return !!n && (n.home ?? -1) >= 0;
+};
+
+/**
+ * …AND UNDER WHICH NAME. Returns the id Connections would actually draw for this
+ * subject, or null when it draws nothing for it at all.
+ *
+ * 'same-as' is the one relation kind that is not a relation: relations.ts defines
+ * it as "the SAME thing seen through two lanes" — "Renaissance" as a timeline
+ * lane item, "The Renaissance" as a spread, weight 1.00. Connections carries the
+ * spread and not the lane id, and the lane id is the FIRST row of that spread's
+ * own card. So the founder clicked "Renaissance" in a card he had opened by
+ * clicking the Renaissance ribbon, and was told "Renaissance is not drawn on
+ * Connections". Both sentences cannot be true of one thing, so when this view
+ * does not carry the id itself, its same-as twin answers for it.
+ */
+const connShown = (id: string): string | null => {
+  if (connDraws(id)) return id;
+  const C = Conn as unknown as { relsOf?: (id: string) => { other: string; kind: string }[] };
+  let twins: string[] = [];
+  try { twins = (C?.relsOf?.(id) || []).filter(r => r.kind === 'same-as').map(r => r.other); } catch { twins = []; }
+  return twins.find(connDraws) ?? null;
+};
+
+/**
+ * PUT A SUBJECT ON THE CONNECTIONS CANVAS — the one implementation, shared by
+ * the selection card's Connections cell and by a relation click taken while
+ * already standing on Connections, exactly as showInFlow() is shared by the
+ * search and the card's Flow cell.
+ *
+ * It does NOT navigate; the two callers decide that for themselves, because one
+ * of them is already there. Selecting is the whole of the lighting: connections.ts
+ * draws off the global selection, so a store write lights the mark, dims the rest
+ * to context and threads the relations without this file knowing how. Framing is
+ * a courtesy on top — a subject the current window has scrolled past is in the
+ * corpus but not on the glass, and animTo brings it back.
+ */
+function showInConnections(id: string, from: SelSource = 'point') {
+  const shown = connShown(id) ?? id;
+  SelCard.select(shown, null, null, from);
+  const sub = describe(shown);
+  if (!sub) return;
+  const [f0, f1] = padSpan(...perspectiveSpan(sub));
+  try { (Conn as unknown as { animTo?: (a: number, b: number) => void }).animTo?.(f0, f1); } catch { /* framing is a courtesy */ }
+}
 
 /* ribbonHas() lived here — "is this id one of the ribbons THIS engine is
    drawing?" — and it was only ever asked of Braid, to refuse a stream from the
@@ -827,12 +882,6 @@ export default function Lab() {
   const narrow = useSyncExternalStore(subNarrow, () => matchMedia(NARROW).matches, () => false);
   const collapsed = collapsedBy ?? narrow;
   const readCollapsed = readCollapsedBy ?? narrow;
-  // WHAT IS SELECTED — read straight off the global store, so the chip below
-  // re-renders on every selection and on nothing else. describe() is a pure
-  // lookup over the loaded corpus, hence the `ready` guard: nothing can be
-  // selected before the data lands, but calling it is only meaningful after.
-  const selId = useSyncExternalStore(subSel, selSnapshot, selServerSnapshot);
-  const sel = ready && selId ? describe(selId) : null;
   const viewRef = useRef<ViewId>(view);
   // Declared FIRST so it is up to date before any effect below reads it.
   useEffect(() => { viewRef.current = view; });
@@ -857,7 +906,7 @@ export default function Lab() {
   // Tolerates unknown ids, and maps the legacy alias 'sketch' -> 'braid'.
   // gallery.ts still emits data-goto="sketch" on three cards (SHELL does not own
   // that file in this pass), so all three land on Beliefs rather than on Beliefs,
-  // Horizon and People respectively. Logged as a follow-up.
+  // Horizon and Habitation respectively. Logged as a follow-up.
   // ── field notes ───────────────────────────────────────────────────────────
   // Declared HERE, above go(), because the first-visit auto-open below has to
   // run from inside the navigation itself rather than from an effect on `view`.
@@ -1000,8 +1049,12 @@ export default function Lab() {
         const grab = async (u: string) => {
           const r = await fetch(u); if (!r.ok) throw new Error(`${u} → HTTP ${r.status}`); return r.json();
         };
-        const [worlds, datasets, lanes, polities] = await Promise.all([
-          grab('/data/worlds.json'), grab('/data/datasets.json') as Promise<Datasets>,
+        // THE ATLAS IS NOT HERE. worlds.json is 599 KB of border geometry — 87%
+        // of what this Promise.all used to weigh — and the default view draws no
+        // map. It is fetched after first paint instead (warmAtlas below), and
+        // forced early by any view that actually needs borders.
+        const [datasets, lanes, polities] = await Promise.all([
+          grab('/data/datasets.json') as Promise<Datasets>,
           grab('/data/lanes.json').catch(() => ({ lanes: [] })),   // curated lanes; tolerant
           // The time-gated polity → sovereign alias table. The cube already
           // fetches this from inside its own chunk; the map's territory
@@ -1009,9 +1062,9 @@ export default function Lab() {
           // here and handed to subject.ts. Same posture as the rest: tolerant.
           grab('/data/polities.json').catch(() => ({ polities: [] })),
           loadRelations(),                       // Connections; a miss must not stop the boot
-          loadPopulation(),                      // Map · People; same posture
+          loadPopulation(),                      // Map · Habitation; same posture
         ]);
-        initData(worlds, datasets);
+        initData(datasets);
         setLanes(lanes);                         // AFTER initData: lane members append to EVENTS pre-classified
         setPolityAliases(polities);
         boot();
@@ -1075,6 +1128,20 @@ export default function Lab() {
              shared with the search, so one polity cannot be revealed two
              different ways depending on which control asked. */
           showInFlow: (pid) => { showInFlow(pid); go('flow'); },
+          /* SHOW THIS IN CONNECTIONS. "I should be able to see Connections are
+             in active state and an option to view him in Timeline. Now he just
+             shows Timeline button in non-active state." Standing on Connections
+             with Leonardo open, the card's destination row did not contain
+             Connections at all, so it could not mark "you are here" and its one
+             Timeline cell read as inert.
+
+             THE SAME CALL landingFor MAKES. A relation clicked while already on
+             this view and this cell pressed from another one are the same act
+             with two triggers, so they are one function — showInConnections()
+             above, which also resolves the same-as twin. go() is the only part
+             that belongs here, and it is a no-op when you are already on conn,
+             which is exactly when the cell is drawn inverted. */
+          showInConnections: (id) => { showInConnections(id); go('conn'); },
           traceInCube: (pid) => { Cube.select(pid); go('cube'); },
           allConnections: () => setRelOpen(true),
           mapYear: () => (WorldMap as any).year(),
@@ -1092,6 +1159,14 @@ export default function Lab() {
         connHome.current = [Conn.d0, Conn.d1];
         SelCard.setView(viewRef.current);
         setReady(true);
+        // THE ATLAS, AFTER THE PIXELS. warmAtlas() waits for the first idle after
+        // this paint, so a reader who never opens the map pays nothing for it and
+        // a reader who does finds it already in hand; a view that needs it sooner
+        // (?v=map) forces it from its own render. The repaint is for the views
+        // that read GEO without asking for it — Borders repaints itself, Horizon
+        // and Habitation do not.
+        warmAtlas();
+        onAtlas(() => rerenderAll());
       } catch (e: any) {
         console.error(e);
         setError(String(e?.message || e));
@@ -1109,6 +1184,58 @@ export default function Lab() {
   // same point in stage pixels (the scale is inset by the readout and the
   // transport, the canvas is not). Driving both from the percentage alone puts
   // them about 9% apart at 1440px.
+  /**
+   * WHERE THE READER IS POINTING, IN YEARS — asked of the renderer, in the
+   * renderer's own coordinates, and null when the pointer is not on the canvas.
+   *
+   * "Where you're in cursor is the specific date where you are in time." On a
+   * span view the window's CENTRE is an artefact of the arithmetic — the
+   * founder's "the middle orange line in timeline is pretty arbitrary" — and
+   * the cursor is the one moment on a span view that a person actually chose.
+   * So minium keeps its single sanctioned meaning, "where you are in TIME", and
+   * points at the thing the reader is pointing at.
+   *
+   * EACH RENDERER IS ASKED IN ITS OWN LANGUAGE, because each one has its own
+   * plot inset and its own axis. Two of them publish a real inverse — TL.ix()
+   * and VT.it() — and those are called rather than reimplemented; flow and
+   * connections are linear in years across their plot, so the window and the
+   * inset are the whole mapping. Every constant here is the renderer's own
+   * public property (TL.gutter(), VT.GY/PAD/H, Flow.PAD) except the 12px
+   * connections gutter, which that file writes as a literal in every one of its
+   * own handlers and has no accessor for. Braid draws no cursor year at all, so
+   * it answers null and the index falls back below.
+   */
+  const cursorYear = (v: ViewId): number | null => {
+    try {
+      if (v === 'zoom') {
+        const cv = TL.cv; if (!cv || TL.hoverX == null) return null;
+        const G = TL.gutter();
+        return TL.ix(TL.hoverX, G, cv.clientWidth - G - 10);
+      }
+      if (v === 'vertical') {
+        const cv = VT.cv; if (!cv || VT.hoverY == null) return null;
+        return VT.it(VT.hoverY, VT.GY, VT.H - VT.GY - VT.PAD);
+      }
+      if (v === 'flow') {
+        const cv = Flow.cv; if (!cv || Flow.hoverX == null) return null;
+        const G = Flow.PAD;
+        return Flow.d0 + (Flow.hoverX - G) / (cv.clientWidth - G * 2) * (Flow.d1 - Flow.d0);
+      }
+      if (v === 'conn') {
+        const cv = Conn.cv; if (!cv || Conn.hoverX == null) return null;
+        return Conn.d0 + (Conn.hoverX - 12) / (cv.clientWidth - 24) * (Conn.d1 - Conn.d0);
+      }
+    } catch { /* a renderer mid-boot has no canvas — the fallback covers it */ }
+    return null;
+  };
+  /* THE POINTER LEAVES; THE MOMENT DOES NOT. A cursor that took the index with
+     it off the canvas would blank the one mark that says where you are every
+     time the hand went to a panel. So the last place pointed at is held, and
+     only a reader who has not pointed at this canvas at all falls back to the
+     global moment — which is what the rest of the app means by "where you are"
+     and, on the timeline, is the window's centre. */
+  const heldCursor = useRef<number | null>(null);
+
   const syncRail = useCallback(() => {
     const app = document.getElementById('app');
     const scale = document.getElementById('railScale');
@@ -1200,24 +1327,46 @@ export default function Lab() {
       return;
     }
 
-    // mode === 'span': the canvas axis IS time, but the view is a zoom WINDOW,
-    // not a moment. The rail shows the full extent with the visible window drawn as a
-    // bracket — and the red index sits at the GLOBAL moment (TimeStore), because the
-    // index means "where you are" app-wide now, not the window's centre.
+    /* mode === 'span': the canvas axis IS time, but the view is a zoom WINDOW,
+       not a moment — and the readout now says so.
+
+       "Lets instead of keeping the middle year in the counter keep FROM-TO
+       years, the middle orange line in timeline is pretty arbitrary." He is
+       right, and structurally so: on a LIVE view the canvas draws one snapshot,
+       so one year is the truth; on a SPAN view the truth is the window, and the
+       single year the counter used to show was that window's centre — arithmetic,
+       not a fact anyone chose. So the counter holds the window's two ends, in the
+       slot the counter already occupies at the bottom of the view, and the index
+       goes to the cursor (see cursorYear above).
+
+       fmtBig ON BOTH ENDS, and this is not a nicety. The timeline's window
+       reaches the Big Bang, and a raw d0 printed there is -13797812398: "make
+       sure on timeline the years get clever, like when you zoom all the way,
+       show truncated readable number not 13797812398123". fmtBig is the app's
+       own ladder — billions, millions, thousands, then ordinary years with their
+       era — and it already prints every deep-time year on both canvases, so the
+       rail now says exactly what the plot says. Same reason the flag and the
+       span caption use fmtBig and fmtSpan: those are the other two places in
+       this rail where a year or a count of years reaches the screen. */
     const src: any = v === 'flow' ? Flow : v === 'braid' ? Braid : v === 'conn' ? Conn : TL;
     const d0 = Number(src.d0), d1 = Number(src.d1);
     const a = railPos(d0), b = railPos(d1);
-    const centre = (d0 + d1) / 2;
-    const pct = railPos(TimeStore.year);
+    const cur = cursorYear(v);
+    if (cur !== null && Number.isFinite(cur)) heldCursor.current = cur;
+    const at = heldCursor.current ?? TimeStore.year;
+    const pct = railPos(at);
     setIndex(pct);
     if (span) { span.hidden = false; span.style.left = a + '%'; span.style.width = Math.max(0.4, b - a) + '%'; }
     stops.forEach(s => s.dataset.here = 'false');
     const flag = document.getElementById('railFlag');
-    if (flag) flag.textContent = railNum(TimeStore.year);
-    txt('railYear', railNum(TimeStore.year));
-    txt('railEra', (v === 'zoom' || v === 'vertical') && TL.span() > 60000
-      ? 'DEEP TIME · BIG BANG → NOW'
-      : `${railEraOf(centre)} · SPAN ${Math.round(d1 - d0).toLocaleString('en-US')} YRS`);
+    if (flag) flag.textContent = fmtBig(at);
+    txt('railYear', `${fmtBig(d0)} – ${fmtBig(d1)}`);
+    // The era word is gone from this caption: the range above carries BCE/CE on
+    // each end already, and the one it used to print was the CENTRE's — the very
+    // year this pass exists to stop reporting. What is left is the fact the
+    // range cannot state on its own, how much time is on screen, and fmtSpan is
+    // the app's own formatter for it (13.8 Gyr, not 13,797,812,398 yrs).
+    txt('railEra', `SPAN ${fmtSpan(Math.max(0, d1 - d0))}`);
     if (generic && document.activeElement !== generic) generic.value = String(Math.round(pct * 10));
   }, []);
 
@@ -1238,14 +1387,10 @@ export default function Lab() {
   // which sizeRenderers() measures — so the canvases have to re-fit when it moves.
   useEffect(() => { if (ready) renderTab(viewRef.current); }, [collapsed, readCollapsed, ready]);
 
-  // Below 760px the selection chip takes a rail row of its own (shell.css), so
-  // its arrival and departure change the height of the stage — and the stage is
-  // the 1fr row of .tl-app, which no resize event ever reports. Same failure as
-  // the sheet above, same fix: re-fit on the transition, and only at the widths
-  // where the transition exists. Without it ten canvases would keep drawing
-  // at their pre-chip height until the next window resize.
-  const hasSel = !!sel;
-  useEffect(() => { if (ready && narrow) renderTab(viewRef.current); }, [hasSel, narrow, ready]);
+  // (The selection used to force a re-fit here too: below 760px the chip took a
+  // rail row of its own, so selecting something changed the height of the stage.
+  // The chip is gone and a selection now costs no chrome, so there is nothing to
+  // re-fit — the panels above are the only thing left that moves.)
 
   useEffect(() => {
     const g = groupOf(view);
@@ -1284,7 +1429,7 @@ export default function Lab() {
   /* ═══ THE SWITCHER ROW'S OVERFLOW, SAID OUT LOUD ═══════════════════════════
 
      At 390px the row wants 623px: six group names are 377 of it and the Map
-     group's seg — Borders / People / Horizon — is another 190, so the seg sits
+     group's seg — Borders / Habitation / Horizon — is another 190, so the seg sits
      entirely past the right edge. It cannot be made to fit: shortening the
      padding buys single-digit pixels against a 233px deficit, and the two real
      alternatives (hiding the seg, or hiding the group names behind icons) each
@@ -1414,7 +1559,12 @@ export default function Lab() {
               : v === 'braid' ? `b${Braid.d0}|${Braid.d1}`
                 : v === 'conn' ? `c${Conn.d0}|${Conn.d1}`
                   : `t${TL.d0}|${TL.d1}|${TL.log}`)
-        + `|${TimeStore.year}|${SelStore.id ?? ''}`;   // the global stores nudge the rail too
+        + `|${TimeStore.year}|${SelStore.id ?? ''}`   // the global stores nudge the rail too
+        // …and so does the CURSOR, on the four span views whose index follows it.
+        // Without this the rail would only notice the pointer when the window or
+        // the selection happened to change underneath it, and the index would
+        // lag a gesture behind the crosshair the canvas is already drawing.
+        + `|${TL.hoverX ?? ''}|${VT.hoverY ?? ''}|${Flow.hoverX ?? ''}|${Conn.hoverX ?? ''}`;
       // THE TRAILING EDGE. writeUrl's throttle refuses a write inside 500ms of
       // the last one, and `key` goes still the moment a tween lands — so the
       // final state of every gesture that finished inside that window used to
@@ -1561,6 +1711,33 @@ export default function Lab() {
 
   const closeSearch = useCallback(() => { setSRows([]); setSTotal(0); setSSel(0); }, [setSRows, setSTotal, setSSel]);
 
+  /* ── EMPTYING THE FIELD IS ONE ACT, AND IT IS THIS ONE ─────────────────────
+     "Search bar is missing X to remove contents of search."
+
+     The ✕ and Escape-in-an-empty-list are the same gesture with two triggers,
+     so they are one function rather than two that will drift. And it is three
+     things, not one: a search leaves TEXT in the field, a LIST hanging under
+     it, and a DIM on every canvas that matched nothing. Blanking only the input
+     is the bug this exists to avoid — the founder's board would stay dimmed to
+     12% by a query no longer written anywhere on screen.
+
+     WHERE THEY DIFFER IS FOCUS, and only because the two gestures mean opposite
+     things about the field: Escape is "I am done here", so it hands the field
+     back to the page; pressing ✕ is "wrong words", so the caret stays where the
+     right ones go. Nothing else about the two paths is allowed to differ.
+
+     hasQ is the one piece of React state the uncontrolled input needs: the ✕
+     may only exist while there is something to clear. timeline.ts still owns
+     the input's own listener, so this reads box.value rather than holding it. */
+  const [hasQ, setHasQ] = useState(false);
+  const clearField = useCallback((keepFocus: boolean) => {
+    const box = document.getElementById('cmdk') as HTMLInputElement | null;
+    if (box) { box.value = ''; if (keepFocus) box.focus(); else box.blur(); }
+    setHasQ(false);
+    closeSearch();
+    TL.clearSearch();
+  }, [closeSearch]);
+
 
   /* THE LANE ROW'S GESTURE. Add-or-locate, and the difference is only whether
      the lane is already on the board — the founder's "I could also search for
@@ -1689,8 +1866,8 @@ export default function Lab() {
    * REVEAL IT WHERE THE READER IS STANDING, or say where it had to go.
    *
    * Returns the landing for a content hit taken from `here`, or null when
-   * nothing anywhere can draw the thing (a belief stream searched from People:
-   * the timeline does not draw beliefs and People does not draw one thing).
+   * nothing anywhere can draw the thing (a belief stream searched from Habitation:
+   * the timeline does not draw beliefs and Habitation does not draw one thing).
    *
    * READ TOP TO BOTTOM AS "CAN HERE DO IT?", then the fallback. Every branch
    * ends in the same two acts in the same order — put the selection in the
@@ -1702,7 +1879,9 @@ export default function Lab() {
   const landingFor = useCallback((here: ViewId, sub: Subject, plan: RevealPlan,
     from: SelSource = 'search'): Landing | null => {
     const id = sub.id;
-    const [a, b] = perspectiveSpan(sub);
+    // (The span used to be read here for the Connections branch's own framing.
+    // That framing moved into showInConnections(), which the card's cell shares,
+    // so this function no longer measures anything itself.)
     const pid = sub.polity;
     const onTimeline = plan.need !== 'never';
 
@@ -1751,24 +1930,15 @@ export default function Lab() {
       // through to a dead row. The fallback below answers for BOTH systems and
       // for every view, so the one place that knows where a belief goes is the
       // one place, and standing on Beliefs is no longer a precondition.
-      // CONNECTIONS draws a subset of the corpus and knows which: its own node
-      // table is the test. Everything is optional-chained because this view is
-      // being redrawn by another hand — a missing method costs the fallback,
-      // never a throw.
-      case 'conn': {
-        const C = Conn as any;
-        if (C?.nodes?.has?.(id)) {
-          return {
-            view: 'conn',
-            act: () => {
-              SelCard.select(id, null, null, from);
-              const [f0, f1] = padSpan(a, b);
-              try { C.animTo(f0, f1); } catch { /* framing is a courtesy */ }
-            },
-          };
-        }
+      // CONNECTIONS DRAWS THINGS, and this case is the whole of that admission.
+      // It used to be missing, which is why a relation clicked on Connections
+      // offered to show it in the Timeline — over the very ribbon it was named
+      // after. connShown() decides whether this canvas has the subject and under
+      // which name (see it, above), and showInConnections() is the same call the
+      // card's own Connections cell makes, so the two can never drift.
+      case 'conn':
+        if (connShown(id)) return { view: 'conn', act: () => showInConnections(id, from) };
         break;
-      }
       // THE VERTICAL PROJECTION is the same timeline and the same window, so it
       // stays where it is rather than being flipped to horizontal underneath
       // the reader.
@@ -1778,7 +1948,7 @@ export default function Lab() {
       case 'zoom':
         if (onTimeline) return toTimeline('zoom');
         break;
-      // People, the information horizon and Concepts draw no single named
+      // Habitation, the information horizon and Concepts draw no single named
       // thing. Nothing to try — fall through to the timeline.
       default: break;
     }
@@ -1982,6 +2152,7 @@ export default function Lab() {
     if (!box) return;
 
     const onInput = () => {
+      setHasQ(!!box.value);
       const { rows, total } = buildRows(box.value);
       setSRows(rows); setSTotal(total); setSSel(firstSel(rows));
       if (rows.length) placeSearch(); else setSBox(null);
@@ -1999,8 +2170,9 @@ export default function Lab() {
         if (rows.length) { ev.preventDefault(); closeSearch(); }
         // Emptying the field has to empty the QUERY as well, or the canvas is
         // left dimmed to 12% by a search whose text is no longer anywhere on
-        // screen — a dim with nothing to explain it.
-        else { box.value = ''; TL.clearSearch(); box.blur(); }
+        // screen — a dim with nothing to explain it. Same path as the ✕, which
+        // is the whole reason clearField() exists.
+        else clearField(false);
         return;
       }
       if (!rows.length) return;
@@ -2030,7 +2202,7 @@ export default function Lab() {
       box.removeEventListener('focus', onFocus);
       box.removeEventListener('blur', onBlurOut);
     };
-  }, [ready, placeSearch, closeSearch, takeRow, buildRows]);
+  }, [ready, placeSearch, closeSearch, takeRow, buildRows, clearField]);
 
   // The list hangs off a rect, so anything that moves the rect moves it too.
   useEffect(() => {
@@ -2230,7 +2402,7 @@ export default function Lab() {
   // because two drawings of one state is a control of the view rather than a
   // way to another one. Flow's is the same object: Empires and Beliefs are one
   // ribbon engine, one span, one selection, one set of regions, drawn over two
-  // corpora. So is Map's — Borders, People and Horizon are three readings of
+  // corpora. So is Map's — Borders, Habitation and Horizon are three readings of
   // one atlas at one moment, and the rail already says you are in MAP.
   //
   // So EVERY group with siblings now states them the same way, as the first
@@ -2273,7 +2445,7 @@ export default function Lab() {
     );
   };
   // The engraving on the scale: the 18 world snapshots for Map and Cube, the
-  // population slices for People, nothing for the span views (they get a bracket).
+  // population slices for Habitation, nothing for the span views (they get a bracket).
   const stopYears: number[] =
     meta.rail === 'legend' || view === 'map' ? SNAPSHOTS
       : view === 'pop' && ready ? (Pop.slices() as any[]).map(s => s.year)
@@ -2326,9 +2498,7 @@ export default function Lab() {
 
   return (
     <>
-      {/* data-sel is what lets the phone rail trade the wordmark for the chip:
-          390px cannot hold both, and the search may not pay for it. */}
-      <div className="tl-app" id="app" data-rail={railOn ? 'on' : 'off'} data-sel={sel ? 'on' : undefined}>
+      <div className="tl-app" id="app" data-rail={railOn ? 'on' : 'off'}>
 
         {/* ══ TOP RAIL ═════════════════════════════════════════════════════ */}
         <header className="tl-rail">
@@ -2350,7 +2520,7 @@ export default function Lab() {
             </nav>
 
             {/* THE SEG IS GONE FROM HERE, and the breadcrumb chevron with it.
-                Empires | Beliefs, Borders | People | Horizon and the projection
+                Empires | Beliefs, Borders | Habitation | Horizon and the projection
                 switch are all rows of the Controls panel now (see groupSeg
                 above) — one level in the header, one place to say how a view is
                 being drawn. The chevron existed only to say "the seg belongs to
@@ -2377,47 +2547,20 @@ export default function Lab() {
             <svg viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.6"><path d="M6 3.5L10.5 8L6 12.5" /></svg>
           </button>
 
-          {/* ══ THE SELECTION CHIP ═══════════════════════════════════════════
-              "We should clearly see I'm in Roman Empire, on the Map view or on
-              Timeline view."
+          {/* THE SELECTION CHIP IS GONE. "There should be no 'Currently
+              selected' pill on top. This should be only in the form of the
+              Selected Card."
 
-              The selection is global and it survives every view switch — that
-              is the whole point of SelStore — but until now the only thing that
-              ever NAMED it was the floating card, which is dismissible, is
-              anchored to whatever you clicked, and is suppressed outright on
-              Connections. So the app could be holding Rome, dimming half the
-              world for it, and have nothing in the frame that said "Rome".
-              Switch to Timeline and even the highlight stopped meaning
-              anything: the map was gone and the card had re-anchored.
-
-              This is the persistent answer, and deliberately NOT a second card:
-              a dot, a name, the span, and a way out. Pressing the body brings
-              the card back (SelCard.select on the id already selected re-shows
-              it and un-dismisses it); pressing ✕ does exactly what Escape does.
-
-              It sits in its own grid track between the switcher and the end
-              group, so it can neither move the nav nor shorten the search — see
-              .tl-rail and §02b in shell.css for why that placement is the whole
-              design. It renders only while something is selected. */}
-          {sel && (
-            <div className="tl-selchip" role="status" aria-live="polite">
-              <button type="button" className="tl-selchip__main"
-                title={`${sel.name} — selected. Show details.`}
-                onClick={() => SelCard.select(sel.id, null)}>
-                <i className="tl-selchip__dot" aria-hidden="true"
-                  style={{ '--tl-dot': dotVar(sel.cat) } as CSSProperties} />
-                <span className="tl-selchip__name">{sel.name}</span>
-                <span className="tl-selchip__yrs">
-                  {sel.start === sel.end ? fmtBig(sel.start) : `${fmtBig(sel.start)}–${fmtY(sel.end)}`}
-                </span>
-              </button>
-              <button type="button" className="tl-selchip__x"
-                aria-label={`Clear selection: ${sel.name}`} title="Clear selection  Esc"
-                onClick={clearSel}>
-                {I.close}
-              </button>
-            </div>
-          )}
+              It was built to answer "we should clearly see I'm in Roman Empire"
+              with something that outlives a dismissed card — and it answered it
+              twice. Two objects naming one selection is two things to read, two
+              ✕ buttons that mean the same act, and a rail that changes shape the
+              moment you click a ribbon. The card is the answer; it carries the
+              name, the span, the note, the destinations and its own way out.
+              What the chip owned and did not hand back: a fourth grid track in
+              the rail (shell.css §02b), a third rail row below 760px, and the
+              stage re-fit that row's arrival forced. All three are gone with it,
+              so a selection no longer moves one pixel of chrome. */}
 
           <div className="tl-rail__end">
             {/* THE ONE SEARCH. A real input, not a button that opens a modal:
@@ -2438,7 +2581,23 @@ export default function Lab() {
                 aria-label="Search history and views" aria-autocomplete="list"
                 aria-expanded={sOpen} aria-controls="searchSugg" role="combobox"
                 placeholder="Search anything…" />
-              <kbd className="tl-kbd">⌘K</kbd>
+              {/* THE WAY OUT OF A SEARCH, and it appears only when there is one
+                  to leave. "Search bar is missing X to remove contents of
+                  search." It trades places with the ⌘K hint rather than sitting
+                  beside it: the hint answers "how do I get into this field",
+                  which is a question nobody typing has, and two glyphs at one
+                  end of a 232px field is a crowd. A real <button> after the
+                  input, so Tab reaches it from the caret with no tabIndex of
+                  its own; its title carries Esc, which is the same act. */}
+              {hasQ
+                ? (
+                  <button type="button" className="tl-field__x"
+                    aria-label="Clear search" title="Clear search  Esc"
+                    onClick={() => clearField(true)}>
+                    {I.close}
+                  </button>
+                )
+                : <kbd className="tl-kbd">⌘K</kbd>}
             </div>
             <button className="tl-iconbtn" id="notesBtn" aria-expanded={notesOpen} aria-controls="fieldNotes"
               aria-label="Field notes for this view" title="Field notes  ?"
@@ -2462,7 +2621,7 @@ export default function Lab() {
             <div className="tl-canvasbox"><canvas id="mapCanvas" height={520} /></div>
           </section>
 
-          {/* ── Map · People ──────────────────────────────────────────────── */}
+          {/* ── Map · Habitation ──────────────────────────────────────────────── */}
           <section {...sect('pop')}>
             <div className="tl-canvasbox"><canvas id="popCanvas" height={440} /></div>
           </section>
@@ -2545,7 +2704,7 @@ export default function Lab() {
           {/* Two columns, not four free-floating corners. Corner-anchored
               panels cannot see each other, so on a short viewport the tall
               bottom-left "Reading" grew up under "Controls" and ate its last
-              row: at 900x700 the People view's Names toggle was covered, not
+              row: at 900x700 the Habitation view's Names toggle was covered, not
               merely ugly. One flex column per side gives the pair a shared
               height budget they cannot exceed. Corner classes stay — they are
               what the column reads to decide which panel hugs the bottom.
@@ -2644,7 +2803,7 @@ export default function Lab() {
                 the moment rather than about the view. It is the first row here
                 for the same reason Play is the first row on the map: the top of
                 Controls is where a view says how it is being drawn. */}
-            <aside {...panel('tr', ['zoom', 'vertical'], 'Controls')}>
+            <aside {...panel('br', ['zoom', 'vertical'], 'Controls')}>
               <div className="tl-panel__grip" aria-hidden="true" />
               {hd('Controls')}
               <div className="tl-panel__bd">
@@ -2657,7 +2816,7 @@ export default function Lab() {
               </div>
             </aside>
             {/* map */}
-            <aside {...panel('tr', ['map'], 'Controls')}>
+            <aside {...panel('br', ['map'], 'Controls')}>
               <div className="tl-panel__grip" aria-hidden="true" />
               {hd('Controls')}
               <div className="tl-panel__bd">
@@ -2677,7 +2836,7 @@ export default function Lab() {
               </div>
             </aside>
             {/* pop */}
-            <aside {...panel('tr', ['pop'], 'Controls')}>
+            <aside {...panel('br', ['pop'], 'Controls')}>
               <div className="tl-panel__grip" aria-hidden="true" />
               {hd('Controls')}
               {/* population.ts appendChild()s its own rows into #popPanel, and writes
@@ -2695,7 +2854,7 @@ export default function Lab() {
               </div>
             </aside>
             {/* horizon */}
-            <aside {...panel('tr', ['horizon'], 'Controls')}>
+            <aside {...panel('br', ['horizon'], 'Controls')}>
               <div className="tl-panel__grip" aria-hidden="true" />
               {hd('Controls')}
               <div className="tl-panel__bd">
@@ -2730,7 +2889,7 @@ export default function Lab() {
                 their absence costs nothing. The vertical projection loses the
                 panel too and takes the full stage width. */}
             {/* flow */}
-            <aside {...panel('tr', ['flow'], 'Controls')}>
+            <aside {...panel('br', ['flow'], 'Controls')}>
               <div className="tl-panel__grip" aria-hidden="true" />
               {hd('Controls')}
               <div className="tl-panel__bd">
@@ -2765,7 +2924,7 @@ export default function Lab() {
               </div>
             </aside>
             {/* braid */}
-            <aside {...panel('tr', ['braid'], 'Controls')}>
+            <aside {...panel('br', ['braid'], 'Controls')}>
               <div className="tl-panel__grip" aria-hidden="true" />
               {hd('Controls')}
               <div className="tl-panel__bd">
@@ -2790,7 +2949,7 @@ export default function Lab() {
                 why Connections has no right-hand panels any more.
                 buildConnLegend() fills #connGrammar by id, so it does not care
                 that the element now lives inside a <details>. */}
-            <aside {...panel('tr', ['conn'], 'Controls')}>
+            <aside {...panel('br', ['conn'], 'Controls')}>
               <div className="tl-panel__grip" aria-hidden="true" />
               {hd('Controls')}
               <div className="tl-panel__bd">
@@ -2855,7 +3014,7 @@ export default function Lab() {
                 rather than a fact about a scrollbar. cube.ts opens a group
                 whose contents are no longer at rest (paintDisc), so a closed
                 group can never hide a setting that is doing something. */}
-            <aside {...panel('tr', ['cube'], 'Controls')}>
+            <aside {...panel('br', ['cube'], 'Controls')}>
               <div className="tl-panel__grip" aria-hidden="true" />
               {hd('Controls')}
               <div className="tl-panel__bd">
@@ -3108,11 +3267,20 @@ export default function Lab() {
               {NOTES[view].body}
               {NOTES[view].src && <p className="tl-pop__src">{NOTES[view].src}</p>}
             </div>
+            {/* THE HOTKEY STRIP IS GONE. "Dont show the hotkeys info in field
+                notes lets make it real small." Four shortcuts under a
+                three-line introduction was a reference table stapled to a
+                greeting, and every one of them is already reachable where a
+                person would look for it: ← → and Space are the step and play
+                buttons in Controls, ⌘K is printed inside the search field
+                itself while it is empty, and ? is in the notes button's own
+                title. Nothing was lost by cutting them; a newcomer just stops
+                being handed a keyboard map before they have seen the picture.
+
+                THE LINK STAYS, because it is not a shortcut — it is the only
+                route in the app to the Concepts view, which is not on the
+                switcher. */}
             <div className="tl-pop__ft">
-              <span className="tl-pop__key"><kbd className="tl-kbd">←</kbd><kbd className="tl-kbd">→</kbd> step</span>
-              <span className="tl-pop__key"><kbd className="tl-kbd">Space</kbd> play</span>
-              <span className="tl-pop__key"><kbd className="tl-kbd">⌘K</kbd> search</span>
-              <span className="tl-pop__key"><kbd className="tl-kbd">?</kbd> these notes</span>
               <button className="tl-pop__link" onClick={() => { go('concepts'); setNotesOpen(false); }}>
                 Concepts, rated →
               </button>
@@ -3148,7 +3316,14 @@ export default function Lab() {
             That is what lets #yearLabel, #yearSlider and #btnPlay keep working
             untouched while other views drive the same rail differently. */}
         <footer className="tl-timerail" id="timerail">
-          <div className="tl-timerail__year" data-legend={String(meta.rail === 'legend')}>
+          {/* data-range says the counter is holding a WINDOW, not a moment, and
+              the two are not the same typographic object: one year is four
+              numerals and a range is up to "13.8 billion yrs ago – 2026". The
+              flag is read off VIEWS[v].rail, the same classification syncRail
+              switches on, so the shell and the readout can never disagree about
+              which kind of view this is. */}
+          <div className="tl-timerail__year" data-legend={String(meta.rail === 'legend')}
+            data-range={String(meta.rail === 'span')}>
             <div data-railcell="year-map" data-on={String(yearCell === 'map')}>
               <span className="tl-year" id="yearLabel">1783</span>
               <span className="tl-year__era" id="mapEra">CE · 12/18</span>
@@ -3226,7 +3401,7 @@ export default function Lab() {
               play/go forward/backward, reset view) / Reading / Card on all
               pages, to keep it unified."
 
-              Play and the two steppers were the map's and People's; the
+              Play and the two steppers were the map's and Habitation's; the
               PROJECTION switch was the two timeline projections'. All three
               were the same kind of thing — a control of the VIEW — parked in
               the one strip that is not about the view but about the MOMENT.
@@ -3337,7 +3512,7 @@ export default function Lab() {
 
       {!ready && (
         <div className="bootstate" role="status">
-          {error ? <><b>Could not load the data.</b> {error}</> : <>Loading 18 world snapshots…</>}
+          {error ? <><b>Could not load the data.</b> {error}</> : <>Loading the corpus — events, lanes and connections…</>}
         </div>
       )}
     </>

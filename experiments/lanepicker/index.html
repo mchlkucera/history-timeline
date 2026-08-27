@@ -1,0 +1,393 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Lane picker — four arrangements</title>
+<meta name="description" content="A selection card that offers the lanes a thing could live in. Four arrangements, on the real corpus.">
+
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500;600&family=Instrument+Sans:wght@400;500;600;700&family=Instrument+Serif&display=swap">
+
+<!-- THE REAL TOKENS AND THE REAL CARD. Loaded from the design system, never
+     copied: if a token moves, this page moves with it, and the comparison
+     cannot flatter itself with values the app does not have. -->
+<link rel="stylesheet" href="../../design/tokens.css">
+<link rel="stylesheet" href="../../design/selcard/selcard.css">
+<link rel="stylesheet" href="lp.css">
+</head>
+<body>
+<main class="lp">
+
+  <!-- ══ HEAD ══════════════════════════════════════════════════════════════ -->
+  <header class="lp-head">
+    <div class="lp-head__top">
+      <div>
+        <div class="lp-kicker">Local prototype · not deployed · experiments/lanepicker</div>
+        <h1 class="lp-title">A card that offers the lanes a thing could live in</h1>
+      </div>
+      <div class="lp-theme" role="group" aria-label="Theme">
+        <button type="button" data-theme="light" aria-pressed="false">Light</button>
+        <button type="button" data-theme="system" aria-pressed="true">System</button>
+        <button type="button" data-theme="dark" aria-pressed="false">Dark</button>
+      </div>
+    </div>
+    <p class="lp-lede">
+      <b>“Show in timeline is not enough.”</b> Four arrangements of the same idea — D first,
+      because it is the one to build, then the three it was cut down from — each rendered twice — once for <b>Daoism</b>, which is in no lane at all, and once
+      for <b>Mozart</b>, who plausibly fits several. Every lane name, every count, every
+      neighbour and every connection below is read out of the shipped corpus by
+      <code>build-data.py</code>. Nothing is invented. Where a list would be empty, the card
+      says so instead of filling itself.
+    </p>
+    <p class="lp-lede">
+      The cards are the real component — <code>design/selcard/selcard.css</code>, loaded
+      unmodified — on the real tokens, in both themes. The one new block sits between the
+      identity and the destinations, because “is this thing even here” has to be settled
+      before “show this in” can mean anything.
+    </p>
+  </header>
+
+  <!-- ══ WHY THE MODEL CANNOT SAY THIS TODAY ═══════════════════════════════ -->
+  <section class="lp-plate">
+    <div class="lp-sechd">
+      <h2>Why the current model cannot express the question</h2>
+      <p>Six facts, each checked against the files. They are the reason this is a model
+         problem wearing a UI problem’s clothes.</p>
+    </div>
+    <dl class="lp-facts">
+      <div class="lp-fact">
+        <dt>One lane</dt>
+        <dd><code>factsOf(id)</code> computes exactly <b>one</b> canonical lane —
+          <code>layerIdFor(band, category, type)</code>, e.g. Europe × power × polity — plus
+          <code>adopted[]</code>, the lanes whose hard-coded <code>anchors</code> list names
+          that id. <code>planReveal</code> then takes the <b>cheapest</b> candidate and
+          <code>reveal()</code> acts. The reader is never shown a choice because the model
+          never had one.</dd>
+      </div>
+      <div class="lp-fact">
+        <dt>Two axes</dt>
+        <dd>The derived axis is region × domain (31 layers). <code>data/lanes.json</code>
+          holds a completely different axis: <b>15 curated lanes</b> with explicit member
+          lists — Arts &amp; movements, Religion, Technology, Czech history. A thing can
+          plausibly belong on both at once. That is exactly “Mozart as part of Austria or
+          Music”, and no field in the model can hold both answers.</dd>
+      </div>
+      <div class="lp-fact">
+        <dt>Band ≠ place</dt>
+        <dd>A mark’s <code>band</code> is <b>either</b> a region <b>or</b> a lane key, never
+          both. Mozart’s band is <code>MU</code>, so a composer who lived in Salzburg and
+          Vienna has <b>no region at all</b>; <code>layerIdFor()</code> never asks his place.
+          And there is no Austria to ask for: the region axis has four bands — EU, ME, AS,
+          AM. The closest thing the derived axis can offer is
+          <b>Europe · Art &amp; culture</b>, which holds <b>seven</b> things: Stonehenge,
+          the first Olympic games, Leonardo, Michelangelo, Shakespeare, Kafka and the
+          Renaissance.</dd>
+      </div>
+      <div class="lp-fact">
+        <dt>Daoism</dt>
+        <dd><code>eventById('belief:daoism')</code> returns null, so <code>factsOf</code>
+          returns null and <code>planReveal</code> says <code>never</code>. A belief stream
+          has no band, no category, no type and no coordinate — <code>layerIdFor()</code> has
+          nothing to compute from. But <code>lanes.json</code> ships a <b>Religion</b> lane
+          with 40 members. “Daoism cannot be on the timeline” is a limitation of the model,
+          not a fact about Daoism.</dd>
+      </div>
+      <div class="lp-fact">
+        <dt>Same conversation, two fates</dt>
+        <dd>Confucius <b>is</b> drawn — he is a <code>LIVES</code> row banded
+          <code>AS</code>, so he resolves to <b>Asia · Essentials</b> (35 things). Daoism is a
+          <code>beliefs.json</code> stream, so it resolves to nothing. The single link
+          between them, <code>entity:Confucius → belief:daoism</code>, is Daoism’s
+          <b>only</b> connection in a corpus of 348.</dd>
+      </div>
+      <div class="lp-fact">
+        <dt>What you join</dt>
+        <dd>A count alone does not answer “what context am I adding”. Religion’s 40 members
+          run from the Axial Age to the Iranian Revolution, and <b>36 of them sit west of
+          longitude 62</b>; the easternmost is Buddhist expansion at 85°E. Nothing in it is
+          Chinese. Philosophy’s 35 members are <b>all</b> west of 28°E — it is a lane of
+          European philosophy that is not named that. Adding Daoism to either is a real
+          editorial act, and the card should say so before you click.</dd>
+      </div>
+    </dl>
+  </section>
+
+  <!-- ══ D — THE FOUNDER'S CUT, AND THE ONE TO BUILD ═══════════════════════ -->
+  <section>
+    <div class="lp-sechd">
+      <h2>Arrangement D — the list of views<span class="lp-badge">Recommended</span></h2>
+      <p>“We just have a list of views. […] The moment we have him open in Timeline […] we
+         should see an expanded view to specify which lanes in the Timeline it is a part of.
+         Just show their names, nothing else, no other explanations.”</p>
+      <p>The destination strip the card already ships <b>is</b> the list of views. The lane
+         list hangs off it, and only under <b>Timeline</b> — press Flow, Map or Cube on the
+         stage switch and it closes, because a lane is a timeline concept. Two states, both
+         borrowed from the strip rather than invented: the inverted ink block is a lane on
+         your board, the plain bordered cell is one you can press to add. Mozart starts with
+         <b>Music</b> already on the board so both states are visible at once; Daoism starts
+         with nothing, which is the case the founder described as a card that is in none of
+         your lanes yet.</p>
+    </div>
+    <dl class="lp-verdict" style="max-width: 760px; margin-bottom: var(--tl-space-5)">
+      <dt>Good at</dt>
+      <dd>It adds no vocabulary — one existing control grows one row of names — and it is the
+          only arrangement that answers “which have I added” at a glance instead of by
+          reading. Smallest of the four: 315px for Daoism, 422px for Mozart, both inside the
+          card’s 480px cap.</dd>
+      <dt>Costs</dt>
+      <dd>The order of the names is unexplained, so the ranking has to be right by feel; a
+          reader who does not know a lane cannot find out what is in it from here; and the
+          two states are carried by fill alone, which is one signal doing two jobs.</dd>
+    </dl>
+    <div class="lp-lead-row">
+      <div data-spec="d" data-sub="daoism"></div>
+      <div data-spec="d" data-sub="mozart"></div>
+    </div>
+  </section>
+
+  <!-- ══ THE THREE ARRANGEMENTS ════════════════════════════════════════════ -->
+  <section>
+    <div class="lp-sechd">
+      <h2>The three it was cut down from</h2>
+      <p>How D was arrived at, kept because the arguments in them are what settled the
+         default and the order. Same data, same tokens, same card; only the arrangement of the offer differs.
+         Every specimen is live: pick a lane, press the button, read the notice, press
+         <b>Undo</b>. The measurement under each card is its real rendered height against
+         the card’s real 480px cap.</p>
+    </div>
+
+    <div class="lp-compare">
+
+      <!-- ── A ───────────────────────────────────────────────────────────── -->
+      <div class="lp-col">
+        <div class="lp-col__hd">
+          <span class="lp-col__tag">Arrangement A</span>
+          <span class="lp-col__name">One default, one link</span>
+        </div>
+        <dl class="lp-verdict">
+          <dt>Good at</dt>
+          <dd>The common path is one click and the card does not grow — 386px for Daoism,
+              429px for Mozart, both inside the card’s real 480px cap. The default is stated
+              in the button, so nobody is asked a question they did not come with.</dd>
+          <dt>Costs</dt>
+          <dd>The choice is discovered, not read — a reader who never presses “others” never
+              learns that lanes are a decision, which is the thing the founder asked for.</dd>
+        </dl>
+        <div data-spec="a" data-sub="daoism"></div>
+        <div data-spec="a" data-sub="mozart"></div>
+      </div>
+
+      <!-- ── B ───────────────────────────────────────────────────────────── -->
+      <div class="lp-col">
+        <div class="lp-col__hd">
+          <span class="lp-col__tag">Arrangement B</span>
+          <span class="lp-col__name">The ladder</span>
+        </div>
+        <dl class="lp-verdict">
+          <dt>Good at</dt>
+          <dd>Every candidate is read, ranked, with its size, its reason and a glimpse of
+              what is inside — and the top one is pre-selected, so it is still one click.</dd>
+          <dt>Costs</dt>
+          <dd>Height, and only height. Shown uncapped on purpose: 593px for Daoism’s two
+              candidates, <b>921px</b> for Mozart’s six, against a 480px cap. It would have
+              to show three and put “All 6 →” in the header.</dd>
+        </dl>
+        <div data-spec="b" data-sub="daoism"></div>
+        <div data-spec="b" data-sub="mozart"></div>
+      </div>
+
+      <!-- ── C ───────────────────────────────────────────────────────────── -->
+      <div class="lp-col">
+        <div class="lp-col__hd">
+          <span class="lp-col__tag">Arrangement C</span>
+          <span class="lp-col__name">Two axes</span>
+        </div>
+        <dl class="lp-verdict">
+          <dt>Good at</dt>
+          <dd>It splits the choice the way the founder said it — “Austria <b>or</b> Music” —
+              and an empty axis becomes a sentence in the column where the answer should
+              have been, which is the clearest statement of the gap anywhere on this page.</dd>
+          <dt>Costs</dt>
+          <dd>Two headers and an empty-state paragraph is a lot of chrome for 320px —
+              762px and <b>1016px</b> against a 480px cap, the tallest of the three — and it
+              promises a symmetry the data does not have: one axis is empty for Daoism and
+              seven-things-deep for Mozart.</dd>
+        </dl>
+        <div data-spec="c" data-sub="daoism"></div>
+        <div data-spec="c" data-sub="mozart"></div>
+      </div>
+
+    </div>
+  </section>
+
+  <!-- ══ THE NOTE ══════════════════════════════════════════════════════════ -->
+  <section class="lp-plate lp-note">
+    <div class="lp-sechd">
+      <h2>The note</h2>
+      <p>The rule behind the lists above — which still runs D, silently — the default,
+         what I could not settle, and what has to move in <code>layers.ts</code> for any of
+         it to be real.</p>
+    </div>
+
+    <div class="lp-cols">
+      <div>
+        <h3>The candidate-derivation rule</h3>
+        <p>Four sources, in falling order of confidence. Implemented in
+           <code>build-data.py → candidates()</code>; every row on every card above carries
+           the reason it passed.</p>
+        <ol>
+          <li><b>Where it already is.</b> Any lane whose member list names the id, or whose
+              <code>anchors</code> adopt it. (Mozart: the Mozart lane anchors
+              <code>entity:Wolfgang Amadeus Mozart</code>.)</li>
+          <li><b>Where the model computes it.</b>
+              <code>layerIdFor(band, cat, type)</code> — the single lane the app derives
+              today. (Mozart: band <code>MU</code> → Music.)</li>
+          <li><b>Where it happened on the ground.</b> The region lane its <i>place</i> would
+              give, via <code>regionOf(lat, lon)</code>. This is <b>not</b> computed today
+              and every row that comes from it says so. (Mozart: Salzburg → EU →
+              Europe · Art &amp; culture.)</li>
+          <li><b>What its subject fits.</b> Every curated lane, scored: <b>+3</b> if the
+              lane is single-domain and that domain is the subject’s; <b>+2</b> if the
+              lane’s span contains the whole subject, <b>+1</b> if it contains only its
+              start; <b>+1</b> per shared word, up to three. Kept at 4 or better.</li>
+        </ol>
+        <p>Two gates do most of the work, and both exist so the list has no hand-written
+           exceptions. <b>Purity:</b> a lane where ≥90% of members share one category will
+           not take a foreigner at any word score — that is what keeps Mozart out of
+           Religion. A <i>mixed</i> lane (Czech history: power, art, belief, society) is
+           about a place, not a domain, so it takes whatever happened there but has to earn
+           it on evidence. <b>Origin:</b> a lane whose span begins after the subject does
+           cannot hold its origin — that is what keeps Daoism (−350) out of Political
+           ideologies (1685) without anyone writing that down.</p>
+        <p>And <b>a lane of my own</b> is always the last row, never scored. It is a sketch:
+           nothing backs it. Its place in the list is the argument — it belongs beside the
+           other answers, not behind a separate “create” affordance, because at the moment
+           you are looking at three lanes that are nearly right, “none of these” is the
+           fourth answer to the same question.</p>
+      </div>
+
+      <div>
+        <h3>The default, and why</h3>
+        <p><b>The default is the lane the app would have picked anyway.</b> Concretely:
+           <code>planReveal</code>’s own answer — the owning lane, then an adopting one,
+           cheapest first. For Mozart that is <b>Music</b>, which is exactly what search
+           does with him today.</p>
+        <p>The defence is that it changes nobody’s behaviour. A reader who does not look at
+           the list gets the result they already get, so the picker is <i>purely</i>
+           additive: it puts a choice where today there is none. It is also the only default
+           already written and already tested — the alternative (“the lane with the most
+           members”, “the lane you used last”) is a new opinion that has to be maintained.</p>
+        <p><b>When there is no such lane</b> — <code>planReveal</code> says
+           <code>never</code>, which is every belief stream — the default falls to the
+           top-scoring subject-fit lane. For Daoism that is <b>Religion</b> (6) over
+           Philosophy (5). Here the default <i>is</i> a new opinion, so the card earns it by
+           showing the reason on the row and the company it keeps. That is the whole reason
+           the glimpse line exists.</p>
+        <p><b>Build D.</b> A is too quiet — it answers “pick from a list” with a control
+           that hides the list. B is the most informative and the most expensive: 921px at
+           Mozart’s six candidates against a 480px cap. C is the best teacher and the worst
+           card. D throws away everything the other three argue about and keeps the only two
+           facts a reader acts on — the name, and whether it is already yours — and it does
+           it inside a control the card already has, at 315px and 422px.</p>
+        <p><b>What the other three were for.</b> They are the argument D no longer makes out
+           loud. The ranking below still orders D’s names; the default rule still decides
+           which lane a bare press of <b>Timeline</b> uses; the scoring still decides which
+           names appear at all. D shows none of it, so all of it has to be right unseen —
+           which is why the reasoning stays on this page rather than in the card.</p>
+      </div>
+    </div>
+
+    <div class="lp-cols">
+      <div>
+        <h3>What I could not resolve</h3>
+        <ul>
+          <li><b>Membership has nowhere to live.</b> Nothing in the data can record “this id
+              is in that lane” for anything that is not literally a member row.
+              <code>anchors</code> is per-lane and hard-coded (<code>MZ_ANCHOR</code> is a
+              constant in <code>layers.ts</code>). A picker writes a membership and there is
+              no field to write it to.</li>
+          <li><b>A lane is not enough for Daoism.</b> Even after you pick Religion, the
+              timeline still cannot draw a belief stream: it has no start-shaped mark, no
+              category, no importance. Something must project a stream into an
+              <code>EVENTS</code> tuple. That is a data change, not a UI one, and this
+              prototype does not pretend otherwise.</li>
+          <li><b>Austria is not expressible.</b> Four regions, and the only nation-shaped
+              lane in the corpus — Czech history — exists because someone hand-wrote 38
+              members. “Mozart as part of Austria” needs either a fifth axis or a curated
+              lane per country, and those are very different projects.</li>
+          <li><b>Word overlap is noisy, and I left the noise visible.</b> Literature scores
+              on the word <i>wolfgang</i> — it is matching Goethe. Read the reason on that
+              row: this is the weakest of the three signals and the card should not hide it.</li>
+          <li><b>D shows an order it does not justify.</b> The names are in candidate rank,
+              added ones first, and nothing on the card says why. That is fine at the top —
+              Music then Mozart for him, Religion then Philosophy for it, both right by feel
+              — and soft at the tail, where <b>Literature</b> sits fourth for Mozart on the
+              strength of the word <i>wolfgang</i>, which is Goethe. An unexplained order has
+              to be right by feel, and this one is right where it is read and arguable where
+              it is not.</li>
+          <li><b>The founder named Connections as one of the views;</b> the shipped card has
+              no Connections cell — its fixed row is Timeline, Flow, Map, Cube. D renders the
+              shipped four rather than quietly inventing a fifth. Which of the two is wrong
+              is his call, not mine.</li>
+          <li><b>Religion over Philosophy is 6 to 5.</b> Nothing in the data settles where
+              Daoism belongs, and a Sinologist might well say Philosophy. A default this
+              thin has to be visibly reversible, which is why the notice and its Undo are
+              part of the specimen and not an afterthought.</li>
+        </ul>
+      </div>
+
+      <div>
+        <h3>What would have to change in layers.ts</h3>
+        <ol>
+          <li><code>factsOf(id)</code> stops returning one lane. <code>own: string | null</code>
+              and <code>adopted: string[]</code> become one ranked
+              <code>cands: { id, source, score, why }[]</code>. And it needs a
+              <code>belief:</code> branch reading
+              <code>BELIEFS.systems[].streams[]</code>, exactly as it already has a
+              <code>polity:</code> and a <code>spread:</code> branch — that single branch is
+              what turns <code>never</code> into a list for 61 streams.</li>
+          <li><code>planReveal</code> stops choosing. It keeps returning a plan, but for a
+              <i>given</i> lane, and exposes the ranked list beside it — so the card can draw
+              the alternatives while search keeps acting with no choice at all.</li>
+          <li>A membership store beside <code>Layers.vis / det / gvis</code>:
+              <code>Layers.mem: Record&lt;laneId, string[]&gt;</code>, persisted in the same
+              <code>tl.layers.v1</code> blob, and consulted by the renderer’s membership
+              test. That is the smallest change that makes “add this to that lane” mean
+              anything at all.</li>
+          <li><code>RevealUndo</code> gains <code>mem: string[] | undefined</code> and
+              <code>undoReveal</code> restores it through the same <code>put()</code>
+              delete-if-absent discipline — otherwise an undone add leaves a membership
+              behind, which is precisely the bug that record was built to prevent.</li>
+          <li><code>didLine()</code> gains one case. A reveal that also writes a membership
+              has to say both things, or Undo undoes something the reader was never told
+              about. The specimens above say <i>Added “Religion” and put Daoism in it</i>.</li>
+          <li>The <code>never</code> verdict shrinks to “there is genuinely nothing”, and the
+              “Show in Beliefs” offer goes away with it.</li>
+          <li><b>D only:</b> <code>dests()</code> in <code>selcard.ts</code> stops drawing the
+              Timeline cell shut for a belief stream. It reads
+              <code>planReveal(s.id).need === 'never'</code> today and puts “there is no lane
+              to add” on the cell — once a lane is a choice, that sentence is false, and D’s
+              Daoism card is live precisely there.</li>
+          <li><b>D only:</b> the card needs the reader’s board to draw its two states. That
+              part needs nothing new — <code>Layers.has(laneId)</code> already answers it —
+              but the card has never asked, so <code>paint()</code> has to subscribe to the
+              layer store the way it already subscribes to <code>TimeStore</code>.</li>
+        </ol>
+      </div>
+    </div>
+
+    <p class="lp-foot">
+      experiments/lanepicker/ · open index.html directly, no build · data.js regenerated with
+      <code>python3 build-data.py</code> · corpus: 658 events, 147 polities, 20 spreads,
+      348 links, 15 curated lanes, 31 layers, 61 belief streams
+    </p>
+  </section>
+
+</main>
+
+<script src="data.js"></script>
+<script src="app.js"></script>
+</body>
+</html>

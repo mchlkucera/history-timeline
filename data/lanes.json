@@ -2,7 +2,7 @@
  "lanes": [
   {
    "id": "arts",
-   "label": "Arts & movements",
+   "label": "Western art movements",
    "members": [
     {
      "name": "Byzantine art",
@@ -470,7 +470,7 @@
   },
   {
    "id": "design",
-   "label": "Design",
+   "label": "Modern Western design",
    "members": [
     {
      "name": "Arts and Crafts movement",
@@ -2477,7 +2477,7 @@
   },
   {
    "id": "philosophy",
-   "label": "Philosophy",
+   "label": "Western philosophy",
    "key": "PH",
    "si": 6,
    "default": false,
@@ -3503,7 +3503,7 @@
   },
   {
    "id": "economics",
-   "label": "Economics",
+   "label": "Western economics",
    "key": "EC",
    "si": 3,
    "default": false,

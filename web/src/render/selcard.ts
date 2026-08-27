@@ -92,7 +92,7 @@
    views — so there is no cycle back through timeline.ts, map.ts or cube.ts.
    ============================================================================= */
 
-import { $, CATBY, POLITIES, SelStore, TimeStore, YEARS, fmtBig, fmtY } from './shared';
+import { $, CATBY, POLITIES, SelStore, TimeStore, YEARS, atlasState, fmtBig, fmtY } from './shared';
 import { esc, relDir } from './relations';
 import {
   bandLabel, catLabel, describe, perspectiveSpan, relCount, territoryAt,
@@ -119,7 +119,7 @@ const NARROW = 760;
 const SUPPRESS = new Set<string>();
 
 /** Which view each destination lands you on — the aria-current join. */
-const LANDS_ON: Record<string, string> = { persp: 'zoom', flow: 'flow', map: 'map', cube: 'cube' };
+const LANDS_ON: Record<string, string> = { persp: 'zoom', flow: 'flow', map: 'map', cube: 'cube', conn: 'conn' };
 
 /**
  * IS THIS POLITY A RIBBON AT ALL? Flow draws POLITIES and only POLITIES, so a
@@ -155,6 +155,12 @@ function isRibbon(polity: string | null): boolean {
  */
 function firstMapYear(polity: string | null): number | null {
   if (!polity) return null;
+  // NO ATLAS, NO DESTINATION. The atlas is lazy now, and it can fail. This
+  // function reads polities.json and ATLAS_YEARS, neither of which needs the
+  // geometry — so without the guard the card would keep offering "go to 1279,
+  // where its borders first appear" for a map that cannot draw a border. It
+  // would not crash; it would just promise a room with nothing in it.
+  if (atlasState() === 'failed') return null;
   for (const y of YEARS) if (territoryAt(polity, y).size) return y;
   return null;
 }
@@ -212,6 +218,10 @@ export interface CardWiring {
   showInFlow(polityId: string): void;
   /** show the cube with this polity id traced */
   traceInCube(polityId: string): void;
+  /** show Connections with this subject selected and lit. Lab.tsx resolves the
+   *  same-as twin on the way in, so a lane id and the spread it names land on
+   *  the one mark Connections actually draws. */
+  showInConnections(id: string): void;
   /** reveal the full ranked relation list in the docked panel */
   allConnections(): void;
   /** the snapshot year the map is actually showing right now */
@@ -684,7 +694,6 @@ export const SelCard = {
       html += `<div class="tl-selcard__rels">` +
         `<div class="tl-selcard__relshd">` +
         `<span class="tl-selcard__section">Connections</span>` +
-        `<button type="button" class="tl-selcard__all" data-act="all">All ${total} →</button>` +
         `</div><ul class="tl-selcard__rellist">`;
       for (const r of rels) {
         html += `<li><button type="button" class="tl-selcard__rel" data-goid="${attr(r.id)}">` +
@@ -794,6 +803,8 @@ export const SelCard = {
           ? 'Highlight its territory on the map, at the year you are already on'
           : first !== null
             ? `Not drawn at ${this.whenOnMap()} — go to ${fmtY(first)}, where its borders first appear`
+            : atlasState() === 'failed'
+            ? 'The atlas could not be loaded — the map is unavailable'
             : `${s.name} is never drawn on any of the ${YEARS.length} atlas snapshots`,
         // A DOOR IS ONLY SHUT WHEN THERE IS NOTHING BEHIND IT. This used to be
         // shut whenever the CURRENT year had no borders, which made the map
@@ -809,6 +820,21 @@ export const SelCard = {
     // CUBE — never disabled by the year: it traces the whole life as a solid.
     if (!s.minimal && s.polity) {
       out.push({ act: 'cube', label: 'Cube', title: 'Trace its territory through time as a solid' });
+    }
+
+    // CONNECTIONS — for anything the relation corpus actually links. The
+    // founder, with Leonardo open IN Connections: "I should be able to see
+    // Connections are in active state and an option to view him in Timeline.
+    // Now he just shows Timeline button in non-active state." He was standing
+    // in a view the row did not contain, so the row could not say "you are
+    // here" and the one cell it did show looked inert.
+    //
+    // The test is the CORPUS, not the renderer — this file imports none.
+    // relCount is the same count the card already prints over the connections
+    // list, so a card that shows relations can always reach the view that draws
+    // them, and one with none never offers an empty room. Leonardo has two.
+    if (!s.minimal && SelStore.id && relCount(SelStore.id) > 0) {
+      out.push({ act: 'conn', label: 'Connections', title: 'See what it is linked to, and how strongly' });
     }
 
     // ONE SIGNAL, ONE MEANING: the inverted cell is the view you are standing
@@ -858,7 +884,16 @@ export const SelCard = {
     const s = describe(SelStore.id); if (!s) return;
     const w = this.wiring;
     switch (a) {
-      case 'close': this.hide(true); break;
+      // THE × MEANS THE SAME THING AS ESCAPE. It used to hide the card and
+      // LEAVE the selection in the store, so the highlight went on burning with
+      // its explanation gone — the founder hit this from two directions on the
+      // same day: "In Cube clicking X on card should be the same as getting rid
+      // of highlight in map - should clean the map", and, of Flow, "If you dont
+      // want it highlighted you should just close it via cross, then you can
+      // hover as you like". Both describe a × that clears. The card is one
+      // reading of the selection, but it is the only reading that carries a
+      // dismiss control, so dismissing it has to mean dismissing the thing.
+      case 'close': SelStore.set(null); this.hide(true); break;
       // THE SAME VERB AS A CONNECTIONS ROW. It used to hand over a SPAN, which
       // framed two numbers whether or not any lane drew anything between them —
       // "Make sure its impossible to zoom in on something that does not exist"
@@ -883,7 +918,7 @@ export const SelCard = {
       // region showing — see showInFlow's contract.
       case 'flow': if (s.polity) w?.showInFlow(s.polity); break;
       case 'cube': if (s.polity) w?.traceInCube(s.polity); break;
-      case 'all': w?.allConnections(); break;
+      case 'conn': if (SelStore.id) w?.showInConnections(SelStore.id); break;
     }
   },
 
