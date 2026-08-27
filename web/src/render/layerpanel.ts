@@ -34,7 +34,7 @@
      · On a tablet the column is THERE and eating the plot — 232px of a 1024px
        iPad in landscape, permanently. He wants it gone and the space back.
      · On a phone the column was NOT there at all. app.css hid it under 760px,
-       and with it went every route to hiding a lane, adding one, grouping, or
+       and with it went every route to adding a lane, removing one, grouping, or
        moving a layer's detail dial: those controls have no other home in the
        app. He wants it summoned.
 
@@ -70,7 +70,7 @@
    file is forbidden to have.
 
    WHERE THE STATE LIVES. localStorage, beside the arrangement itself (which
-   layers, their order, their groups, what is hidden, every detail dial —
+   layers, their order, their groups, every detail dial —
    layers.ts, same store, same reasoning). NOT the URL. `?v=&y=&s=` is a
    COORDINATE — the view, the year, the span — and it is meant to be shared:
    whether the person who sent you a link had their column open on a phone is
@@ -103,8 +103,6 @@ const el = (t: string, c?: string, h?: string) => {
    column it draws is standing beside it. */
 const COLS = '<svg viewBox="0 0 16 16" fill="none" stroke="currentColor" aria-hidden="true"><rect x="1.7" y="2.7" width="12.6" height="10.6" rx="1.6" stroke-width="1.3"/><path d="M6.5 2.7v10.6" stroke-width="1.3"/><path d="M3.5 5.9h1.6M3.5 8h1.6M3.5 10.1h1.6" stroke-width="1.1"/></svg>';
 
-const EYE = '<svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.3" aria-hidden="true"><path d="M1.5 8s2.4-4.2 6.5-4.2S14.5 8 14.5 8 12.1 12.2 8 12.2 1.5 8 1.5 8Z"/><circle cx="8" cy="8" r="1.9"/></svg>';
-const EYEOFF = '<svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.3" aria-hidden="true"><path d="M2.6 5.4C1.9 6.3 1.5 8 1.5 8S3.9 12.2 8 12.2c1 0 1.9-.2 2.7-.6M6.2 4c.6-.1 1.2-.2 1.8-.2 4.1 0 6.5 4.2 6.5 4.2s-.6 1.1-1.7 2.2"/><path d="M2.5 2.5l11 11"/></svg>';
 
 interface Row {
   el: HTMLElement;
@@ -186,8 +184,8 @@ export const LayerPanel = {
 
          WHAT A READER CAN STILL DO. Grouping is a whole feature and only its
          front door is shut: a group that already exists in a saved layout still
-         draws its own row with its chevron, its eye, its count and its × to
-         ungroup, and layers still drag into and out of it. The one thing that
+         draws its own row with its chevron, its count and its × to ungroup,
+         and layers still drag into and out of it. The one thing that
          cannot be done is making a NEW empty group — which is exactly the verb
          on the button. So nothing anybody has can be stranded by this. */
       const grp = mk('+', 'Group');
@@ -302,29 +300,29 @@ export const LayerPanel = {
       const g = nd;
       const gh = el('div', 'tl-lrow tl-lrow--group');
       gh.dataset.gid = g.id;
-      if (Layers.gvis[g.id] === false) gh.classList.add('is-off');
       const chev = el('button', 'tl-lchev', g.collapsed ? '›' : '⌄') as HTMLButtonElement;
       chev.type = 'button'; chev.dataset.a = 'collapse';
       chev.title = g.collapsed ? 'Expand the group in this panel' : 'Collapse the group in this panel (the lanes stay on the workspace)';
-      const eye = el('button', 'tl-leye', Layers.gvis[g.id] === false ? EYEOFF : EYE) as HTMLButtonElement;
-      eye.type = 'button'; eye.dataset.a = 'geye';
-      eye.title = 'Show or hide every layer in this group';
       const nm = el('div', 'tl-lname tl-lname--group'); nm.textContent = g.name; nm.dataset.a = 'gdrag';
       const ct = el('div', 'tl-lcnt'); ct.textContent = String(g.kids.length);
       const x = el('button', 'tl-lx', '×') as HTMLButtonElement;
       x.type = 'button'; x.dataset.a = 'ungroup'; x.title = 'Ungroup — the layers stay, the group goes';
-      gh.append(chev, eye, nm, ct, x);
+      gh.append(chev, nm, ct, x);
       host.append(gh);
       this.rows.push({ el: gh, key: 'g:' + g.id, type: 'group', g });
       if (!g.collapsed) for (const k of g.kids) this.pushLayer(k.id, true);
     }
-    const ids = Layers.ids();
+    /* THE READOUT IS A COUNT, NOT A RATIO. It used to say "7/9 shown", which
+       only ever had two different numbers in it because a lane could be present
+       and hidden. With hiding gone every lane on the board is drawn, so the
+       ratio could say nothing but "9/9" — a fraction whose halves are always
+       equal is a fraction the reader has to read twice to learn nothing. */
     const cnt = document.getElementById('layerCount');
     if (cnt) {
       cnt.textContent = '';
       cnt.append(
-        document.createTextNode(ids.filter(i => Layers.visible(i)).length + '/' + ids.length),
-        el('span', 'tl-lcount__w', ' shown'),                 // dropped when the panel narrows
+        document.createTextNode(String(Layers.ids().length)),
+        el('span', 'tl-lcount__w', ' layers'),                // dropped when the panel narrows
       );
     }
     /* AN EMPTY LIBRARY IS A STATE, NOT AN ABSENCE. When everything is already
@@ -348,13 +346,8 @@ export const LayerPanel = {
   pushLayer(id: string, indent: boolean) {
     const host = this.host!;
     const d = layerDef(id); if (!d) return;
-    const on = Layers.visible(id);
-    const r = el('div', 'tl-lrow tl-lrow--layer' + (indent ? ' tl-lrow--in' : '') + (on ? '' : ' is-off'));
+    const r = el('div', 'tl-lrow tl-lrow--layer' + (indent ? ' tl-lrow--in' : ''));
     r.dataset.lid = id;
-    const eye = el('button', 'tl-leye', on ? EYE : EYEOFF) as HTMLButtonElement;
-    eye.type = 'button'; eye.dataset.a = 'eye';
-    eye.title = on ? 'Hide this layer' : 'Show this layer';
-    eye.setAttribute('aria-pressed', String(on));
     const dot = el('span', 'tl-ldot');
     dot.style.background = d.si === null ? 'var(--tl-ink-3)' : `var(--s${d.si + 1})`;
     const nm = el('div', 'tl-lname'); nm.textContent = d.name; nm.dataset.a = 'drag';
@@ -365,7 +358,7 @@ export const LayerPanel = {
     lv.title = 'How much of this layer to show — click to choose';
     const x = el('button', 'tl-lx', '×') as HTMLButtonElement;
     x.type = 'button'; x.dataset.a = 'remove'; x.title = 'Remove — it goes back to the library';
-    r.append(eye, dot, nm, lv, x);
+    r.append(dot, nm, lv, x);
     host.append(r);
     this.rows.push({ el: r, key: id, type: 'layer' });
   },
@@ -405,8 +398,6 @@ export const LayerPanel = {
     const row = (e.target as HTMLElement).closest('.tl-lrow') as HTMLElement | null;
     const lid = row?.dataset.lid, gid = row?.dataset.gid;
     switch (t.dataset.a) {
-      case 'eye': if (lid) Layers.toggle(lid); break;
-      case 'geye': if (gid) Layers.toggleGroup(gid); break;
       case 'collapse': if (gid) Layers.collapse(gid); break;
       case 'ungroup': if (gid) Layers.ungroup(gid); break;
       case 'remove': if (lid) {

@@ -119,7 +119,7 @@ const NARROW = 760;
 const SUPPRESS = new Set<string>();
 
 /** Which view each destination lands you on — the aria-current join. */
-const LANDS_ON: Record<string, string> = { persp: 'zoom', flow: 'flow', map: 'map', cube: 'cube', conn: 'conn' };
+const LANDS_ON: Record<string, string> = { persp: 'zoom', flow: 'flow', map: 'map', cube: 'cube', braid: 'braid', conn: 'conn' };
 
 /**
  * IS THIS POLITY A RIBBON AT ALL? Flow draws POLITIES and only POLITIES, so a
@@ -173,8 +173,8 @@ export interface CardWiring {
    * It replaced `perspective(a, b)`, which took a SPAN and could therefore only
    * do half the job: frame two numbers and hope something was drawn between
    * them. A span cannot be asked whether a lane draws it; an id can. So Lab
-   * plans the reveal, adds the lane / opens its eye / raises its dial, selects,
-   * frames, and says what it took — the same call the search box makes, so
+   * plans the reveal, adds the lane and raises its dial, selects, frames, and
+   * says what it took — the same call the search box makes, so
    * "Make sure its impossible to zoom in on something that does not exist"
    * finally holds for this cell too.
    */
@@ -218,6 +218,22 @@ export interface CardWiring {
   showInFlow(polityId: string): void;
   /** show the cube with this polity id traced */
   traceInCube(polityId: string): void;
+  /**
+   * SHOW THIS BELIEF STREAM ON THE BRAIDED RIVERS — the BELIEFS destination.
+   *
+   * It exists because the founder asked for it twice: "Remove the 'Show in
+   * Beliefs' - instead the card should be able to reach ALL the views." Beliefs
+   * used to be reachable only through a button on the notice, which is a
+   * control that appears for a moment, in a corner, for one class of subject —
+   * while every other view had a permanent cell in this row. Now it is a cell
+   * like the rest of them, and the notice carries no buttons at all.
+   *
+   * Lab.tsx implements it, and its implementation must also SWITCH THE SYSTEM:
+   * braid draws religions OR ideologies, so landing on it with the other one up
+   * is the same broken promise as landing on Flow with the region filtered out
+   * or on the map at a year with no borders. Same shape, same contract.
+   */
+  showInBeliefs(id: string): void;
   /** show Connections with this subject selected and lit. Lab.tsx resolves the
    *  same-as twin on the way in, so a lane id and the spread it names land on
    *  the one mark Connections actually draws. */
@@ -270,11 +286,16 @@ interface Dest {
  *  card is composed from corpus strings, so they go through this instead. */
 const attr = (s: string) => esc(s).replace(/"/g, '&quot;');
 
-/** The field notes own Escape while open. (The ⌘K palette used to as well; it
- *  is gone — the one search is an <input>, and the guard below already refuses
- *  to act on any input, so Escape there closes its own dropdown instead.) */
+/** The field notes and the wordmark's menu own Escape while open. (The ⌘K
+ *  palette used to as well; it is gone — the one search is an <input>, and the
+ *  guard below already refuses to act on any input, so Escape there closes its
+ *  own dropdown instead.)
+ *
+ *  #markMenu joined the list rather than becoming a fourth owner of the key:
+ *  Lab.tsx closes both from its ONE Escape branch, and this is the one place
+ *  that has to know the card stands down while either is up. */
 const modalOpen = () =>
-  !!document.querySelector('#fieldNotes:not([hidden])');
+  !!document.querySelector('#fieldNotes:not([hidden]), #markMenu:not([hidden])');
 
 export const SelCard = {
   el: null as HTMLElement | null,
@@ -719,11 +740,11 @@ export const SelCard = {
   },
 
   /**
-   * THE DESTINATION GROUP. Built as [timeline, map, cube] and only ever
-   * FILTERED — never sorted, never re-ordered. If Map is missing, Cube does not
-   * slide left into its slot; the group just gets shorter and Timeline is still
-   * the first cell. Reordering by relevance makes each card individually optimal
-   * and the set of cards unlearnable.
+   * THE DESTINATION GROUP. Built as [timeline, flow, map, cube, beliefs,
+   * connections] and only ever FILTERED — never sorted, never re-ordered. If
+   * Map is missing, Cube does not slide left into its slot; the group just gets
+   * shorter and Timeline is still the first cell. Reordering by relevance makes
+   * each card individually optimal and the set of cards unlearnable.
    */
   dests(s: Subject): Dest[] {
     const out: Dest[] = [];
@@ -736,8 +757,8 @@ export const SelCard = {
       const [a0, a1] = perspectiveSpan(s);
       const deep = fmtBig(a0) !== fmtY(a0);            // beyond 20,000 years
       // NEVER vs NOT NOW, in the one cell where the difference had never been
-      // drawn. A subject whose lane is merely absent, hidden or under-detailed
-      // is NOT NOW — pressing this adds it (see act('persp')), so the cell
+      // drawn. A subject whose lane is merely absent or under-detailed is
+      // NOT NOW — pressing this adds it (see act('persp')), so the cell
       // stays live. A belief stream is on no lane at all and no lane can be
       // added that would draw it: the door opens onto nothing, so it is shown
       // SHUT with the reason on it, exactly as the Map cell is for a polity
@@ -820,6 +841,36 @@ export const SelCard = {
     // CUBE — never disabled by the year: it traces the whole life as a solid.
     if (!s.minimal && s.polity) {
       out.push({ act: 'cube', label: 'Cube', title: 'Trace its territory through time as a solid' });
+    }
+
+    /* BELIEFS — for a belief stream, and there is no shut version of this door.
+       The founder, twice: "Remove the 'Show in Beliefs' - instead the card
+       should be able to reach ALL the views."
+
+       THE TEST IS WHAT THE THING IS, which for once is the whole of the
+       question. Flow has to ask whether a polity carries a weight curve and Map
+       has to ask whether any of eighteen snapshots draws it, because those
+       views draw a SUBSET of what they are handed. Braid draws the belief
+       corpus entire — both systems, every stream in it — and describe() only
+       ever answers type 'belief' for an id it found in that corpus. So a
+       subject that is a stream is a subject braid draws, and the cell is live
+       whenever it is offered at all. That is the same shape as `s.polity` for
+       Flow/Map/Cube and relCount for Connections: a fact about the subject,
+       read here, with no renderer imported to answer it.
+
+       WHICH SYSTEM IS SHOWING IS NOT THIS CELL'S PROBLEM. It is a transient —
+       recoverable by the click itself, because the wiring presses braid's own
+       preset on the way in — and nothing transient is ever hatched in this row.
+
+       The slot is after Cube and before Connections: the four cells above are
+       the projections that draw the SUBJECT (a line, a line with thickness, a
+       surface, a solid — and now a stream), and Connections, which draws its
+       LINKS, stays last. */
+    if (!s.minimal && s.type === 'belief') {
+      out.push({
+        act: 'braid', label: 'Beliefs',
+        title: 'Follow it as a river of ideas — where it forked, and what it ran alongside',
+      });
     }
 
     // CONNECTIONS — for anything the relation corpus actually links. The
@@ -918,6 +969,10 @@ export const SelCard = {
       // region showing — see showInFlow's contract.
       case 'flow': if (s.polity) w?.showInFlow(s.polity); break;
       case 'cube': if (s.polity) w?.traceInCube(s.polity); break;
+      // The system it belongs to may not be the one on the canvas, so this
+      // hands over the ID and lets the wiring press braid's own preset — the
+      // same shape as 'flow' turning a hidden region back on.
+      case 'braid': w?.showInBeliefs(s.id); break;
       case 'conn': if (SelStore.id) w?.showInConnections(SelStore.id); break;
     }
   },

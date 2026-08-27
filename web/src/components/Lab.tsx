@@ -41,7 +41,7 @@ import { Pop, loadPopulation } from '@/render/population';
 import { buildGallery } from '@/render/gallery';
 import { Conn, initConn, loadRelations } from '@/render/connections';
 import { searchCorpus, searchLayers, type Hit, type LayerHit } from '@/render/search';
-import { Layers, planReveal, reveal, undoReveal, type RevealPlan } from '@/render/layers';
+import { Layers, planReveal, reveal, type RevealPlan } from '@/render/layers';
 import { describe, perspectiveSpan, setPolityAliases, type Subject } from '@/render/subject';
 import { railPos, railYear, railNum, railEraOf, SNAPSHOTS } from './rail';
 
@@ -99,8 +99,16 @@ const TL_HOME: [number, number] = [-3000, 2026];
 
 
 // Concepts is deliberately NOT in the switcher: it is documentation about the
-// tool, not a view of history. It stays reachable from ⌘K and from the
-// "Concepts, rated →" link in the field-notes footer.
+// tool — ten rated sketches of ways to see history — not a view of history, and
+// a tab is a claim to be part of the product. It has a home instead: the
+// wordmark's menu. "Hide concepts under the main Timeline brand view dropdown,
+// make it hidden."
+//
+// It stays in ORDER, and ORDER is not the switcher — the switcher renders
+// GROUPS, which has never contained it. ORDER is what validates ?v= (so the URL
+// keeps working) and what the ⌘K view rows are built from (so its name still
+// finds it). Its old third route, a "Concepts, rated →" footer on the field
+// notes, is gone: "Remove the Concepts rated footer of fields notes."
 const groupOf = (v: ViewId): string => GROUPS.find(g => g.members.includes(v))?.id || 'g-map';
 
 // The eight domain tokens, by the name tokens.css spells them. The chip's dot
@@ -470,7 +478,6 @@ function needLine(r: { p: RevealPlan; to: ViewId | null }, here: ViewId): string
   if (r.to !== here) return `shown on ${VIEWS[r.to].seg}`;
   if (!r.p.layerName) return null;
   if (r.p.need === 'add') return `in ${r.p.layerName} — not added`;
-  if (r.p.need === 'show') return `in ${r.p.layerName} — hidden`;
   if (r.p.need === 'detail') return `in ${r.p.layerName} — needs more detail`;
   return null;
 }
@@ -485,11 +492,10 @@ function needTitle(r: { p: RevealPlan; to: ViewId | null }, name: string, here: 
   // them can put one named thing on screen, so taking the row travels, and it
   // says where and why before it is pressed rather than after.
   if (r.to !== here) {
-    return `${VIEWS[here].seg} cannot show one ${p.need === 'never' && p.why ? p.why.replace(/ —.*$/, '') : 'thing'} on its own, `
+    return `${VIEWS[here].seg} cannot show one thing on its own, `
       + `so this opens ${name} on ${VIEWS[r.to].name}.`;
   }
   if (p.need === 'add') return `Adds the “${p.layerName}” layer${raise}, then selects ${name} and frames it.`;
-  if (p.need === 'show') return `Un-hides “${p.layerName}”${raise}, then selects ${name} and frames it.`;
   if (p.need === 'detail') return `Raises “${p.layerName}” to “${p.detailWord}”, then selects ${name} and frames it.`;
   return null;
 }
@@ -690,26 +696,32 @@ function showInBeliefs(id: string) {
    "when I click Confucius - Daoism and daoisms lane isnt showed up we need to
    somehow present that daoism is in lane that is not here."
 
-   Going to a subject can quietly change the board — a lane arrives, an eye
-   opens, a dial goes up — and a board that changed without being asked is only
-   honest if it SAYS SO. One line, one action, and nothing else:
+   Going to a subject can quietly change the board — a lane arrives, a dial goes
+   up — and a board that changed without being asked is only honest if it SAYS
+   SO. One line, and nothing else:
 
-     Added “Asia · Beliefs”                                          [Undo]
-     Daoism is a belief stream — the Beliefs view draws these  [Show in Beliefs]
+     Added “Asia · Beliefs”
+     Daoism is not drawn on this timeline
 
-   NOT A CONFIRMATION. The search has revealed lanes silently since the
+   IT SAYS; IT DOES NOT DO. It carried a button once — [Undo] on the first line,
+   [Show in Beliefs] on the second — and both are gone, for the same reason in
+   two shapes. The founder on the first: "get rid of the undo - you can just
+   remove the lane if you like" — the lane the line names is flashed in the
+   panel as the line appears, with its own × on it. And on the second: "Remove
+   the 'Show in Beliefs' - instead the card should be able to reach ALL the
+   views" — the selection card opens on the same gesture, a hand's width below,
+   and its destination row now carries every view including Beliefs. Both
+   buttons were a second control for a control already on screen.
+
+   NOT A CONFIRMATION, EITHER. The search has revealed lanes silently since the
    phantom-zoom fix, and gating the identical move behind a dialog when it comes
-   from a card would be one app doing one thing two ways. A confirmation is for
-   a change you cannot take back; this one has Undo written on it.
+   from a card would be one app doing one thing two ways.
 
-   NOT THE ACCENT, EITHER. Minium means WHERE YOU ARE IN TIME and nothing else,
-   so the notice is ink on the same over-surface every panel uses. */
+   NOT THE ACCENT. Minium means WHERE YOU ARE IN TIME and nothing else, so the
+   notice is ink on the same over-surface every panel uses. */
 interface Notice {
   /** what changed, or why nothing could — one line, past tense, no jargon */
   text: string;
-  /** the one thing to do about it: 'Undo', or the view that can draw it */
-  label: string | null;
-  act: (() => void) | null;
   /** a fresh id per notice, so an identical message re-plays its entry */
   n: number;
 }
@@ -721,13 +733,12 @@ let noticeN = 0;
  *  called that destination "Timeline" since it had destinations. */
 const destWord = (v: ViewId) => v === 'zoom' ? 'Timeline' : VIEWS[v].seg;
 
-/** WHAT THE REVEAL ACTUALLY TOOK, in the panel's own vocabulary. The three
- *  needs are three different events and they are spelled differently; the dial
- *  is named only when it actually moved (an `add` can carry one too). */
+/** WHAT THE REVEAL ACTUALLY TOOK, in the panel's own vocabulary. The
+ *  two needs are two different events and they are spelled differently; the
+ *  dial is named only when it actually moved (an `add` can carry one too). */
 function didLine(p: RevealPlan): string {
   const at = p.detailWord ? ` at “${p.detailWord}”` : '';
   if (p.need === 'add') return `Added “${p.layerName}”${at}`;
-  if (p.need === 'show') return `Turned “${p.layerName}” back on${at}`;
   return `Raised “${p.layerName}” to “${p.detailWord}”`;
 }
 
@@ -837,6 +848,11 @@ const I = {
   prev: <svg viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.5" aria-hidden="true"><path d="M10 3.5L5.5 8l4.5 4.5" /></svg>,
   next: <svg viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.5" aria-hidden="true"><path d="M6 3.5L10.5 8 6 12.5" /></svg>,
   close: <svg viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.5" aria-hidden="true"><path d="M4 4l8 8M12 4l-8 8" /></svg>,
+  // The wordmark's one affordance. 1.5 rather than the 1.3 the mark's own glyph
+  // uses, because it is drawn at 9px and a 1.3 stroke disappears there — and it
+  // is painted --tl-ink-3 by shell.css, a step quieter than the word it follows,
+  // so it announces the menu without making the mark loud again.
+  chev: <svg viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.5" aria-hidden="true"><path d="M3.5 6L8 10.5 12.5 6" strokeLinecap="round" strokeLinejoin="round" /></svg>,
 };
 
 export default function Lab() {
@@ -844,6 +860,12 @@ export default function Lab() {
   const [ready, setReady] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [notesOpen, setNotesOpen] = useState(false);
+  /* THE WORDMARK'S MENU. "Hide concepts under the main Timeline brand view
+     dropdown, make it hidden." One item today; the markup is a list so a second
+     costs nothing. It is NOT in the switcher and must never be: Concepts is
+     documentation about the tool, which is exactly why it needed a home that is
+     not a tab. */
+  const [markOpen, setMarkOpen] = useState(false);
   /* TWO FLAGS FOR ONE POPOVER, because it has to be seen LEAVING.
      `notesOpen` is what the reader asked for; `notesVis` is whether the element
      is still in the layout. Opening sets both; closing drops `notesOpen` at
@@ -1143,6 +1165,14 @@ export default function Lab() {
              which is exactly when the cell is drawn inverted. */
           showInConnections: (id) => { showInConnections(id); go('conn'); },
           traceInCube: (pid) => { Cube.select(pid); go('cube'); },
+          /* SHOW THIS IN BELIEFS. "Remove the 'Show in Beliefs' - instead the
+             card should be able to reach ALL the views." The doing did not
+             change at all — showInBeliefs() above is the same function that
+             used to hang off the notice's button, switching braid's system on
+             the way in. Only the control it hangs off did: it is a cell in the
+             card's destination row now, beside Timeline and Cube, permanent
+             rather than a button that appears for twelve seconds. */
+          showInBeliefs: (id) => { showInBeliefs(id); go('braid'); },
           allConnections: () => setRelOpen(true),
           mapYear: () => (WorldMap as any).year(),
           anchorOf: (id) => {
@@ -1799,10 +1829,12 @@ export default function Lab() {
    * So there is now one function and every one of them calls it. In order:
    *
    *   1. PLAN against the board as it is now (never against a stale plan).
-   *   2. REVEAL — add the lane, open its eye, raise its dial, in one emit.
+   *   2. REVEAL — add the lane and raise its dial, in one emit.
    *   3. only then select, frame and go.
-   *   4. and if the board moved, SAY SO, with an Undo that puts all three
-   *      pieces of it back.
+   *   4. and if the board moved, SAY SO. Saying so is the whole of step 4:
+   *      the founder — "get rid of the undo - you can just remove the lane if
+   *      you like" — and he is right, because the lane the notice names is
+   *      flashed in the panel a few pixels away with its own × on it.
    *
    * `to` is which timeline projection to land on: the vertical one when the
    * reader is already standing there, horizontal otherwise. `from` is the
@@ -1811,43 +1843,40 @@ export default function Lab() {
    * A `never` plan cannot arrive here, and it is neither caller's afterthought:
    * the search plans first and routes a belief stream to Beliefs instead, and
    * the card's Timeline cell is drawn SHUT for a subject no lane can draw. If
-   * one ever did arrive, reveal() returns null and nothing is framed — the
-   * phantom zoom stays impossible whichever way the mistake is made.
+   * one ever did arrive, the guard below frames nothing — the phantom zoom
+   * stays impossible whichever way the mistake is made.
    */
   const goToSubject = useCallback((id: string, to: ViewId = 'zoom', from: SelSource = 'point') => {
     const sub = describe(id);
     if (!sub) return;
     const plan = planReveal(id);
-    const undo = reveal(plan);
-    if (!undo) return;                                 // `never` — frame nothing
+    if (plan.need === 'never') return;                 // frame nothing
+    const moved = reveal(plan);
     TL.clearSearch();                                  // frame a full world, never 12% of one
     // A REVEAL MEANS YOU POINTED AT NOTHING. selcard.ts's two placements ask
     // one question — was the reader LOOKING at the thing? — and when the lane
-    // had to be added, unhidden or turned up, the answer is no: a moment ago
+    // had to be added or turned up, the answer is no: a moment ago
     // there was nothing on the canvas to look at. So the card parks in its one
     // learnable corner, exactly as it does after a search, instead of appearing
     // beside a mark that has just this instant been drawn somewhere the reader
     // was not looking. It also keeps the card out of the notice explaining it.
-    SelCard.select(id, null, null, undo.touched ? 'search' : from);
+    SelCard.select(id, null, null, moved ? 'search' : from);
     const [a, b] = perspectiveSpan(sub);
     frameSettled(a, b);
     go(to);
-    if (undo.touched && plan.layer) {
+    if (moved && plan.layer) {
       flashLayer(plan.layer);                          // …and locate the lane it took
-      setNotice({
-        text: didLine(plan), label: 'Undo',
-        act: () => { undoReveal(undo); setNotice(null); }, n: ++noticeN,
-      });
+      setNotice({ text: didLine(plan), n: ++noticeN });
     } else setNotice(null);                            // nothing changed, nothing to say
   }, [go, flashLayer]);
   useEffect(() => { showTlRef.current = (id: string) => goToSubject(id, 'zoom', 'point'); }, [goToSubject]);
 
 
   /* THE NOTICE LEAVES ON ITS OWN. Twelve seconds, restarted by each new one —
-     long enough to read a line, look at what changed on the board and decide
-     against it, short enough that it is not furniture. The × is the way out
-     before then; there is no way to bring it back, because Undo is a courtesy
-     for a change you just watched happen, not a history. */
+     long enough to read a line and look at what changed on the board, short
+     enough that it is not furniture. The × is the way out before then; there is
+     no way to bring it back, because it is a remark about a change you just
+     watched happen, not a history. */
   useEffect(() => {
     if (!notice) return;
     const t = setTimeout(() => setNotice(null), 12000);
@@ -1886,8 +1915,8 @@ export default function Lab() {
     const onTimeline = plan.need !== 'never';
 
     /* THE FALLBACK, AND A DESTINATION IN ITS OWN RIGHT — and not one line of
-       its own any more. Earn the frame first (reveal() adds the layer, opens
-       its eye, raises its dial), only then select and frame, and scroll the
+       its own any more. Earn the frame first (reveal() adds the layer and
+       raises its dial), only then select and frame, and scroll the
        panel row into view when the board actually changed: that is
        goToSubject(), which the selection card now calls for the identical
        move. One behaviour, one implementation, so the search and a relation
@@ -1952,18 +1981,21 @@ export default function Lab() {
       // thing. Nothing to try — fall through to the timeline.
       default: break;
     }
-    // A BELIEF STREAM IS NOT A DEAD END, IT IS A DIFFERENT VIEW — and it is the
-    // one class planReveal answers `never` for with a view's name in its hand:
-    // "a belief stream — the Beliefs view draws these". Honour that sentence
-    // instead of printing it over a row nobody can press. Beliefs draws the
-    // whole belief corpus, both systems, so this needs no permission from the
-    // canvas currently up: showInBeliefs switches the system if it has to.
+    // A BELIEF STREAM IS NOT A DEAD END. This USED to call showInBeliefs()
+    // itself — a route hand-wired here, past the card, for one class of
+    // subject. It goes through the card's own destination now, exactly as the
+    // map and cube cases above do (select, then act), so there is one
+    // implementation of "put this stream on braid" and the search row and the
+    // card's Beliefs cell cannot disagree about the same stream. destOpen is
+    // the card's verdict, and the card's verdict is that a stream is drawn.
     // It navigates on its own, unlike the cases above: those only ever fire
     // when the landing IS the view you are standing on, and this one fires from
-    // anywhere — including the timeline, where the row used to be dead.
-    if (beliefSystem(id)) return { view: 'braid', act: () => { showInBeliefs(id); go('braid'); } };
+    // anywhere — including the timeline, where the row would otherwise be dead.
+    if (destOpen(sub, 'braid')) {
+      return { view: 'braid', act: () => { SelCard.select(id, null, null, from); SelCard.act('braid'); } };
+    }
     return onTimeline ? toTimeline('zoom') : null;
-  }, [goToSubject, go]);
+  }, [goToSubject]);
 
   /**
    * ═══ TAKE ME TO THAT SUBJECT — answered from where the reader is standing ═══
@@ -1978,14 +2010,17 @@ export default function Lab() {
    * WITH ONE RULE OF ITS OWN: IT NEVER TELEPORTS. A search row says "shown on
    * Beliefs" in its own second line before you press it; a row in a list of
    * names says nothing, so a view switch out of it would be a surprise. When
-   * the landing is not the view you are on, this OFFERS it — the subject is
-   * still selected, so the card can still say what it is, and the notice
-   * carries the one click that goes there. That covers both of the ways a
-   * subject can be missing from the screen you are looking at:
+   * the landing is not the view you are on, this SELECTS and SAYS SO, and the
+   * going is left to the card — which opens on the same call, and whose
+   * destination row now reaches every view there is. The notice used to carry
+   * its own [Show in …] button; the founder: "Remove the 'Show in Beliefs' -
+   * instead the card should be able to reach ALL the views." One control, in
+   * the place the reader already looks for controls, for both of the ways a
+   * subject can be missing from the screen they are looking at:
    *
    *   NOT DRAWN HERE     an event on the map, an empire on Connections
    *   NOT DRAWN AT ALL   a belief stream on the timeline — planReveal says
-   *                      `never` and names the view that does draw it
+   *                      `never`, and the card's Beliefs cell is lit
    */
   const goHere = useCallback((id: string) => {
     const sub = describe(id); if (!sub) return;
@@ -1998,12 +2033,12 @@ export default function Lab() {
     // and it is a true answer whether or not this canvas can draw the thing.
     SelCard.select(id, null, null, 'point');
     const why = plan.need === 'never' && plan.why ? plan.why : `not drawn on ${VIEWS[here].seg}`;
-    setNotice(land
-      ? {
-        text: `${sub.name} is ${why}`, label: `Show in ${destWord(land.view)}`,
-        act: () => { setNotice(null); land.act(); }, n: ++noticeN,
-      }
-      : { text: `${sub.name} is ${why}, and no other view draws it either`, label: null, act: null, n: ++noticeN });
+    setNotice({
+      text: land
+        ? `${sub.name} is ${why} — the card can show it in ${destWord(land.view)}`
+        : `${sub.name} is ${why}, and no other view draws it either`,
+      n: ++noticeN,
+    });
   }, [landingFor]);
   useEffect(() => { goToRef.current = goHere; }, [goHere]);
 
@@ -2107,12 +2142,12 @@ export default function Lab() {
    *   2. if nothing anywhere can draw it, do nothing at all — no selection, no
    *      frame. The row is disabled in the markup too, so this is a second lock
    *      on a door that is already bolted;
-   *   3. inside the timeline branch, reveal() — add the layer, open its eye,
-   *      raise its dial, whatever the verdict said, in ONE emit;
+   *   3. inside the timeline branch, reveal() — add the layer, raise its
+   *      dial, whatever the verdict said, in ONE emit;
    *   4. only now select and frame.
    *
-   * Nothing between 3 and 4 can fail: reveal() has already made Layers.has,
-   * Layers.visible and passesDetail all true for the layer that draws it.
+   * Nothing between 3 and 4 can fail: reveal() has already made Layers.has and
+   * passesDetail both true for the layer that draws it.
    */
   const takeRow = useCallback((r: SRow) => {
     if (r.k === 'c' && r.to === null) return;            // the door is bolted here too
@@ -2367,7 +2402,18 @@ export default function Lab() {
       const t = e.target as HTMLElement | null;
       const typing = !!t && (t.tagName === 'INPUT' || t.tagName === 'TEXTAREA' || t.tagName === 'SELECT');
       if ((e.key === 'k' || e.key === 'K') && (e.metaKey || e.ctrlKey)) { e.preventDefault(); focusSearch(); return; }
-      if (e.key === 'Escape') { if (notesOpen) { setNotesOpen(false); document.getElementById('notesBtn')?.focus(); } return; }
+      /* ONE ESCAPE OWNER IN THIS FILE, NOT TWO. The card takes Escape in the
+         capture phase and stands down while a modal is open (selcard.ts
+         modalOpen, which now names the mark menu as well as the field notes),
+         so this branch is the whole of "close the thing that is open" — and it
+         closes the SMALLEST thing first. The menu is a popover over the notes,
+         never under them, so a reader with both open means the menu. Focus goes
+         back to whatever was pressed to open it, in both cases. */
+      if (e.key === 'Escape') {
+        if (markOpen) { setMarkOpen(false); document.getElementById('markBtn')?.focus(); }
+        else if (notesOpen) { setNotesOpen(false); document.getElementById('notesBtn')?.focus(); }
+        return;
+      }
       if (typing) return;
       if (e.key === '?') { e.preventDefault(); openNotes(true); return; }
       const m = VIEWS[viewRef.current].rail;
@@ -2384,6 +2430,23 @@ export default function Lab() {
     addEventListener('keydown', onKey);
     return () => removeEventListener('keydown', onKey);
   });
+
+  /* A CLICK ANYWHERE ELSE SHUTS THE MARK MENU. Every other popover in the app
+     closes this way and a menu that did not would be the one thing on screen
+     you have to dismiss on purpose. `pointerdown`, not `click`, so it goes
+     before whatever was pressed rather than after it, and only while the menu
+     is actually open — a listener that spends the whole session waiting for a
+     menu nobody has opened is a cost with no reader behind it. The trigger is
+     inside `.tl-mark`, so pressing it again toggles through its own handler
+     rather than being closed here and reopened. */
+  useEffect(() => {
+    if (!markOpen) return;
+    const away = (ev: PointerEvent) => {
+      if (!(ev.target as HTMLElement | null)?.closest?.('.tl-mark')) setMarkOpen(false);
+    };
+    addEventListener('pointerdown', away);
+    return () => removeEventListener('pointerdown', away);
+  }, [markOpen]);
 
   // ── derived flags ─────────────────────────────────────────────────────────
   const railOn = meta.rail !== 'off';
@@ -2502,9 +2565,28 @@ export default function Lab() {
 
         {/* ══ TOP RAIL ═════════════════════════════════════════════════════ */}
         <header className="tl-rail">
+          {/* THE MARK, AND THE ONE DOOR BEHIND IT. The glyph stays a glyph —
+              identity, not a control. The WORD is the trigger, and its resting
+              appearance is unchanged: same serif, same 15px, same --tl-ink-2
+              (see shell.css, which was at pains to demote it and stays that
+              way). The chevron is the only new pixel, and it is drawn a step
+              quieter than the word. */}
           <span className="tl-mark">
             <span className="tl-mark__glyph" aria-hidden="true">{I.mark}</span>
-            <span className="tl-mark__word">Timeline</span>
+            <button type="button" id="markBtn" className="tl-mark__word"
+              aria-haspopup="menu" aria-expanded={markOpen} aria-controls="markMenu"
+              onClick={() => setMarkOpen(o => !o)}>
+              Timeline
+              <span className="tl-mark__chev" aria-hidden="true">{I.chev}</span>
+            </button>
+            <div className="tl-mark__menu" id="markMenu" role="menu"
+              aria-labelledby="markBtn" hidden={!markOpen}>
+              <button type="button" role="menuitem" className="tl-mark__item"
+                aria-current={view === 'concepts' || undefined}
+                onClick={() => { setMarkOpen(false); leaveSearch('concepts'); }}>
+                Concepts, rated
+              </button>
+            </div>
           </span>
 
           <div className="tl-rail__mid" ref={midRef} data-ovf={ovf || undefined}>
@@ -3277,14 +3359,16 @@ export default function Lab() {
                 title. Nothing was lost by cutting them; a newcomer just stops
                 being handed a keyboard map before they have seen the picture.
 
-                THE LINK STAYS, because it is not a shortcut — it is the only
-                route in the app to the Concepts view, which is not on the
-                switcher. */}
-            <div className="tl-pop__ft">
-              <button className="tl-pop__link" onClick={() => { go('concepts'); setNotesOpen(false); }}>
-                Concepts, rated →
-              </button>
-            </div>
+                AND SO IS THE LINK. "Remove the Concepts rated footer of fields
+                notes." It was kept on the grounds that it was the only route to
+                a view that is not on the switcher — but Concepts is
+                documentation about the tool, not a view of history, and a
+                permanent footer on every view, on every open, pointing at a
+                design document is not the product. It has a home of its own
+                now — the wordmark's menu, top left — and ⌘K still finds it by
+                name, and ?v=concepts still opens it. With the strip and the link
+                both gone the notes have no footer at all, so the element goes
+                with them. */}
           </aside>
 
           {/* ══ THE NOTICE ═══════════════════════════════════════════════════
@@ -3301,9 +3385,6 @@ export default function Lab() {
           {notice && (
             <div className="tl-notice" role="status" aria-live="polite" key={notice.n}>
               <span className="tl-notice__msg">{notice.text}</span>
-              {notice.label && notice.act && (
-                <button type="button" className="tl-notice__act" onClick={notice.act}>{notice.label}</button>
-              )}
               <button type="button" className="tl-notice__x" aria-label="Dismiss"
                 title="Dismiss" onClick={() => setNotice(null)}>{I.close}</button>
             </div>
@@ -3486,7 +3567,10 @@ export default function Lab() {
                       style={{ background: r.l.si === null ? 'var(--tl-ink-3)' : `var(--s${r.l.si + 1})` }} />
                     <span className="tl-sugg__name">{r.l.name}</span>
                     <span className="tl-sugg__meta">
-                      {r.l.on ? (r.l.hidden ? 'on the board · hidden' : 'on the board') : `add as a lane · ${r.l.n}`}
+                      {/* `r.l.hidden` is gone from this line, not from search.ts's
+                          tuple: a lane on the board is drawn, so the third
+                          state it named cannot happen any more. */}
+                      {r.l.on ? 'on the board' : `add as a lane · ${r.l.n}`}
                     </span>
                   </button>
                 ) : (

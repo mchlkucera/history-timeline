@@ -163,6 +163,88 @@ html:has(body.tl-body) { height: 100%; overflow: hidden; }
   color: var(--tl-ink-2);
 }
 
+/*
+   …AND THE MARK IS NOW THE DOOR TO ONE THING. "Hide concepts under the main
+   Timeline brand view dropdown, make it hidden."
+
+   Concepts is ten rated sketches of ways to see history — documentation about
+   the tool, not a view of it — so it has never been on the switcher, and its
+   one link (a "Concepts, rated →" footer on the field notes, on every view, on
+   every open) has just been cut. The wordmark is where a thing like that
+   belongs: the corner of an app that is not a place you go is the corner where
+   the things that are not the product live.
+
+   THE WORD ITSELF DOES NOT CHANGE, and that is the whole constraint. It was
+   demoted to --tl-ink-2 above for a named reason — on the Map view the biggest,
+   brightest word in the chrome said TIMELINE and the tab you were on said MAP
+   two shades quieter — and an affordance that walked that back would reopen the
+   bug. So the face, the 15px, the tracking and the ink are byte-for-byte the
+   ones above; `button.tl-mark__word` strips the UA button down to the span it
+   replaces and adds nothing but a pointer cursor. The ONE new pixel is the
+   chevron, at --tl-ink-3, which is a step QUIETER than the word it follows.
+   No accent anywhere near it: minium means where you are in TIME.
+*/
+.tl-mark { position: relative; }
+button.tl-mark__word {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--tl-space-3);
+  appearance: none;
+  margin: 0;
+  padding: 0;
+  border: 0;
+  background: none;
+  cursor: pointer;
+  /* --tl-tap is 32px and becomes 36px under a coarse pointer on its own
+     (tokens.css), and the rail is 44px, so this is a thumb target that costs
+     the rail no height at all. */
+  min-height: var(--tl-tap);
+}
+.tl-mark__chev {
+  display: block;
+  flex: none;
+  width: 9px;
+  height: 9px;
+  color: var(--tl-ink-3);
+  transition: transform var(--tl-dur-fast) var(--tl-ease);
+}
+button.tl-mark__word[aria-expanded="true"] .tl-mark__chev { transform: rotate(180deg); }
+
+.tl-mark__menu {
+  position: absolute;
+  top: calc(100% - var(--tl-space-3));
+  left: 0;
+  z-index: var(--tl-z-pop);
+  min-width: 168px;
+  padding: var(--tl-space-2);
+  background: var(--tl-surface);
+  border: var(--tl-border) solid var(--tl-rule);
+  border-radius: var(--tl-radius-lg);
+  box-shadow: var(--tl-shadow-pop);
+}
+.tl-mark__menu[hidden] { display: none; }
+/* One item today. A second would need no rule of its own — which is the point
+   of building it as a list rather than as a button that goes one place. */
+.tl-mark__item {
+  appearance: none;
+  display: flex;
+  align-items: center;
+  width: 100%;
+  min-height: var(--tl-tap);
+  padding: 0 var(--tl-space-4);
+  border: 0;
+  border-radius: var(--tl-radius-sm);
+  background: none;
+  text-align: left;
+  cursor: pointer;
+  font-family: var(--tl-font-ui);
+  font-size: var(--tl-text-sm);
+  color: var(--tl-ink);
+  white-space: nowrap;
+}
+.tl-mark__item:hover { background: var(--tl-hover); }
+.tl-mark__item[aria-current="true"] { background: var(--tl-selected); }
+
 .tl-rail__mid {
   display: flex;
   align-items: center;

@@ -108,7 +108,6 @@
 .tl-lrow--layer { box-shadow: inset 0 -1px 0 var(--tl-rule-soft); }
 .tl-lrow--layer.tl-lrow--in { box-shadow: inset 0 -1px 0 var(--tl-rule-soft), inset 10px 0 0 -9px var(--tl-rule); }
 .tl-lrow--in { padding-left: 18px; box-shadow: inset 10px 0 0 -9px var(--tl-rule); }
-.tl-lrow.is-off .tl-lname, .tl-lrow.is-off .tl-ldot { opacity: .38; }
 .tl-lrow.is-dragging { background: var(--tl-accent-soft); box-shadow: inset 0 0 0 1px var(--tl-accent-line) !important; }
 /* ── "WHICH ONE IS LITERATURE?" ───────────────────────────────────────────────
    A lane row taken from the search either arrived just now (added) or was
@@ -130,14 +129,6 @@
 }
 .tl-lrow.is-thin { line-height: 18px; }
 
-.tl-leye {
-  appearance: none; border: 0; background: none; padding: 0;
-  flex: none; width: 16px; height: 20px;
-  display: grid; place-items: center;
-  color: var(--tl-ink-3); cursor: pointer; border-radius: var(--tl-radius-xs);
-}
-.tl-leye:hover { color: var(--tl-ink); background: var(--tl-press); }
-.tl-leye svg { width: 12px; height: 12px; display: block; }
 .tl-ldot { flex: none; width: 7px; height: 7px; margin-top: 6px; border-radius: 50%; }
 .tl-lname {
   flex: 1 1 auto; min-width: 0;
@@ -324,7 +315,7 @@
   white-space: nowrap;
 }
 /* The count yields first. Below 1181px the panel is 232px, and two bordered
-   buttons plus "5/5 shown" is 4px over it — so the WORD goes and the ratio,
+   buttons plus "9 layers" does not fit — so the WORD goes and the number,
    which is the part that is a measurement, stays. */
 @media (max-width: 1180px) { .tl-lcount__w { display: none; } }
 
@@ -1172,26 +1163,11 @@ body.tl-dragging { cursor: grabbing; }
 }
 .tl-notice__msg b { font-weight: var(--tl-w-medium); color: var(--tl-ink); }
 
-/* THE ONE THING TO DO ABOUT IT — "Undo", or the view that can draw the thing
-   this timeline cannot. A quiet control, not a call to action: the reveal it
-   undoes was already what the reader asked for. */
-.tl-notice__act {
-  flex: none;
-  appearance: none;
-  height: var(--tl-ctl-sm);
-  padding: 0 var(--tl-space-4);
-  border: var(--tl-border) solid var(--tl-rule);
-  border-radius: var(--tl-radius-xs);
-  background: var(--tl-surface);
-  font: inherit;
-  font-weight: var(--tl-w-medium);
-  color: var(--tl-ink);
-  white-space: nowrap;
-  cursor: pointer;
-}
-.tl-notice__act:hover { background: var(--tl-hover); border-color: var(--tl-rule-strong); }
-.tl-notice__act:active { background: var(--tl-press); }
-
+/* THE NOTICE CARRIES NO BUTTON. .tl-notice__act styled one — [Undo], and
+   [Show in Beliefs] — and both are gone: the lane a notice names is flashed in
+   the layer panel with its own × on it, and the selection card that opens on
+   the same gesture reaches every view from its destination row. What is left is
+   a sentence and a way to dismiss it. */
 .tl-notice__x {
   flex: none;
   display: grid; place-items: center;
@@ -1226,7 +1202,6 @@ body.tl-dragging { cursor: grabbing; }
     max-width: calc(100% - var(--tl-space-4) * 2);
     animation-name: tl-notice-in-top;
   }
-  .tl-notice__act { height: var(--tl-tap); }
   .tl-notice__x {
     width: var(--tl-tap); height: var(--tl-tap);
     margin: calc((var(--tl-tap) - 20px) / -2);
@@ -1244,20 +1219,6 @@ body.tl-dragging { cursor: grabbing; }
 /* ── Small shared bits ───────────────────────────────────────────────────── */
 .tl-panel__bd .tl-label { display: block; }
 .tl-stack { display: flex; flex-direction: column; gap: var(--tl-space-4); }
-.tl-pop__link {
-  font-size: var(--tl-text-xs);
-  color: var(--tl-ink-2);
-  text-decoration: underline;
-  text-decoration-color: var(--tl-rule-strong);
-  text-underline-offset: 2px;
-  background: none;
-  border: 0;
-  padding: 0;
-  cursor: pointer;
-  font-family: inherit;
-}
-.tl-pop__link:hover { color: var(--tl-ink); }
-
 /* ── Responsive ───────────────────────────────────────────────────────────── */
 
 /* Short viewports: spend less inside the panel.
@@ -1683,7 +1644,6 @@ body.tl-dragging { cursor: grabbing; }
    which is the part of the target a thumb actually misses. The remaining
    shortfall in height is real, is reported upward, and is not solvable here. */
 @media (pointer: coarse) {
-  .tl-leye { width: 26px; }
   .tl-lx   { width: 26px; }
   .tl-lchev { width: 22px; }
   .tl-ldetail { padding: 0 var(--tl-space-3); }

@@ -13,9 +13,8 @@
    The subject is a region (EU/ME/AS/AM), deep time, or a curated lane (Mozart,
    Design…). The kind is what the marks in it ARE: a facet of the region's
    corpus, or the whole of a curated lane. Every layer has a stable id, so the
-   whole arrangement — which layers exist, their order, their groups, what is
-   hidden, how much detail each is asked for — survives a reload in
-   localStorage.
+   whole arrangement — which layers exist, their order, their groups, how much
+   detail each is asked for — survives a reload in localStorage.
 
    THE LIBRARY holds everything not currently on the board. "+ Add layer" takes
    from it, "×" gives back to it. Nothing is ever destroyed.
@@ -285,9 +284,7 @@ export type TNode = LNode | GNode;
 interface Persisted {
   v: 1;
   root: TNode[];
-  vis: Record<string, boolean>;
   det: Record<string, Detail>;
-  gvis: Record<string, boolean>;
 }
 
 const KEY = 'tl.layers.v1';
@@ -309,9 +306,7 @@ const nid = () => 'g' + (++uid) + '-' + Math.random().toString(36).slice(2, 6);
 
 export const Layers = {
   root: [] as TNode[],
-  vis: {} as Record<string, boolean>,
   det: {} as Record<string, Detail>,
-  gvis: {} as Record<string, boolean>,
   _subs: new Set<() => void>(),
   _loaded: false,
 
@@ -356,29 +351,35 @@ export const Layers = {
     const untouched = root.length === OLD_SPINE.length
       && root.every(nd => nd.t === 'L')
       && OLD_SPINE.every(id => seen.has(id))
-      && [...seen].every(id => (p!.vis ? p!.vis[id] !== false : true)
-        && ((p!.det ? p!.det[id] ?? 1 : 1)) === 1);
+      && [...seen].every(id => ((p!.det ? p!.det[id] ?? 1 : 1)) === 1);
     if (untouched) { this.reset(); return; }
     this.root = root;
-    this.vis = {}; this.det = {}; this.gvis = {};
+    // MIGRATION, THE SECOND: `vis` and `gvis` are gone from the model, and a
+    // blob written before they went may carry `vis: {"eu-war": false}`. It is
+    // READ BY NOBODY — which means a lane the reader had hidden comes back
+    // PRESENT AND DRAWN rather than being dropped. Deleting a lane off
+    // somebody's board on an upgrade is the worse of the two mistakes: the
+    // hidden lane was one they had chosen to put there, and showing it again is
+    // recoverable with one click on its ×, while removing it is silent and
+    // leaves them nothing to click. The keys stay in localStorage until the
+    // next save(), which drops them.
+    this.det = {};
     for (const id of seen) {
-      this.vis[id] = p.vis ? p.vis[id] !== false : true;
       const d = p.det ? p.det[id] : 1;
       this.det[id] = (d === 0 || d === 1 || d === 2) ? d : 1;
     }
-    for (const nd of root) if (nd.t === 'G') this.gvis[nd.id] = p.gvis ? p.gvis[nd.id] !== false : true;
     if (!root.length) this.reset();
   },
   reset() {
     const known = new Set(layerDefs().map(d => d.id));
     this.root = SPINE.filter(id => known.has(id)).map(id => ({ t: 'L' as const, id }));
-    this.vis = {}; this.det = {}; this.gvis = {};
-    for (const nd of this.root) if (nd.t === 'L') { this.vis[nd.id] = true; this.det[nd.id] = 1; }
+    this.det = {};
+    for (const nd of this.root) if (nd.t === 'L') this.det[nd.id] = 1;
     this.save();
   },
   save() {
     try {
-      const p: Persisted = { v: 1, root: this.root, vis: this.vis, det: this.det, gvis: this.gvis };
+      const p: Persisted = { v: 1, root: this.root, det: this.det };
       if (typeof localStorage !== 'undefined') localStorage.setItem(KEY, JSON.stringify(p));
     } catch { /* nothing to do — the session still works, it just will not survive */ }
   },
@@ -406,12 +407,19 @@ export const Layers = {
     return null;
   },
   detail(id: string): Detail { const d = this.det[id]; return d === 0 || d === 2 ? d : 1; },
-  /** Visible = its own eye is open AND its group's eye is open. */
-  visible(id: string): boolean {
-    if (this.vis[id] === false) return false;
-    const g = this.groupOf(id);
-    return !(g && this.gvis[g.id] === false);
-  },
+  /**
+   * VESTIGIAL — IT IS `has` NOW. Hiding is gone, the founder: "also remove the
+   * hiding/showing of lanes. You can just add or remove." A lane has two states
+   * left, on the board or in the library, and being on the board IS being
+   * drawn, so the second question collapsed into the first.
+   *
+   * It survives only because timeline.ts and search.ts still ask it and are
+   * owned elsewhere. All five of those calls are now either a duplicate of a
+   * `has` they already made or a test on a lane they are iterating BECAUSE it
+   * is on the board — so every one of them is a no-op against this answer.
+   * Delete the five and this goes with them.
+   */
+  visible(id: string): boolean { return this.has(id); },
   /** The draw order the renderer consumes: group heads and layers, interleaved. */
   lanes(): ({ t: 'L'; id: string; group: GNode | null } | { t: 'G'; g: GNode })[] {
     const out: any[] = [];
@@ -423,9 +431,7 @@ export const Layers = {
     return out;
   },
 
-  // ---- the five operations -------------------------------------------------
-  toggle(id: string) { this.vis[id] = this.vis[id] === false; this.emit(); },
-  toggleGroup(gid: string) { this.gvis[gid] = this.gvis[gid] === false; this.emit(); },
+  // ---- the operations ------------------------------------------------------
   setDetail(id: string, d: Detail) { this.det[id] = d; this.emit(); },
   collapse(gid: string) {
     const g = this.root.find(n => n.t === 'G' && n.id === gid) as GNode | undefined;
@@ -434,7 +440,6 @@ export const Layers = {
   add(id: string) {
     if (this.has(id)) return;
     this.root.push({ t: 'L', id });
-    if (this.vis[id] === undefined) this.vis[id] = true;
     if (this.det[id] === undefined) this.det[id] = 1;
     this.emit();
   },
@@ -446,7 +451,7 @@ export const Layers = {
   },
   newGroup(name = 'New group') {
     const g: GNode = { t: 'G', id: nid(), name, collapsed: false, kids: [] };
-    this.root.push(g); this.gvis[g.id] = true; this.emit();
+    this.root.push(g); this.emit();
     return g.id;
   },
   /** Ungroup: the group node disappears, its layers stay in the list where it was. */
@@ -455,7 +460,6 @@ export const Layers = {
     if (i < 0) return;
     const g = this.root[i] as GNode;
     this.root.splice(i, 1, ...g.kids);
-    delete this.gvis[gid];
     this.emit();
   },
   renameGroup(gid: string, name: string) {
@@ -518,17 +522,16 @@ export const polityLvl = (p: any) => lvlOfWeight(peakOf(p.weight));
    three questions that decide whether the mark reaches the canvas —
 
      is it ON THE BOARD?          Layers.has
-     is its EYE OPEN?             Layers.visible (its own, and its group's)
      does its DETAIL DIAL ask for something this unimportant?   passesDetail
 
-   planReveal() answers all three as one verdict, and reveal() is the single
+   planReveal() answers both as one verdict, and reveal() is the single
    operation that makes the verdict true. Framing is allowed only afterwards.
 
-   NOTHING HERE GUESSES. The three questions are asked with the same functions
-   timeline.ts asks them with (Layers.has / Layers.visible / passesDetail), on
-   the same numbers the renderer passes (a moment's `end` is 0, exactly as in
-   the event stratum), so this file and the canvas cannot drift into disagreeing
-   about whether something is on screen.
+   NOTHING HERE GUESSES. The two questions are asked with the same functions
+   timeline.ts asks them with (Layers.has / passesDetail), on the same numbers
+   the renderer passes (a moment's `end` is 0, exactly as in the event
+   stratum), so this file and the canvas cannot drift into disagreeing about
+   whether something is on screen.
    ═══════════════════════════════════════════════════════════════════════════ */
 
 // EVENTS only ever grows (initData, then setLanes), so a length check is a
@@ -595,8 +598,12 @@ function detailFor(f: MarkFacts, kind: LayerKind, from: Detail): Detail {
   return 2;                                    // `detailed` is "everything we hold" — it always passes
 }
 
-/** What stands between this id and the canvas. */
-export type RevealNeed = 'ready' | 'add' | 'show' | 'detail' | 'never';
+/**
+ * What stands between this id and the canvas. There is no `show`: with hiding
+ * gone a lane is on the board or in the library, so "present but hidden" is not
+ * a state the reader can be in any more.
+ */
+export type RevealNeed = 'ready' | 'add' | 'detail' | 'never';
 
 export interface RevealPlan {
   need: RevealNeed;
@@ -618,18 +625,20 @@ export interface RevealPlan {
  * already on their screen.
  *
  * Otherwise the CHEAPEST candidate wins, in the order of how much of the
- * reader's arrangement it disturbs: raising a dial < opening an eye < adding a
- * lane. Ties go to the owning layer, which is where the mark actually belongs.
+ * reader's arrangement it disturbs: raising a dial < adding a lane. Ties go to
+ * the owning layer, which is where the mark actually belongs.
  */
 export function planReveal(id: string): RevealPlan {
-  // A BELIEF STREAM IS NOT A BUG, IT IS A DIFFERENT VIEW. The braided-rivers
-  // view draws the belief corpus and this one never has; saying so by name is
-  // more use to the reader than a flat "not drawn".
+  // THIS FILE DOES NOT KNOW ABOUT THE CANVAS, and it certainly does not know
+  // about the OTHER canvases. `why` used to answer a belief stream with "the
+  // Beliefs view draws these", which was a routing hint smuggled into the layer
+  // model — and it is no longer needed anywhere: the selection card carries a
+  // live Beliefs cell in its destination row for exactly these ids, which is a
+  // button rather than a sentence about a button. One verdict for everything
+  // the timeline cannot draw, and it is the true one.
   const none: RevealPlan = {
     need: 'never', layer: null, layerName: null, detail: null, detailWord: null,
-    why: id.startsWith('belief:')
-      ? 'a belief stream — the Beliefs view draws these'
-      : 'not drawn on this timeline',
+    why: 'not drawn on this timeline',
   };
   const f = factsOf(id);
   if (!f || !f.own) return none;
@@ -638,7 +647,7 @@ export function planReveal(id: string): RevealPlan {
   // already drawn by one of them? then there is nothing to do.
   for (const c of cands) {
     const def = layerDef(c); if (!def) continue;
-    if (Layers.has(c) && Layers.visible(c)
+    if (Layers.has(c)
       && passesDetail(Layers.detail(c), def.kind, f.lvl, f.type, f.start, f.end)) {
       return { need: 'ready', layer: c, layerName: def.name, detail: null, detailWord: null, why: null };
     }
@@ -649,15 +658,14 @@ export function planReveal(id: string): RevealPlan {
   for (const c of cands) {
     const def = layerDef(c); if (!def) continue;
     const on = Layers.has(c);
-    const lit = on && Layers.visible(c);
     const cur = Layers.detail(c);                 // a layer off the board still remembers its dial
     const want = detailFor(f, def.kind, cur);
     const raises = want !== cur;
-    const cost = !on ? 3 : !lit ? 2 : 1;
+    const cost = on ? 1 : 2;
     if (cost >= bestCost) continue;
     bestCost = cost;
     best = {
-      need: !on ? 'add' : !lit ? 'show' : 'detail',
+      need: on ? 'detail' : 'add',
       layer: c, layerName: def.name,
       detail: raises ? want : null,
       detailWord: raises ? DETAIL_WORDS[want] : null,
@@ -668,85 +676,32 @@ export function planReveal(id: string): RevealPlan {
 }
 
 /**
- * EVERYTHING reveal() CAN HAVE CHANGED, as it was BEFORE it changed it.
- *
- * One reveal can move three separate pieces of state in one emit — whether the
- * lane is on the board at all, whether its eye (or its group's) is open, and
- * where its detail dial sits — so an undo that only puts the lane back is not
- * an undo. `undefined` is a value here and not a gap: a layer that has never
- * been on the board has no entry in `vis`/`det` at all, and writing `true`/`1`
- * back into them would leave a trace of a lane that was never added.
- */
-export interface RevealUndo {
-  /** did anything actually move? a `ready` plan touches nothing. */
-  touched: boolean;
-  layer: string;
-  had: boolean;                  // was it on the board?
-  vis: boolean | undefined;      // its own eye — undefined means "no entry"
-  det: Detail | undefined;       // its dial — same
-  group: string | null;          // the group it sat in, if any
-  gvis: boolean | undefined;     // that group's eye
-}
-
-/**
  * MAKE THE VERDICT TRUE. One emit, whatever it took: adding a lane and raising
  * its dial in two emits would rebuild the panel twice and hand the slew limiter
  * two separate relayouts for one gesture.
  *
- * Returns null only when the plan was `never` — i.e. the thing is not drawn on
- * this timeline at all, and the caller must not frame anything. Otherwise it
- * returns the board as it stood a moment ago, which is what undoReveal() needs
- * and what lets the caller offer an Undo without knowing what a reveal touches.
+ * Returns whether the board actually MOVED, which is the only thing the caller
+ * still needs to know — a `ready` plan touches nothing, and a caller that
+ * changed nothing has nothing to announce. A `never` plan never reaches here:
+ * the caller checks `plan.need` before framing anything, and this returns false
+ * for one anyway.
+ *
+ * THERE IS NO UNDO. The founder: "get rid of the undo - you can just remove the
+ * lane if you like." Removing a lane is one click on its × in the layer panel,
+ * which is the same gesture whether the lane arrived by hand or by a reveal — a
+ * second, differently-shaped reversal that only exists for twelve seconds after
+ * one particular way of adding was one mechanism too many.
  */
-export function reveal(plan: RevealPlan): RevealUndo | null {
-  if (plan.need === 'never' || !plan.layer) return null;
+export function reveal(plan: RevealPlan): boolean {
+  if (plan.need === 'never' || !plan.layer) return false;
   const id = plan.layer;
-  const g0 = Layers.groupOf(id);
-  const u: RevealUndo = {
-    touched: false, layer: id,
-    had: Layers.has(id), vis: Layers.vis[id], det: Layers.det[id],
-    group: g0 ? g0.id : null, gvis: g0 ? Layers.gvis[g0.id] : undefined,
-  };
-  if (plan.need === 'ready' && plan.detail === null) return u;
+  let touched = false;
   if (!Layers.has(id)) {
     Layers.root.push({ t: 'L', id });
-    if (Layers.vis[id] === undefined) Layers.vis[id] = true;
     if (Layers.det[id] === undefined) Layers.det[id] = 1;
-    u.touched = true;
+    touched = true;
   }
-  if (Layers.vis[id] === false) { Layers.vis[id] = true; u.touched = true; }
-  const g = Layers.groupOf(id);
-  if (g && Layers.gvis[g.id] === false) { Layers.gvis[g.id] = true; u.touched = true; }
-  if (plan.detail !== null && Layers.det[id] !== plan.detail) { Layers.det[id] = plan.detail; u.touched = true; }
-  if (u.touched) Layers.emit();
-  return u;
-}
-
-/** Restore a key to exactly what it was, INCLUDING having been absent. */
-function put<T>(bag: Record<string, T>, k: string, v: T | undefined) {
-  if (v === undefined) delete bag[k]; else bag[k] = v;
-}
-
-/**
- * PUT THE BOARD BACK EXACTLY. The mirror of reveal(), and the same one emit:
- * membership, the layer's eye, its group's eye and its dial all return to the
- * values in the token, and a key that had no entry gets none.
- *
- * It does NOT touch the selection or the window. Undoing a reveal is a
- * statement about the BOARD — "I did not want that lane" — and dropping the
- * reader's selection as a side effect would be a second, unasked-for undo.
- */
-export function undoReveal(u: RevealUndo | null) {
-  if (!u || !u.touched) return;
-  const id = u.layer;
-  if (!u.had) {
-    // Layers.remove() would emit on its own; the whole restore is one emit.
-    for (const w of Layers.walk()) {
-      if (w.n.t === 'L' && w.n.id === id) { (w.list as any[]).splice(w.i, 1); break; }
-    }
-  }
-  put(Layers.vis, id, u.vis);
-  put(Layers.det, id, u.det);
-  if (u.group) put(Layers.gvis, u.group, u.gvis);
-  Layers.emit();
+  if (plan.detail !== null && Layers.det[id] !== plan.detail) { Layers.det[id] = plan.detail; touched = true; }
+  if (touched) Layers.emit();
+  return touched;
 }
