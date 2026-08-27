@@ -668,28 +668,85 @@ export function planReveal(id: string): RevealPlan {
 }
 
 /**
+ * EVERYTHING reveal() CAN HAVE CHANGED, as it was BEFORE it changed it.
+ *
+ * One reveal can move three separate pieces of state in one emit — whether the
+ * lane is on the board at all, whether its eye (or its group's) is open, and
+ * where its detail dial sits — so an undo that only puts the lane back is not
+ * an undo. `undefined` is a value here and not a gap: a layer that has never
+ * been on the board has no entry in `vis`/`det` at all, and writing `true`/`1`
+ * back into them would leave a trace of a lane that was never added.
+ */
+export interface RevealUndo {
+  /** did anything actually move? a `ready` plan touches nothing. */
+  touched: boolean;
+  layer: string;
+  had: boolean;                  // was it on the board?
+  vis: boolean | undefined;      // its own eye — undefined means "no entry"
+  det: Detail | undefined;       // its dial — same
+  group: string | null;          // the group it sat in, if any
+  gvis: boolean | undefined;     // that group's eye
+}
+
+/**
  * MAKE THE VERDICT TRUE. One emit, whatever it took: adding a lane and raising
  * its dial in two emits would rebuild the panel twice and hand the slew limiter
  * two separate relayouts for one gesture.
  *
- * Returns false only when the plan was `never` — i.e. the thing is not drawn on
- * this timeline at all, and the caller must not frame anything.
+ * Returns null only when the plan was `never` — i.e. the thing is not drawn on
+ * this timeline at all, and the caller must not frame anything. Otherwise it
+ * returns the board as it stood a moment ago, which is what undoReveal() needs
+ * and what lets the caller offer an Undo without knowing what a reveal touches.
  */
-export function reveal(plan: RevealPlan): boolean {
-  if (plan.need === 'never' || !plan.layer) return false;
-  if (plan.need === 'ready' && plan.detail === null) return true;
+export function reveal(plan: RevealPlan): RevealUndo | null {
+  if (plan.need === 'never' || !plan.layer) return null;
   const id = plan.layer;
-  let touched = false;
+  const g0 = Layers.groupOf(id);
+  const u: RevealUndo = {
+    touched: false, layer: id,
+    had: Layers.has(id), vis: Layers.vis[id], det: Layers.det[id],
+    group: g0 ? g0.id : null, gvis: g0 ? Layers.gvis[g0.id] : undefined,
+  };
+  if (plan.need === 'ready' && plan.detail === null) return u;
   if (!Layers.has(id)) {
     Layers.root.push({ t: 'L', id });
     if (Layers.vis[id] === undefined) Layers.vis[id] = true;
     if (Layers.det[id] === undefined) Layers.det[id] = 1;
-    touched = true;
+    u.touched = true;
   }
-  if (Layers.vis[id] === false) { Layers.vis[id] = true; touched = true; }
+  if (Layers.vis[id] === false) { Layers.vis[id] = true; u.touched = true; }
   const g = Layers.groupOf(id);
-  if (g && Layers.gvis[g.id] === false) { Layers.gvis[g.id] = true; touched = true; }
-  if (plan.detail !== null && Layers.det[id] !== plan.detail) { Layers.det[id] = plan.detail; touched = true; }
-  if (touched) Layers.emit();
-  return true;
+  if (g && Layers.gvis[g.id] === false) { Layers.gvis[g.id] = true; u.touched = true; }
+  if (plan.detail !== null && Layers.det[id] !== plan.detail) { Layers.det[id] = plan.detail; u.touched = true; }
+  if (u.touched) Layers.emit();
+  return u;
+}
+
+/** Restore a key to exactly what it was, INCLUDING having been absent. */
+function put<T>(bag: Record<string, T>, k: string, v: T | undefined) {
+  if (v === undefined) delete bag[k]; else bag[k] = v;
+}
+
+/**
+ * PUT THE BOARD BACK EXACTLY. The mirror of reveal(), and the same one emit:
+ * membership, the layer's eye, its group's eye and its dial all return to the
+ * values in the token, and a key that had no entry gets none.
+ *
+ * It does NOT touch the selection or the window. Undoing a reveal is a
+ * statement about the BOARD — "I did not want that lane" — and dropping the
+ * reader's selection as a side effect would be a second, unasked-for undo.
+ */
+export function undoReveal(u: RevealUndo | null) {
+  if (!u || !u.touched) return;
+  const id = u.layer;
+  if (!u.had) {
+    // Layers.remove() would emit on its own; the whole restore is one emit.
+    for (const w of Layers.walk()) {
+      if (w.n.t === 'L' && w.n.id === id) { (w.list as any[]).splice(w.i, 1); break; }
+    }
+  }
+  put(Layers.vis, id, u.vis);
+  put(Layers.det, id, u.det);
+  if (u.group) put(Layers.gvis, u.group, u.gvis);
+  Layers.emit();
 }

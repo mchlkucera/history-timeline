@@ -415,6 +415,70 @@ CONNECTIONS                        None curated yet.
 "Yet" is doing work: the corpus is growing, and a subject with no curated links
 is not thereby unimportant.
 
+### 3.6a What happens when you press a row — and the notice
+
+Founder, on the card as shipped: *"when I click Confucius - Daoism and daoisms
+lane isnt showed up we need to somehow present that daoism is in lane that is
+not here."*
+
+A row used to write the selection and stop. The card's list is the WHOLE
+neighbourhood of a subject and most of a neighbourhood is not on the board, so
+pressing one routinely produced a card for something with nothing lit anywhere —
+a selection pointing at an invisible thing. The search box had solved the same
+problem months earlier (plan the reveal, add the lane, *then* frame), and the
+two controls behaving differently in the same situation is the actual defect.
+
+**One implementation now answers both.** A row calls `goTo(id)`; the Timeline
+destination cell calls `showOnTimeline(id)`; the search's own landing calls the
+same function underneath. Two verbs, because they are two sentences — the
+destination row says *show this subject in THAT view*, a connections row says
+*take me to that subject*, and the second is answered from wherever the reader
+is standing (a related empire pressed on the Map highlights on the Map). The
+docked "All N" list is routed to `goTo` too, so the top four and the full list
+cannot disagree.
+
+**When the board has to change, it changes — and says so.** No confirmation: the
+search has revealed lanes silently since the phantom-zoom fix, and a dialog on
+the same move from a different control would be one app doing one thing two
+ways. A confirmation is for what you cannot take back; this has Undo on it.
+
+A one-line notice at the foot of the stage names what it took, in the layer
+panel's own vocabulary, and distinguishes the three needs because they are three
+different events:
+
+```
+Added “Europe · Science”                                          [Undo]
+Turned “Europe · Science” back on                                 [Undo]
+Raised “Europe · Essentials” to “detailed”                        [Undo]
+```
+
+Undo restores **all three** pieces of lane state in one emit — membership, both
+eyes, and the dial — including restoring "this layer had no stored entry at
+all", which is the state a lane that has never been on the board is in.
+
+**And when no lane could ever draw it**, the card does not pretend one could.
+The subject is still selected (its dates, its note and its own connections are
+true answers to the press), the Timeline cell is drawn SHUT with the reason on
+it — the same NEVER/NOT-NOW rule §3.5 gives the Map cell — and the notice offers
+the view that does draw it:
+
+```
+Daoism is a belief stream — the Beliefs view draws these   [Show in Beliefs]
+```
+
+One class of subject reaches that today: belief streams. It goes to the braid
+view, switching which belief system is up if it has to, carrying the selection
+so the stream is lit on arrival.
+
+**The notice is not a card and it is not the accent.** Ink on the same glass
+every panel wears — minium means *where you are in time* and nothing else. It
+sits along the bottom of the stage between the two panel columns, the one strip
+no panel and no parked card occupies; the card lists it among the rects it
+refuses to cover, and a reveal parks the card for the same reason it parks after
+a search (a moment ago there was nothing on the canvas to point at). Below
+760px, where every surface is a bottom sheet, it takes the top of the stage
+instead. It leaves after twelve seconds, or on ×.
+
 ### 3.7 Sizing — what is the maximum, and what scrolls?
 
 | | value | reason |

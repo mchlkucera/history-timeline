@@ -99,6 +99,10 @@ import {
   topRelations, typeLabel, type Place, type Subject,
 } from './subject';
 import { FOLD, roleWord } from './fold';
+// The layer MODEL, not a renderer — it is the file that knows whether any lane
+// on the board (or in the library) would draw a given id, and it knows nothing
+// about the canvas. See "THIS FILE IMPORTS NO RENDERER" above.
+import { planReveal } from './layers';
 
 const GAP = 10;          // breathing room between the card and the thing it names
 const MARGIN = 10;       // hard viewport inset
@@ -157,8 +161,32 @@ function firstMapYear(polity: string | null): number | null {
 
 /** Everything the card can do, injected by Lab.tsx at boot. */
 export interface CardWiring {
-  /** show the horizontal timeline framed on [a, b] — the TIMELINE destination */
-  perspective(a: number, b: number): void;
+  /**
+   * THE TIMELINE DESTINATION — show THIS subject on the horizontal timeline.
+   *
+   * It replaced `perspective(a, b)`, which took a SPAN and could therefore only
+   * do half the job: frame two numbers and hope something was drawn between
+   * them. A span cannot be asked whether a lane draws it; an id can. So Lab
+   * plans the reveal, adds the lane / opens its eye / raises its dial, selects,
+   * frames, and says what it took — the same call the search box makes, so
+   * "Make sure its impossible to zoom in on something that does not exist"
+   * finally holds for this cell too.
+   */
+  showOnTimeline(id: string): void;
+  /**
+   * GO TO ANOTHER SUBJECT — a row in the Connections list.
+   *
+   * A DIFFERENT VERB FROM THE ONE ABOVE, because it is a different sentence.
+   * The destination row says "show this subject in THAT view" and names the
+   * view on the button. A connections row says "take me to that subject", full
+   * stop — and the reader is standing somewhere. So Lab answers it from HERE:
+   * on the map a related empire highlights on the map, on the timeline a
+   * related event reveals its lane and frames. Only when the thing cannot be
+   * drawn where the reader is standing does anything move, and then it asks
+   * first rather than teleporting, because a row in a list gives no warning of
+   * a view switch the way a search row's "shown on Beliefs" does.
+   */
+  goTo(id: string): void;
   /** show the map — at `year` when the subject is not drawn at the current one,
    *  otherwise (undefined) at the current global year, leaving it untouched */
   seeOnMap(year?: number): void;
@@ -277,7 +305,7 @@ export const SelCard = {
         return;
       }
       const row = t?.closest?.('[data-goid]') as HTMLElement | null;
-      if (row) { e.preventDefault(); this.select(row.dataset.goid!, null); }
+      if (row) { e.preventDefault(); this.go(row.dataset.goid!); }
     });
 
     // ESC CLEARS THE SELECTION, EVERYWHERE.
@@ -365,6 +393,27 @@ export const SelCard = {
     this._hint = null; this._pt = null; this._src = 'point';
   },
 
+  /**
+   * NAVIGATE TO ANOTHER SUBJECT — the Connections rows, and the docked "All N"
+   * list, which Lab routes to the same place.
+   *
+   * It is deliberately NOT select(). select() writes the store and stops, which
+   * is right for a renderer reporting a click on something it has already
+   * drawn, and wrong for the card, because the card's list is the WHOLE
+   * neighbourhood of a subject and most of that neighbourhood is not on the
+   * board. Clicking Confucius ▸ Daoism used to select a belief stream no lane
+   * anywhere draws, and light nothing. goTo() asks Lab, which owns the layer
+   * model and the ten views, to make the thing visible or to say honestly that
+   * it cannot — see CardWiring.goTo.
+   *
+   * The select() fallback is for the window between init() and wire(), where
+   * there is no board to reveal against yet; nothing can click the card there.
+   */
+  go(id: string) {
+    const w = this.wiring;
+    if (w) w.goTo(id); else this.select(id, null);
+  },
+
   /** Lab tells the card which view is on screen — aria-current depends on it. */
   setView(v: string) {
     if (this.view === v) return;
@@ -396,7 +445,7 @@ export const SelCard = {
   },
 
   /**
-   * EVERY PANEL ACTUALLY ON SCREEN, as viewport rects.
+   * EVERY PIECE OF CHROME ACTUALLY ON SCREEN, as viewport rects.
    *
    * The card sits ABOVE panels in z-order (--tl-z-pop over --tl-z-panel), so
    * anything it lands on it HIDES — and a parked card lands somewhere nobody
@@ -409,11 +458,18 @@ export const SelCard = {
    * moved to the top-right as this lands. Reading the rects means the card is
    * correct under every one of those arrangements without knowing about any of
    * them, and gains nothing to keep in sync.
+   *
+   * .tl-notice IS IN THE LIST for exactly the same reason, and it is the piece
+   * this card is most likely to be opened AT THE SAME MOMENT AS: the notice
+   * says which lane had to be added to show the thing this card is describing,
+   * so one covering the other would hide half of one gesture behind the other
+   * half. It is one line at the foot of the stage; the card gives way to it the
+   * same way it gives way to Controls.
    */
   panelRects(): DOMRect[] {
     const st = document.getElementById('stage'); if (!st) return [];
     const out: DOMRect[] = [];
-    st.querySelectorAll<HTMLElement>('.tl-panel').forEach((p) => {
+    st.querySelectorAll<HTMLElement>('.tl-panel, .tl-notice').forEach((p) => {
       if (p.hidden) return;
       const r = p.getBoundingClientRect();
       if (r.width > 0 && r.height > 0) out.push(r);         // display:none measures 0
@@ -472,7 +528,7 @@ export const SelCard = {
     if (!this._ro) this._ro = new ResizeObserver(() => this.placeSoon());
     this._ro.disconnect();
     const st = document.getElementById('stage'); if (!st) return;
-    st.querySelectorAll<HTMLElement>('.tl-panel').forEach(p => this._ro!.observe(p));
+    st.querySelectorAll<HTMLElement>('.tl-panel, .tl-notice').forEach(p => this._ro!.observe(p));
   },
 
   resolveAnchor(id: string): DOMRect | null {
@@ -670,11 +726,24 @@ export const SelCard = {
     if (!s.minimal) {
       const [a0, a1] = perspectiveSpan(s);
       const deep = fmtBig(a0) !== fmtY(a0);            // beyond 20,000 years
+      // NEVER vs NOT NOW, in the one cell where the difference had never been
+      // drawn. A subject whose lane is merely absent, hidden or under-detailed
+      // is NOT NOW — pressing this adds it (see act('persp')), so the cell
+      // stays live. A belief stream is on no lane at all and no lane can be
+      // added that would draw it: the door opens onto nothing, so it is shown
+      // SHUT with the reason on it, exactly as the Map cell is for a polity
+      // drawn in no snapshot. Otherwise this framed five thousand empty years,
+      // which is the phantom zoom the search box was fixed for.
+      const plan = planReveal(s.id);
+      const nowhere = plan.need === 'never';
       out.push({
         act: 'persp', label: 'Timeline',
-        title: deep
-          ? `Frame the timeline on the ${a1 - a0} years around it`
-          : `Frame the timeline on ${fmtY(a0)} – ${fmtY(a1)} — what else was going on`,
+        title: nowhere
+          ? `${s.name} is ${plan.why || 'not drawn on this timeline'} — there is no lane to add`
+          : deep
+            ? `Frame the timeline on the ${a1 - a0} years around it`
+            : `Frame the timeline on ${fmtY(a0)} – ${fmtY(a1)} — what else was going on`,
+        off: nowhere,
       });
     }
 
@@ -790,7 +859,13 @@ export const SelCard = {
     const w = this.wiring;
     switch (a) {
       case 'close': this.hide(true); break;
-      case 'persp': { const [a0, a1] = perspectiveSpan(s); w?.perspective(a0, a1); break; }
+      // THE SAME VERB AS A CONNECTIONS ROW. It used to hand over a SPAN, which
+      // framed two numbers whether or not any lane drew anything between them —
+      // "Make sure its impossible to zoom in on something that does not exist"
+      // held for the search box and not for this cell. Now it hands over the
+      // ID, and the reveal is earned before the frame. (The cell is hatched
+      // outright for a subject no lane can ever draw; see dests().)
+      case 'persp': w?.showOnTimeline(s.id); break;
       // IF IT IS NOT HERE, GO WHERE IT IS. Standing outside a polity's span —
       // or on one of the 5,000 years between two of the 18 atlas snapshots —
       // used to leave this cell hatched and the map unreachable. It now travels

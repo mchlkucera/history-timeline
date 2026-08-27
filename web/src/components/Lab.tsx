@@ -23,12 +23,12 @@
 
 import { type CSSProperties, useCallback, useEffect, useRef, useState, useSyncExternalStore } from 'react';
 import {
-  catColor, clampDomain, fmtBig, fmtY, initData, setGotoTab, setLanes, SelStore, TimeStore,
+  BELIEFS, catColor, clampDomain, fmtBig, fmtY, initData, setGotoTab, setLanes, SelStore, TimeStore,
   tokens, YMAX, YMIN,
   type Datasets,
 } from '@/render/shared';
 import { buildRelIndex } from '@/render/relations';
-import { SelCard } from '@/render/selcard';
+import { SelCard, type SelSource } from '@/render/selcard';
 import { WorldMap } from '@/render/map';
 import { TL } from '@/render/timeline';
 import { LayerPanel } from '@/render/layerpanel';
@@ -41,7 +41,7 @@ import { Pop, loadPopulation } from '@/render/population';
 import { buildGallery } from '@/render/gallery';
 import { Conn, initConn, loadRelations } from '@/render/connections';
 import { searchCorpus, searchLayers, type Hit, type LayerHit } from '@/render/search';
-import { Layers, planReveal, reveal, type RevealPlan } from '@/render/layers';
+import { Layers, planReveal, reveal, undoReveal, type RevealPlan } from '@/render/layers';
 import { describe, perspectiveSpan, setPolityAliases, type Subject } from '@/render/subject';
 import { railPos, railYear, railNum, railEraOf, SNAPSHOTS } from './rail';
 
@@ -542,13 +542,10 @@ const destsOf = (sub: Subject): { act: string; off?: boolean }[] => {
 const destOpen = (sub: Subject, act: string) =>
   destsOf(sub).some(d => d.act === act && !d.off);
 
-/** Is this id one of the ribbons THIS engine is drawing? Braid holds one system
- *  at a time (religions OR ideologies), so a stream from the other system is
- *  genuinely not on this canvas — the card has no Beliefs destination and
- *  therefore no verdict of its own to borrow, unlike Flow. */
-const ribbonHas = (eng: { items: any[] }, localId: string) => {
-  try { return (eng.items || []).some((i: any) => i && i.id === localId); } catch { return false; }
-};
+/* ribbonHas() lived here — "is this id one of the ribbons THIS engine is
+   drawing?" — and it was only ever asked of Braid, to refuse a stream from the
+   system not currently up. showInBeliefs() switches the system instead, so the
+   question has no answer left that matters. */
 
 /** A little air either side, so a framed ribbon is not flush with the edges. */
 const padSpan = (a: number, b: number): [number, number] => {
@@ -586,6 +583,97 @@ function showInFlow(pid: string) {
   SelStore.set('polity:' + pid);
   const sub = describe('polity:' + pid);
   if (sub) { const [f0, f1] = padSpan(...perspectiveSpan(sub)); Flow.animTo(f0, f1); }
+}
+
+/**
+ * WHICH BELIEF SYSTEM HOLDS THIS STREAM — 'religion', 'ideology', or null when
+ * the id is not a stream at all. Braid draws ONE system at a time, so this is
+ * the difference between "the Beliefs view draws these" being true of the app
+ * and being true of the canvas currently on screen.
+ */
+function beliefSystem(id: string): string | null {
+  if (!id.startsWith('belief:')) return null;
+  const local = id.slice(7);
+  for (const s of (BELIEFS.systems || [])) {
+    if ((s.streams || []).some((t: any) => t && t.id === local)) return s.id;
+  }
+  return null;
+}
+
+/**
+ * PUT A BELIEF STREAM ON THE BRAID CANVAS — the one implementation, shared by
+ * the search and by the selection card's offer, exactly as showInFlow() above
+ * is shared by the search and the card's Flow cell.
+ *
+ * It does NOT navigate; both callers decide that for themselves.
+ *
+ * AND THE OTHER SYSTEM COMES BACK ON. Braid holds religions OR ideologies, so
+ * landing on it with the wrong one showing is the same broken promise as
+ * landing on Flow with the region filtered out. Done by pressing braid's own
+ * preset rather than by writing Braid.items: the item list, the `hero` class on
+ * the two buttons, the note under the canvas and the system's own framing are
+ * one thing kept in step by initBraid()'s private pick(), and reaching past it
+ * would light a stream while the panel still claimed the other system was up.
+ * Only sent when the system is genuinely not the one showing.
+ */
+function showInBeliefs(id: string) {
+  const sys = beliefSystem(id);
+  if (sys) {
+    const b = document.querySelector<HTMLElement>(`[data-braid="${CSS.escape(sys)}"]`);
+    if (b && !b.classList.contains('hero')) b.click();
+  }
+  Braid.setQuery('');                          // a leftover filter would dim the stream
+  // 'search' rather than 'point': braid draws no anchor this card could hang
+  // off (Lab's anchorOf answers only for the timeline family and Connections),
+  // and the parked corner is the one place the reader can predict.
+  SelCard.select(id, null, null, 'search');
+  const sub = describe(id);
+  if (sub) { const [f0, f1] = padSpan(...perspectiveSpan(sub)); Braid.animTo(f0, f1); }
+}
+
+/* ── THE NOTICE ───────────────────────────────────────────────────────────────
+   "when I click Confucius - Daoism and daoisms lane isnt showed up we need to
+   somehow present that daoism is in lane that is not here."
+
+   Going to a subject can quietly change the board — a lane arrives, an eye
+   opens, a dial goes up — and a board that changed without being asked is only
+   honest if it SAYS SO. One line, one action, and nothing else:
+
+     Added “Asia · Beliefs”                                          [Undo]
+     Daoism is a belief stream — the Beliefs view draws these  [Show in Beliefs]
+
+   NOT A CONFIRMATION. The search has revealed lanes silently since the
+   phantom-zoom fix, and gating the identical move behind a dialog when it comes
+   from a card would be one app doing one thing two ways. A confirmation is for
+   a change you cannot take back; this one has Undo written on it.
+
+   NOT THE ACCENT, EITHER. Minium means WHERE YOU ARE IN TIME and nothing else,
+   so the notice is ink on the same over-surface every panel uses. */
+interface Notice {
+  /** what changed, or why nothing could — one line, past tense, no jargon */
+  text: string;
+  /** the one thing to do about it: 'Undo', or the view that can draw it */
+  label: string | null;
+  act: (() => void) | null;
+  /** a fresh id per notice, so an identical message re-plays its entry */
+  n: number;
+}
+let noticeN = 0;
+
+/** WHAT TO CALL A VIEW ON THE ONE BUTTON THAT GOES THERE. The rail's own word
+ *  for it — except the horizontal timeline, where the rail says "Horizontal"
+ *  because it is one of two projections in the Timeline group, and the card has
+ *  called that destination "Timeline" since it had destinations. */
+const destWord = (v: ViewId) => v === 'zoom' ? 'Timeline' : VIEWS[v].seg;
+
+/** WHAT THE REVEAL ACTUALLY TOOK, in the panel's own vocabulary. The three
+ *  needs are three different events and they are spelled differently; the dial
+ *  is named only when it actually moved (an `add` can carry one too). */
+function didLine(p: RevealPlan): string {
+  const at = p.detailWord ? ` at “${p.detailWord}”` : '';
+  if (p.need === 'add') return `Added “${p.layerName}”${at}`;
+  if (p.need === 'show') return `Turned “${p.layerName}” back on${at}`;
+  return `Raised “${p.layerName}” to “${p.detailWord}”`;
 }
 
 /* A ROW THAT CANNOT ACT IS NOT IN THE ARROW ORDER. A content hit whose thing is
@@ -720,6 +808,9 @@ export default function Lab() {
   // want the whole ranked list, and it is reached from the card's
   // "All connections →". Opening it costs 92px of a shared column otherwise.
   const [relOpen, setRelOpen] = useState(false);
+  // What the last navigation had to change about the board, and how to take it
+  // back. Null almost always — the common case is that nothing had to change.
+  const [notice, setNotice] = useState<Notice | null>(null);
   const booted = useRef(false);
   // WHERE CONNECTIONS OPENS. Conn computes its own default span from the corpus
   // (connections.ts, "default span: everything the spreads cover"), so the only
@@ -745,6 +836,11 @@ export default function Lab() {
   const viewRef = useRef<ViewId>(view);
   // Declared FIRST so it is up to date before any effect below reads it.
   useEffect(() => { viewRef.current = view; });
+  // The card is wired ONCE, at boot, and its two navigation verbs are defined
+  // far below (they need go() and flashLayer()). Same shape as viewRef: the
+  // wiring closure reads the ref, so it can never be holding a stale copy.
+  const goToRef = useRef<((id: string) => void) | null>(null);
+  const showTlRef = useRef<((id: string) => void) | null>(null);
 
   const meta = VIEWS[view];
   // Concepts is outside the switcher, so NOTHING in the switcher is selected
@@ -937,12 +1033,16 @@ export default function Lab() {
         // imported — which is also why selcard.ts can be imported BY the
         // renderers without a cycle.
         SelCard.wire({
-          // THE CORE LOOP. "Zoom to X" on the timeline and "See on timeline" on
-          // the map are the same move: frame the window on its span and show
-          // the horizontal projection. It writes no year of its own — the
-          // centre-year observer below turns the new window into the new
-          // moment, once, in one place.
-          perspective: (a, b) => { TL.clearSearch(); frameSettled(a, b); go('zoom'); },
+          // THE CORE LOOP. "Zoom to X" on the timeline, "See on timeline" on
+          // the map and a row in the card's own Connections list are all the
+          // same move — put that subject on the timeline — so they are all one
+          // call now. goToSubject() earns the frame first (plan, reveal, then
+          // select and frame) exactly as the search box does, and says what the
+          // board had to give up. It writes no year of its own: the centre-year
+          // observer below turns the new window into the new moment, once, in
+          // one place.
+          showOnTimeline: (id) => { showTlRef.current?.(id); },
+          goTo: (id) => { goToRef.current?.(id); },
           // AT THE CURRENT GLOBAL YEAR — syncToYear moves the map to the nearest
           // snapshot without writing TimeStore back, so the rail keeps reading
           // where YOU are while the map draws the nearest atlas it has.
@@ -1508,6 +1608,84 @@ export default function Lab() {
   }, []);
 
   /**
+   * ═══ GO TO A SUBJECT — THE ONE IMPLEMENTATION ═══════════════════════════
+   *
+   * Three controls used to answer "put that thing on the timeline" and only one
+   * of them was right. The SEARCH earned its frame first — planReveal, then
+   * reveal, then select and frame — while the selection card's Connections rows
+   * and its own Timeline cell just wrote the selection and hoped. Click
+   * Confucius ▸ Daoism and you got a card for Daoism with nothing lit anywhere:
+   * a selection pointing at something invisible. Founder: "when I click
+   * Confucius - Daoism and daoisms lane isnt showed up we need to somehow
+   * present that daoism is in lane that is not here."
+   *
+   * So there is now one function and every one of them calls it. In order:
+   *
+   *   1. PLAN against the board as it is now (never against a stale plan).
+   *   2. REVEAL — add the lane, open its eye, raise its dial, in one emit.
+   *   3. only then select, frame and go.
+   *   4. and if the board moved, SAY SO, with an Undo that puts all three
+   *      pieces of it back.
+   *
+   * `to` is which timeline projection to land on: the vertical one when the
+   * reader is already standing there, horizontal otherwise. `from` is the
+   * card's own placement question — did the reader point at anything.
+   *
+   * A `never` plan cannot arrive here, and it is neither caller's afterthought:
+   * the search plans first and routes a belief stream to Beliefs instead, and
+   * the card's Timeline cell is drawn SHUT for a subject no lane can draw. If
+   * one ever did arrive, reveal() returns null and nothing is framed — the
+   * phantom zoom stays impossible whichever way the mistake is made.
+   */
+  const goToSubject = useCallback((id: string, to: ViewId = 'zoom', from: SelSource = 'point') => {
+    const sub = describe(id);
+    if (!sub) return;
+    const plan = planReveal(id);
+    const undo = reveal(plan);
+    if (!undo) return;                                 // `never` — frame nothing
+    TL.clearSearch();                                  // frame a full world, never 12% of one
+    // A REVEAL MEANS YOU POINTED AT NOTHING. selcard.ts's two placements ask
+    // one question — was the reader LOOKING at the thing? — and when the lane
+    // had to be added, unhidden or turned up, the answer is no: a moment ago
+    // there was nothing on the canvas to look at. So the card parks in its one
+    // learnable corner, exactly as it does after a search, instead of appearing
+    // beside a mark that has just this instant been drawn somewhere the reader
+    // was not looking. It also keeps the card out of the notice explaining it.
+    SelCard.select(id, null, null, undo.touched ? 'search' : from);
+    const [a, b] = perspectiveSpan(sub);
+    frameSettled(a, b);
+    go(to);
+    if (undo.touched && plan.layer) {
+      flashLayer(plan.layer);                          // …and locate the lane it took
+      setNotice({
+        text: didLine(plan), label: 'Undo',
+        act: () => { undoReveal(undo); setNotice(null); }, n: ++noticeN,
+      });
+    } else setNotice(null);                            // nothing changed, nothing to say
+  }, [go, flashLayer]);
+  useEffect(() => { showTlRef.current = (id: string) => goToSubject(id, 'zoom', 'point'); }, [goToSubject]);
+
+
+  /* THE NOTICE LEAVES ON ITS OWN. Twelve seconds, restarted by each new one —
+     long enough to read a line, look at what changed on the board and decide
+     against it, short enough that it is not furniture. The × is the way out
+     before then; there is no way to bring it back, because Undo is a courtesy
+     for a change you just watched happen, not a history. */
+  useEffect(() => {
+    if (!notice) return;
+    const t = setTimeout(() => setNotice(null), 12000);
+    return () => clearTimeout(t);
+  }, [notice]);
+
+  /* AND THE CARD RE-MEASURES WHEN IT ARRIVES OR LEAVES. The card is shown by
+     the same call that sets the notice, so it is placed one React commit before
+     the notice exists — and the notice is one of the rects it refuses to cover
+     (selcard.ts panelRects). Its ResizeObserver cannot help: it observes nodes,
+     and this node was not there to observe. placeSoon() is the settle the card
+     already runs after a view switch, for the identical reason. */
+  useEffect(() => { if (SelCard.open) SelCard.placeSoon(); }, [notice]);
+
+  /**
    * REVEAL IT WHERE THE READER IS STANDING, or say where it had to go.
    *
    * Returns the landing for a content hit taken from `here`, or null when
@@ -1521,25 +1699,23 @@ export default function Lab() {
    * That is why flow and the cube need no new API at all: cube.ts traces on a
    * 'polity:*' store write, flow.ts's localSel() lights the matching ribbon.
    */
-  const landingFor = useCallback((here: ViewId, sub: Subject, plan: RevealPlan): Landing | null => {
+  const landingFor = useCallback((here: ViewId, sub: Subject, plan: RevealPlan,
+    from: SelSource = 'search'): Landing | null => {
     const id = sub.id;
     const [a, b] = perspectiveSpan(sub);
     const pid = sub.polity;
     const onTimeline = plan.need !== 'never';
 
-    /* THE FALLBACK, AND A DESTINATION IN ITS OWN RIGHT. Everything the old
-       takeRow did, unchanged: earn the frame first (reveal() adds the layer,
-       opens its eye, raises its dial), only then select and frame, and scroll
-       the panel row into view when the board actually changed. */
+    /* THE FALLBACK, AND A DESTINATION IN ITS OWN RIGHT — and not one line of
+       its own any more. Earn the frame first (reveal() adds the layer, opens
+       its eye, raises its dial), only then select and frame, and scroll the
+       panel row into view when the board actually changed: that is
+       goToSubject(), which the selection card now calls for the identical
+       move. One behaviour, one implementation, so the search and a relation
+       click cannot drift apart again. */
     const toTimeline = (to: ViewId): Landing => ({
       view: to,
-      act: () => {
-        if (!reveal(plan)) return;
-        SelCard.select(id, null, null, 'search');
-        frameSettled(a, b);
-        go(to);
-        if (plan.need !== 'ready' && plan.layer) flashLayer(plan.layer);
-      },
+      act: () => goToSubject(id, to, from),
     });
 
     switch (here) {
@@ -1548,13 +1724,13 @@ export default function Lab() {
       // is the identical rule in both places rather than a second one here.
       case 'map':
         if (destOpen(sub, 'map')) {
-          return { view: 'map', act: () => { SelCard.select(id, null, null, 'search'); SelCard.act('map'); } };
+          return { view: 'map', act: () => { SelCard.select(id, null, null, from); SelCard.act('map'); } };
         }
         break;
       // THE CUBE never has a "not now": it traces the whole life as a solid.
       case 'cube':
         if (destOpen(sub, 'cube')) {
-          return { view: 'cube', act: () => { SelCard.select(id, null, null, 'search'); SelCard.act('cube'); } };
+          return { view: 'cube', act: () => { SelCard.select(id, null, null, from); SelCard.act('cube'); } };
         }
         break;
       // FLOW lights the ribbon off the global selection and frames its span.
@@ -1569,20 +1745,12 @@ export default function Lab() {
           return { view: 'flow', act: () => { Flow.setQuery(''); showInFlow(pid); } };
         }
         break;
-      // BELIEFS — the same engine, the other corpus, and only the system
-      // currently showing. A stream from the other one is not on this canvas.
-      case 'braid':
-        if (id.startsWith('belief:') && ribbonHas(Braid, id.slice(7))) {
-          return {
-            view: 'braid',
-            act: () => {
-              Braid.setQuery('');
-              SelCard.select(id, null, null, 'search');
-              const [f0, f1] = padSpan(a, b); Braid.animTo(f0, f1);
-            },
-          };
-        }
-        break;
+      // BELIEFS is not a case any more. It used to answer only for the system
+      // currently showing, which made "the Beliefs view draws these" true of
+      // the app and false of the canvas — a stream from the other system fell
+      // through to a dead row. The fallback below answers for BOTH systems and
+      // for every view, so the one place that knows where a belief goes is the
+      // one place, and standing on Beliefs is no longer a precondition.
       // CONNECTIONS draws a subset of the corpus and knows which: its own node
       // table is the test. Everything is optional-chained because this view is
       // being redrawn by another hand — a missing method costs the fallback,
@@ -1593,7 +1761,7 @@ export default function Lab() {
           return {
             view: 'conn',
             act: () => {
-              SelCard.select(id, null, null, 'search');
+              SelCard.select(id, null, null, from);
               const [f0, f1] = padSpan(a, b);
               try { C.animTo(f0, f1); } catch { /* framing is a courtesy */ }
             },
@@ -1614,8 +1782,88 @@ export default function Lab() {
       // thing. Nothing to try — fall through to the timeline.
       default: break;
     }
+    // A BELIEF STREAM IS NOT A DEAD END, IT IS A DIFFERENT VIEW — and it is the
+    // one class planReveal answers `never` for with a view's name in its hand:
+    // "a belief stream — the Beliefs view draws these". Honour that sentence
+    // instead of printing it over a row nobody can press. Beliefs draws the
+    // whole belief corpus, both systems, so this needs no permission from the
+    // canvas currently up: showInBeliefs switches the system if it has to.
+    // It navigates on its own, unlike the cases above: those only ever fire
+    // when the landing IS the view you are standing on, and this one fires from
+    // anywhere — including the timeline, where the row used to be dead.
+    if (beliefSystem(id)) return { view: 'braid', act: () => { showInBeliefs(id); go('braid'); } };
     return onTimeline ? toTimeline('zoom') : null;
-  }, [go, flashLayer]);
+  }, [goToSubject, go]);
+
+  /**
+   * ═══ TAKE ME TO THAT SUBJECT — answered from where the reader is standing ═══
+   *
+   * The card's Connections list and the docked "All N" list both mean this, and
+   * both used to mean SelStore.set() and nothing else: a card for Daoism with
+   * nothing lit anywhere. This routes them through landingFor() — the same
+   * function that decides where a search result lands — so a related empire
+   * clicked on the map highlights ON THE MAP, a related event clicked on the
+   * timeline reveals its lane and frames, and one rule covers both lists.
+   *
+   * WITH ONE RULE OF ITS OWN: IT NEVER TELEPORTS. A search row says "shown on
+   * Beliefs" in its own second line before you press it; a row in a list of
+   * names says nothing, so a view switch out of it would be a surprise. When
+   * the landing is not the view you are on, this OFFERS it — the subject is
+   * still selected, so the card can still say what it is, and the notice
+   * carries the one click that goes there. That covers both of the ways a
+   * subject can be missing from the screen you are looking at:
+   *
+   *   NOT DRAWN HERE     an event on the map, an empire on Connections
+   *   NOT DRAWN AT ALL   a belief stream on the timeline — planReveal says
+   *                      `never` and names the view that does draw it
+   */
+  const goHere = useCallback((id: string) => {
+    const sub = describe(id); if (!sub) return;
+    const here = viewRef.current;
+    const plan = planReveal(id);
+    const land = landingFor(here, sub, plan, 'point');
+    if (land && land.view === here) { land.act(); return; }
+
+    // Selected either way: the card is the reader's answer to "what is that",
+    // and it is a true answer whether or not this canvas can draw the thing.
+    SelCard.select(id, null, null, 'point');
+    const why = plan.need === 'never' && plan.why ? plan.why : `not drawn on ${VIEWS[here].seg}`;
+    setNotice(land
+      ? {
+        text: `${sub.name} is ${why}`, label: `Show in ${destWord(land.view)}`,
+        act: () => { setNotice(null); land.act(); }, n: ++noticeN,
+      }
+      : { text: `${sub.name} is ${why}, and no other view draws it either`, label: null, act: null, n: ++noticeN });
+  }, [landingFor]);
+  useEffect(() => { goToRef.current = goHere; }, [goHere]);
+
+  /* ── "ALL N →" IS THE SAME LIST, SO IT IS THE SAME GESTURE ─────────────────
+     The card shows the top four connections; "All 23 →" opens the docked
+     Related panel with the whole ranked list. Same neighbourhood, same click,
+     same reader — but the panel is drawn by relations.ts, which is shared with
+     the Connections view and whose row handler writes SelStore directly. So a
+     row in the card's four revealed the lane and a row in the same subject's
+     full list did not, which is the bug this pass exists to kill, one control
+     further along.
+
+     Intercepted rather than reimplemented: relations.ts binds its handler on
+     this same element in the BUBBLE phase, so a CAPTURE listener here sees the
+     click first and stopPropagation() keeps the old one from also firing. The
+     panel keeps its markup, its ranking and its Wikipedia link; only what a row
+     MEANS changes, and it now means what a row in the card means. */
+  useEffect(() => {
+    const el = document.getElementById('tlRelPanel');
+    if (!el) return;
+    const onDown = (e: MouseEvent) => {
+      const row = (e.target as HTMLElement | null)?.closest?.('.relrow') as HTMLElement | null;
+      const id = row?.dataset.id;
+      if (!id) return;
+      e.stopPropagation();
+      goHere(id);
+    };
+    el.addEventListener('click', onDown, true);
+    return () => el.removeEventListener('click', onDown, true);
+  }, [goHere]);
 
   /**
    * ONE QUERY, TWO KINDS OF ANSWER.
@@ -2505,7 +2753,7 @@ export default function Lab() {
                     only dimmed, and it existed on this one view. The global
                     field ranks the same 147 polities among everything else, and
                     taking one of them while you are standing here now frames
-                    the ribbon and lights it (takeRow → revealHere). flow.ts
+                    the ribbon and lights it (takeRow → landingFor). flow.ts
                     kept the behaviour as Flow.setQuery() for the callers that
                     still want a filter rather than a selection. */}
                 <hr className="tl-hr" />
@@ -2643,7 +2891,7 @@ export default function Lab() {
                     hand the winner to Cube.select(). So the global field does
                     that: take a polity there while you are standing on the cube
                     and the block is traced from it, here, without leaving
-                    (takeRow → revealHere). #cubeCnt went with it — "N of M"
+                    (takeRow → landingFor). #cubeCnt went with it — "N of M"
                     only ever meant "this list is narrowed", and nothing narrows
                     it now.
 
@@ -2870,6 +3118,28 @@ export default function Lab() {
               </button>
             </div>
           </aside>
+
+          {/* ══ THE NOTICE ═══════════════════════════════════════════════════
+              What going to a subject had to change about the board, or why it
+              could change nothing. One line, one action, and it lives at the
+              BOTTOM of the stage between the two panel columns — the one strip
+              of canvas that no panel, and no parked card, is ever in. (Below
+              760px the columns are gone and every surface is a bottom sheet,
+              so app.css moves it to the top instead; see §Notice.)
+
+              role="status" and not an alert: it reports something the reader
+              just asked for. `key` on the id restarts the entry animation when
+              two reveals in a row happen to say the same thing. */}
+          {notice && (
+            <div className="tl-notice" role="status" aria-live="polite" key={notice.n}>
+              <span className="tl-notice__msg">{notice.text}</span>
+              {notice.label && notice.act && (
+                <button type="button" className="tl-notice__act" onClick={notice.act}>{notice.label}</button>
+              )}
+              <button type="button" className="tl-notice__x" aria-label="Dismiss"
+                title="Dismiss" onClick={() => setNotice(null)}>{I.close}</button>
+            </div>
+          )}
         </main>
 
         {/* ══ TIME RAIL ════════════════════════════════════════════════════

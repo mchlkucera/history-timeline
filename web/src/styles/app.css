@@ -1047,6 +1047,137 @@ body.tl-dragging { cursor: grabbing; }
   .tl-sugg { max-height: 32vh; }
 }
 
+/* ── §Notice ─ WHAT THE BOARD HAD TO GIVE UP ──────────────────────────────────
+   "when I click Confucius - Daoism and daoisms lane isnt showed up we need to
+   somehow present that daoism is in lane that is not here."
+
+   Going to a subject may add a lane, open an eye or raise a detail dial. The
+   board changing under the reader is fine — the search has done it silently
+   since the phantom-zoom fix, and it is trivially reversible — but a board
+   that changed WITHOUT SAYING SO is not. So: one line of what happened, one
+   thing to do about it, and nothing else on it.
+
+   WHERE IT SITS, AND WHY IT IS NOT A CORNER. Every other floating surface in
+   this app has already claimed one: Controls is top-right, the layer panel is
+   top-left, the parked selection card is the next slot down the right-hand
+   column, the crosshair readout is bottom-left. What is left, and what is left
+   on ALL TEN views, is the strip along the BOTTOM between the two panel
+   columns — so the insets are the columns' own width and gutter rather than a
+   number, and the notice cannot land on a panel at any width. It is below the
+   card in z (--tl-z-panel against --tl-z-pop), so on the one arrangement where
+   they could meet, the card is on top and stays readable.
+
+   NO ACCENT. Minium means WHERE YOU ARE IN TIME. This is a fact about the
+   BOARD, so it is ink on the same glass every panel wears — the same rule
+   .tl-sugg__need follows one section up. The focus ring is the exception the
+   whole app already makes.
+*/
+.tl-notice {
+  position: absolute;
+  left: calc(var(--tl-panel-w) + var(--tl-gutter) * 2);
+  right: calc(var(--tl-panel-w) + var(--tl-gutter) * 2);
+  bottom: var(--tl-gutter);
+  z-index: var(--tl-z-panel);
+  /* As wide as its one line and no wider — but never wider than the strip it is
+     inset into. The cap has to be spelled out: a percentage max-width resolves
+     against the STAGE, not against the inset box, and `fit-content` cannot help
+     either, because the line is nowrap and a nowrap line's min-content is its
+     whole width. So the cap subtracts the same two insets the box above sets,
+     and the message (min-width: 0, ellipsis) is what gives way. */
+  width: max-content;
+  max-width: calc(100% - (var(--tl-panel-w) + var(--tl-gutter) * 2) * 2);
+  margin-inline: auto;
+  display: flex;
+  align-items: center;
+  gap: var(--tl-space-4);
+  padding: var(--tl-space-2) var(--tl-space-2) var(--tl-space-2) var(--tl-space-5);
+  background: var(--tl-surface-over);
+  -webkit-backdrop-filter: blur(14px) saturate(1.3);
+  backdrop-filter: blur(14px) saturate(1.3);
+  border: var(--tl-border) solid var(--tl-rule);
+  border-radius: var(--tl-radius-sm);
+  box-shadow: var(--tl-shadow-panel);
+  font-family: var(--tl-font-ui);
+  font-size: var(--tl-text-sm);
+  line-height: var(--tl-lh-ui);
+  color: var(--tl-ink-2);
+  animation: tl-notice-in var(--tl-dur-base) var(--tl-ease) both;
+}
+@keyframes tl-notice-in { from { opacity: 0; transform: translateY(6px); } to { opacity: 1; transform: none; } }
+
+/* ONE LINE, ALWAYS. It reports a single change; if the lane's name is long
+   enough to run out of strip, the ellipsis is the honest end and the button
+   beside it is the part that has to survive. */
+.tl-notice__msg {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.tl-notice__msg b { font-weight: var(--tl-w-medium); color: var(--tl-ink); }
+
+/* THE ONE THING TO DO ABOUT IT — "Undo", or the view that can draw the thing
+   this timeline cannot. A quiet control, not a call to action: the reveal it
+   undoes was already what the reader asked for. */
+.tl-notice__act {
+  flex: none;
+  appearance: none;
+  height: var(--tl-ctl-sm);
+  padding: 0 var(--tl-space-4);
+  border: var(--tl-border) solid var(--tl-rule);
+  border-radius: var(--tl-radius-xs);
+  background: var(--tl-surface);
+  font: inherit;
+  font-weight: var(--tl-w-medium);
+  color: var(--tl-ink);
+  white-space: nowrap;
+  cursor: pointer;
+}
+.tl-notice__act:hover { background: var(--tl-hover); border-color: var(--tl-rule-strong); }
+.tl-notice__act:active { background: var(--tl-press); }
+
+.tl-notice__x {
+  flex: none;
+  display: grid; place-items: center;
+  width: 20px; height: 20px;
+  padding: 0; border: 0;
+  border-radius: var(--tl-radius-xs);
+  background: none;
+  color: var(--tl-ink-3);
+  cursor: pointer;
+}
+.tl-notice__x:hover { background: var(--tl-hover); color: var(--tl-ink); }
+.tl-notice__x svg { width: 12px; height: 12px; display: block; }
+
+/* ON A PHONE IT MOVES TO THE TOP. Below 760px the panel columns are gone and
+   every surface in the app — the panels AND the selection card — is a bottom
+   sheet stacked on the time rail. The strip this thing lives in at desktop
+   width is precisely where the sheet now is, so it takes the other end of the
+   canvas: the top is the one band of a phone screen that is never a sheet.
+   Same margins the popovers use, and both controls grow to the tap floor.
+   It stays max-content wide rather than going full-bleed, because the LAYERS
+   DRAWER is a 232px slab down the left of the canvas here and its rows are
+   welded to the lanes they name (see the drawer note above — nothing may push
+   it down). A centred pill leaves as much of that as it can while it is up;
+   the lane a reveal just added is at the FOOT of that list, never under this,
+   and × takes the notice away early. */
+@media (max-width: 759px) {
+  .tl-notice {
+    left: var(--tl-space-4);
+    right: var(--tl-space-4);
+    top: var(--tl-space-4);
+    bottom: auto;
+    max-width: calc(100% - var(--tl-space-4) * 2);
+    animation-name: tl-notice-in-top;
+  }
+  .tl-notice__act { height: var(--tl-tap); }
+  .tl-notice__x {
+    width: var(--tl-tap); height: var(--tl-tap);
+    margin: calc((var(--tl-tap) - 20px) / -2);
+  }
+}
+@keyframes tl-notice-in-top { from { opacity: 0; transform: translateY(-6px); } to { opacity: 1; transform: none; } }
+
 /* ── Command palette — RETIRED ────────────────────────────────────────────────
    The modal palette was the second search. "Keep only one search - one at the
    top": its job (go to a view) is now a group of rows in .tl-sugg, under the
