@@ -671,17 +671,23 @@ function beliefSystem(id: string): string | null {
  * AND THE OTHER SYSTEM COMES BACK ON. Braid holds religions OR ideologies, so
  * landing on it with the wrong one showing is the same broken promise as
  * landing on Flow with the region filtered out. Done by pressing braid's own
- * preset rather than by writing Braid.items: the item list, the `hero` class on
- * the two buttons, the note under the canvas and the system's own framing are
+ * preset rather than by writing Braid.items: the item list, the pressed state on
+ * the two switches, the note under the canvas and the system's own framing are
  * one thing kept in step by initBraid()'s private pick(), and reaching past it
  * would light a stream while the panel still claimed the other system was up.
  * Only sent when the system is genuinely not the one showing.
+ *
+ * WHICH ONE IS SHOWING IS aria-pressed NOW, not a `hero` class. The two systems
+ * became a .tl-seg with the rest of the control unification — one exclusive
+ * choice drawn the way every other exclusive choice in the app is drawn — and
+ * this read has to follow, or the guard silently stops firing and a reader
+ * arriving from search lands on the wrong corpus.
  */
 function showInBeliefs(id: string) {
   const sys = beliefSystem(id);
   if (sys) {
     const b = document.querySelector<HTMLElement>(`[data-braid="${CSS.escape(sys)}"]`);
-    if (b && !b.classList.contains('hero')) b.click();
+    if (b && b.getAttribute('aria-pressed') !== 'true') b.click();
   }
   Braid.setQuery('');                          // a leftover filter would dim the stream
   // 'search' rather than 'point': braid draws no anchor this card could hang
@@ -854,6 +860,54 @@ const I = {
   // so it announces the menu without making the mark loud again.
   chev: <svg viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.5" aria-hidden="true"><path d="M3.5 6L8 10.5 12.5 6" strokeLinecap="round" strokeLinejoin="round" /></svg>,
 };
+
+/* ONE RESET, SIX VIEWS. "Reset view" was implemented separately in six places
+   — #tlReset, #btnReset, #flowAll, braid's re-press of the active preset,
+   #connReset and the cube's [data-v=home] — with three different titles and two
+   different label texts ("Whole span", "Home"). The act is identical everywhere:
+   put the framing back. So there is one component that draws it, and a view
+   supplies either a handler or the id its own renderer already binds. First
+   child of WHERE YOU ARE, on every view that has one. */
+function ResetBtn(o: { id?: string; dataV?: string; title: string; onClick?: () => void }) {
+  return <button className="btn" id={o.id} data-v={o.dataV} title={o.title} onClick={o.onClick}>Reset view</button>;
+}
+
+/* ONE TRANSPORT, THREE VIEWS. Map's play, Habitation's play and the Cube's play
+   were three separately-written buttons doing one thing, in two different orders,
+   with two different initial labels ("▶ Play" on the map, which map.ts then
+   rewrote to "Play" the first time you pressed it) and only two of the three
+   carrying aria-pressed.
+
+   The label of the middle button belongs to whichever renderer owns the clock —
+   map.ts, population.ts and cube.ts all write its textContent — so it must stay a
+   TEXT button and must never be given an <svg> child. That contract used to be
+   stated in three separate comments in three files; it is stated once, here.
+
+   `unit` is the noun the tooltips use (snapshot, slice); `data` is the cube,
+   which reaches its three buttons through #cubeStep [data-a] and keys its
+   tooltips to [ and ] rather than ← and →.
+
+   THESE TWO ARE MODULE-LEVEL COMPONENTS, NOT CLOSURES IN THE BODY. A component
+   declared inside a render gets a new identity every render, so React unmounts
+   and remounts its subtree — which would throw away the label map.ts had written
+   into #btnPlay on every state change in the shell. */
+function Transport(o: {
+  prevId?: string; playId: string; nextId?: string; unit: string;
+  onPrev?: () => void; onNext?: () => void; data?: boolean;
+}) {
+  return (
+    <div className="tl-cluster tl-transport" id={o.data ? 'cubeStep' : undefined}>
+      <button className="tl-iconbtn" id={o.prevId} data-a={o.data ? 'prev' : undefined}
+        aria-label={`Previous ${o.unit}`} title={`Previous  ${o.data ? '[' : '←'}`}
+        onClick={o.onPrev}>{I.prev}</button>
+      <button className="btn" id={o.playId} data-a={o.data ? 'play' : undefined}
+        aria-label="Play through time" aria-pressed="false">Play</button>
+      <button className="tl-iconbtn" id={o.nextId} data-a={o.data ? 'next' : undefined}
+        aria-label={`Next ${o.unit}`} title={`Next  ${o.data ? ']' : '→'}`}
+        onClick={o.onNext}>{I.next}</button>
+    </div>
+  );
+}
 
 export default function Lab() {
   const [view, setView] = useState<ViewId>(DEFAULT_VIEW);
@@ -2489,8 +2543,17 @@ export default function Lab() {
     if (members.length < 2) return null;
     const timeline = group === 'g-time';
     return (
+      /* THE MASTHEAD WEARS THE GROUP'S NAME ON EVERY GROUP, and this row used to
+         be the exception: the Timeline group's read "Projection" while Map's read
+         "Map" and Flow's read "Flow". One word for one thing — the cube's
+         Perspective/Isometric switch is the only "Projection" in the app now, it
+         lives in HOW IT IS DRAWN where a statement about the drawing belongs, and
+         a reader crossing views no longer meets the word in two different slots
+         meaning two different things. The buttons still say Vertical and
+         Horizontal, and the assistive labels still say "projection", so nothing
+         about what this row DOES has changed. */
       <div className="tl-field-group">
-        <span className="tl-label">{timeline ? 'Projection' : groupLabel}</span>
+        <span className="tl-label">{groupLabel}</span>
         <div className="tl-seg" id={timeline ? 'projSeg' : 'viewSeg'} role="group"
           aria-label={timeline ? 'Projection' : `${groupLabel} views`}>
           {members.map(m => (
@@ -2558,6 +2621,74 @@ export default function Lab() {
       </div>
     );
   };
+
+  /* ══ ONE CONTROL SYSTEM ═══════════════════════════════════════════════════
+     "There should be one agent unifying the system of all controls of all
+     views, they're a bit fragmented now."
+
+     They were fragmented in two ways at once, and only one of them was visible.
+
+     THE VISIBLE ONE: within a single panel, unrelated ideas sat as peers. Flow's
+     first row read [Reset view] [Absolute scale] [Follow Rome] [The great split]
+     — a navigation verb, a statement about what the DATA MEANS, and two saved
+     camera positions, in one undifferentiated cluster. A reader could not learn
+     the row, because the row was not about anything.
+
+     THE INVISIBLE ONE: there was no single place that knew what controls a view
+     has. Sixty-six of them stood in this file's markup and four renderers
+     appended more of their own at runtime, so "what is on the Habitation panel"
+     was a question you answered by reading two files and guessing the order they
+     ran in.
+
+     THE SPINE. Every Controls panel now answers three questions, always in this
+     order, and a view that has no answer to one of them OMITS the row rather
+     than reshuffling the rest:
+
+       1. WHERE YOU ARE   — reset, play/step, framing. Navigation.
+       2. HOW IT IS DRAWN — projection, scale mode, detail. The picture.
+       3. WHAT IS IN IT   — regions, systems, filters. The contents.
+
+     Omitting rather than reshuffling is the whole property: the reader who
+     crosses from Borders to Empires to Cube finds Reset view in the same place
+     on all three, because nothing above it ever changes and nothing below it can
+     push it down. `ctrlPanel` is the only way a Controls panel is built in this
+     file, so that order is a fact about the code and not a habit.
+
+     THE GROUP SWITCH IS THE MASTHEAD, above all three. It is not a control of
+     this view — it chooses WHICH VIEW — so it sits outside the spine, on the
+     other side of a rule, in the one slot it has always had. */
+  const ctrlPanel = (views: ViewId[], g: {
+    /** the group's view switch, when the group has siblings */
+    seg?: React.ReactNode;
+    where?: React.ReactNode;
+    how?: React.ReactNode;
+    what?: React.ReactNode;
+    /** the one-line "scroll to zoom" register, always last */
+    note?: React.ReactNode;
+  }) => (
+    <aside {...panel('br', views, 'Controls')}>
+      <div className="tl-panel__grip" aria-hidden="true" />
+      {hd('Controls')}
+      <div className="tl-panel__bd">
+        {g.seg}
+        {g.where && <div className="tl-group" data-g="where">{g.where}</div>}
+        {g.how && <div className="tl-group" data-g="how">{g.how}</div>}
+        {g.what && <div className="tl-group" data-g="what">{g.what}</div>}
+        {g.note}
+      </div>
+    </aside>
+  );
+
+  /* A LABELLED ROW. Every "here is a name, here is the switch under it" in the
+     app was hand-rolled; three of them were hand-rolled at RUNTIME with inline
+     flexbox instead of .tl-field-group, which is why Habitation's rows sat 6px
+     out of step with everything above them. */
+  const field = (label: string, body: React.ReactNode, extra?: React.ReactNode) => (
+    <div className="tl-field-group">
+      <span className="tl-label">{label}{extra}</span>
+      {body}
+    </div>
+  );
 
   return (
     <>
@@ -2885,79 +3016,108 @@ export default function Lab() {
                 the moment rather than about the view. It is the first row here
                 for the same reason Play is the first row on the map: the top of
                 Controls is where a view says how it is being drawn. */}
-            <aside {...panel('br', ['zoom', 'vertical'], 'Controls')}>
-              <div className="tl-panel__grip" aria-hidden="true" />
-              {hd('Controls')}
-              <div className="tl-panel__bd">
-                {groupSeg()}
+            {ctrlPanel(['zoom', 'vertical'], {
+              seg: groupSeg(),
+              where: (
                 <div className="tl-cluster">
-                  <button className="btn" id="tlReset" title="Frame the whole recorded span"
-                    onClick={() => { TL.clearSearch(); frameSettled(TL_HOME[0], TL_HOME[1]); }}>Reset view</button>
+                  <ResetBtn id="tlReset" title="Frame the whole recorded span"
+                    onClick={() => { TL.clearSearch(); frameSettled(TL_HOME[0], TL_HOME[1]); }} />
                 </div>
-                <p className="note">Scroll to zoom · drag to pan · click anything to select it.</p>
-              </div>
-            </aside>
+              ),
+              /* NO "HOW" AND NO "WHAT" ROW HERE, and both absences are the rule
+                 working. The timeline's projection choice IS the group switch in
+                 the masthead, and its contents are the layer board — a whole
+                 instrument in its own column, which a duplicate filter row in
+                 this panel could only disagree with. */
+              note: <p className="note">Scroll to zoom · drag to pan · click anything to select it.</p>,
+            })}
             {/* map */}
-            <aside {...panel('br', ['map'], 'Controls')}>
-              <div className="tl-panel__grip" aria-hidden="true" />
-              {hd('Controls')}
-              <div className="tl-panel__bd">
-                {groupSeg()}
-                {/* map.ts overwrites #btnPlay's textContent, so it must stay a TEXT button. */}
-                <div className="tl-cluster tl-transport">
-                  <button className="tl-iconbtn" id="railPrev" aria-label="Previous snapshot" title="Previous  ←"
-                    onClick={() => step(-1)}>{I.prev}</button>
-                  <button className="btn" id="btnPlay" aria-label="Play through time">▶ Play</button>
-                  <button className="tl-iconbtn" id="railNext" aria-label="Next snapshot" title="Next  →"
-                    onClick={() => step(1)}>{I.next}</button>
-                </div>
-                <div className="tl-cluster">
-                  <button className="btn" id="btnReset" title="Reset zoom and pan">Reset view</button>
-                </div>
-                <p className="note">Scroll to zoom · drag to pan · click any territory to select it.</p>
-              </div>
-            </aside>
-            {/* pop */}
-            <aside {...panel('br', ['pop'], 'Controls')}>
-              <div className="tl-panel__grip" aria-hidden="true" />
-              {hd('Controls')}
-              {/* population.ts appendChild()s its own rows into #popPanel, and writes
-                  #popPlay's label — so that one must stay a TEXT button. The
-                  transport is the FIRST child, before anything appended. */}
-              <div className="tl-panel__bd" id="popPanel">
-                {groupSeg()}
-                <div className="tl-cluster tl-transport">
-                  <button className="tl-iconbtn" id="railPrevP" aria-label="Previous slice" title="Previous  ←"
-                    onClick={() => step(-1)}>{I.prev}</button>
-                  <button className="btn" id="popPlay" aria-label="Play through time" aria-pressed="false">Play</button>
-                  <button className="tl-iconbtn" id="railNextP" aria-label="Next slice" title="Next  →"
-                    onClick={() => step(1)}>{I.next}</button>
-                </div>
-              </div>
-            </aside>
-            {/* horizon */}
-            <aside {...panel('br', ['horizon'], 'Controls')}>
-              <div className="tl-panel__grip" aria-hidden="true" />
-              {hd('Controls')}
-              <div className="tl-panel__bd">
-                {groupSeg()}
-                <div className="tl-field-group">
-                  <span className="tl-label">Standing in</span>
-                  <select id="hzCity" aria-label="City" defaultValue="" style={{ width: '100%' }} />
-                </div>
-                <div className="tl-field-group">
-                  <span className="tl-label">In the year</span>
-                  <input type="number" id="hzYear" defaultValue="1776" style={{ width: '100%' }} />
+            {ctrlPanel(['map'], {
+              seg: groupSeg(),
+              /* RESET FIRST, THEN THE TRANSPORT — the same two rows, in the same
+                 order, as Habitation and the Cube. It used to be the other way
+                 round here and only here, which is exactly the kind of small
+                 disagreement that makes ten views feel like ten products. */
+              where: (
+                <>
                   <div className="tl-cluster">
-                    <button className="chip" data-hz="1776">1776</button>
-                    <button className="chip" data-hz="1492">1492</button>
-                    <button className="chip" data-hz="1889">1889</button>
+                    <ResetBtn id="btnReset" title="Frame the whole world again" />
                   </div>
-                </div>
-                <hr className="tl-hr" />
-                <span className="note" id="hzSpeed" />
-              </div>
-            </aside>
+                  <Transport prevId="railPrev" playId="btnPlay" nextId="railNext" unit="snapshot"
+                    onPrev={() => step(-1)} onNext={() => step(1)} />
+                </>
+              ),
+              note: <p className="note">Scroll to zoom · drag to pan · click any territory to select it.</p>,
+            })}
+            {/* pop */}
+            {/* HABITATION'S THREE SETTINGS CAME IN OFF THE STREET.
+                population.ts used to appendChild() Detail, Style and Names into
+                this body at runtime, built out of inline `display:flex;gap:6px`
+                rather than .tl-field-group — so they sat six pixels out of step
+                with every row above them, in a font of their own, in an order
+                nothing declared. They are ordinary declared controls now, in the
+                two groups they always belonged to: Detail and Style say HOW the
+                field is drawn, Names says WHAT is on it. population.ts binds
+                them and paints them, exactly as cube.ts has always done. */}
+            {ctrlPanel(['pop'], {
+              seg: groupSeg(),
+              /* No reset: this view has no zoom and no pan, so there is no
+                 framing to put back. The row is omitted, not faked. */
+              where: <Transport prevId="railPrevP" playId="popPlay" nextId="railNextP" unit="slice"
+                onPrev={() => step(-1)} onNext={() => step(1)} />,
+              how: (
+                <>
+                  {field('Detail', (
+                    <div className="tl-seg" id="popDetail" role="group" aria-label="Cell size">
+                      <button className="tl-seg__item" data-v="4" title="4° cells">Coarse</button>
+                      <button className="tl-seg__item" data-v="2" title="2° cells">Medium</button>
+                      <button className="tl-seg__item" data-v="1" title="1° cells">Fine</button>
+                    </div>
+                  ))}
+                  {field('Style', (
+                    <div className="tl-seg" id="popStyle" role="group" aria-label="How the field is drawn">
+                      <button className="tl-seg__item" data-v="plate"
+                        title="One square per cell — the resolution of the claim is visible">Plate</button>
+                      <button className="tl-seg__item" data-v="field"
+                        title="The same numbers, smoothed">Field</button>
+                    </div>
+                  ))}
+                </>
+              ),
+              what: (
+                <label className="tl-toggle">
+                  <input type="checkbox" id="popNames" defaultChecked />
+                  <span className="tl-toggle__track" /><span className="tl-toggle__label">Place names</span>
+                </label>
+              ),
+            })}
+            {/* horizon */}
+            {/* HORIZON'S WHOLE PANEL IS "WHERE YOU ARE", and for once that is
+                literal: a city and a year ARE the standpoint the view answers
+                from. The three year chips stay where Flow's two framing presets
+                went, because they are not the same kind of thing — Follow Rome
+                was a camera position on a plate the reader could already reach
+                by searching, while 1776 / 1492 / 1889 are the SUBJECT of this
+                view, and there is no other route to a year here. */}
+            {ctrlPanel(['horizon'], {
+              seg: groupSeg(),
+              where: (
+                <>
+                  {field('Standing in', <select id="hzCity" aria-label="City" defaultValue="" style={{ width: '100%' }} />)}
+                  {field('In the year', (
+                    <>
+                      <input type="number" id="hzYear" defaultValue="1776" style={{ width: '100%' }} />
+                      <div className="tl-cluster">
+                        <button className="chip" data-hz="1776">1776</button>
+                        <button className="chip" data-hz="1492">1492</button>
+                        <button className="chip" data-hz="1889">1889</button>
+                      </div>
+                    </>
+                  ))}
+                </>
+              ),
+              note: <><hr className="tl-hr" /><span className="note" id="hzSpeed" /></>,
+            })}
             {/* THE TIMELINE GROUP'S "CONTROLS" PANEL IS GONE.
                 It held four things. PROJECTION moved DOWN, to the time rail's
                 control cluster — never back into the header.
@@ -2971,284 +3131,302 @@ export default function Lab() {
                 their absence costs nothing. The vertical projection loses the
                 panel too and takes the full stage width. */}
             {/* flow */}
-            <aside {...panel('br', ['flow'], 'Controls')}>
-              <div className="tl-panel__grip" aria-hidden="true" />
-              {hd('Controls')}
-              <div className="tl-panel__bd">
-                {groupSeg()}
-                {/* THE GROUP'S SEG FIRST, then reset, then the controls this
-                    view alone needs. #flowAll already framed the whole span —
-                    it was called "Whole span", which is the same verb the map
-                    spells "Reset view". One word for one act. */}
+            {/* FLOW IS THE VIEW THAT NAMED THE PROBLEM. "The controls of Flow
+                should be better, follow rome and great split - remove, we
+                should separate view control and toggling of the view
+                (relative/absolute)."
+
+                The first row read [Reset view] [Absolute scale] [Follow Rome]
+                [The great split]: a navigation verb, a statement about what the
+                DATA MEANS, and two saved camera positions — three different
+                kinds of thing, all wearing .btn, all in one cluster.
+
+                FOLLOW ROME AND THE GREAT SPLIT ARE GONE. They were demo
+                bookmarks from prototype days: a hardcoded fly to 300 BCE and
+                another to 180–820. Search reaches every subject in the corpus
+                and taking one frames its ribbon, so a button that can only ever
+                mean one year does not earn a row in the instrument.
+
+                THE SCALE IS SEPARATED, and it stopped being a button. #flowMode
+                was a button whose label named the mode you were NOT in — press
+                "Absolute scale" and it becomes "Share of world" — so the panel
+                could never be read as a statement of the picture's state. It is
+                a two-item .tl-seg now, in HOW IT IS DRAWN, where both readings
+                are on screen at once and aria-pressed says which is live. Same
+                control, same words, same corner on Beliefs. */}
+            {ctrlPanel(['flow'], {
+              seg: groupSeg(),
+              where: (
                 <div className="tl-cluster">
-                  <button className="btn" id="flowAll" title="Frame the whole span">Reset view</button>
-                  <button className="btn" id="flowMode">Absolute scale</button>
+                  <ResetBtn id="flowAll" title="Frame the whole span" />
                 </div>
-                <div className="tl-cluster">
-                  <button className="btn hero" id="flowRome">Follow Rome</button>
-                  <button className="btn" id="flowSplit">The great split</button>
+              ),
+              how: field('Scale', (
+                <div className="tl-seg" id="flowMode" role="group" aria-label="Scale">
+                  <button className="tl-seg__item" data-v="norm">Share of world</button>
+                  <button className="tl-seg__item" data-v="abs">Absolute</button>
                 </div>
-                {/* "Find a polity…" IS GONE — ONE SEARCH. It was a second box
-                    three inches below the first, weaker in every direction: it
-                    matched a substring of a polity name and nothing else, it
-                    only dimmed, and it existed on this one view. The global
-                    field ranks the same 147 polities among everything else, and
-                    taking one of them while you are standing here now frames
-                    the ribbon and lights it (takeRow → landingFor). flow.ts
-                    kept the behaviour as Flow.setQuery() for the callers that
-                    still want a filter rather than a selection. */}
-                <hr className="tl-hr" />
-                <div className="tl-field-group">
-                  <span className="tl-label">Regions</span>
-                  {/* MUST ship EMPTY — flow.ts appendChild()s into it. */}
-                  <div className="tl-cluster" id="flowRegionRow" />
-                </div>
-              </div>
-            </aside>
+              )),
+              /* "Find a polity…" IS GONE — ONE SEARCH. It was a second box three
+                 inches below the first, weaker in every direction: it matched a
+                 substring of a polity name and nothing else, it only dimmed, and
+                 it existed on this one view. The global field ranks the same 147
+                 polities among everything else, and taking one of them while you
+                 are standing here now frames the ribbon and lights it (takeRow →
+                 landingFor). flow.ts kept the behaviour as Flow.setQuery() for
+                 the callers that still want a filter rather than a selection. */
+              what: field('Regions', (
+                /* MUST ship EMPTY — flow.ts appendChild()s into it. The chips
+                   are derived from the corpus (five regions, discovered from
+                   POLITIES at boot), which is the one honest reason left in this
+                   app for a control to be built at runtime rather than declared:
+                   the shell cannot enumerate a list it does not own. */
+                <div className="tl-cluster" id="flowRegionRow" />
+              )),
+            })}
             {/* braid */}
-            <aside {...panel('br', ['braid'], 'Controls')}>
-              <div className="tl-panel__grip" aria-hidden="true" />
-              {hd('Controls')}
-              <div className="tl-panel__bd">
-                {groupSeg()}
+            {/* BELIEFS NOW WEARS EMPIRES' PANEL, ROW FOR ROW. The two views are
+                one engine (Ribbons) and they were reading as two products: Flow
+                had a scale switch and Braid did not, so braid.ts minted itself
+                one at runtime and appended it into whatever .tl-cluster it found
+                first. It is declared here now, identical to Flow's, in the same
+                spine group — and the runtime injection is gone.
+
+                THE TWO SYSTEMS BECAME A SEG. They are one exclusive choice, and
+                every other exclusive choice in the app is a .tl-seg; these two
+                were .btn / .btn.hero, which is the shape of an ACTION and gave
+                the reader an accent where DESIGN.md allows none. */}
+            {ctrlPanel(['braid'], {
+              seg: groupSeg(),
+              where: (
                 <div className="tl-cluster">
                   {/* Braid's framing belongs to whichever system is showing —
-                      religions open on 1000 BCE, ideologies on 1650 — so the
-                      reset is the active preset pressed again rather than a
-                      second, disagreeing copy of those two numbers here. */}
-                  <button className="btn" title="Frame the whole span of the system showing"
-                    onClick={() => document.querySelector<HTMLElement>('[data-braid].hero')?.click()}>Reset view</button>
+                      religions open on 1000 BCE, ideologies on 1848 — so the
+                      reset is the live system re-picked rather than a second,
+                      disagreeing copy of those two numbers here. */}
+                  <ResetBtn title="Frame the whole span of the system showing"
+                    onClick={() => document.querySelector<HTMLElement>('#braidSystem [aria-pressed="true"]')?.click()} />
                 </div>
-                <div className="tl-cluster">
-                  <button className="btn hero" data-braid="religion">Religions</button>
-                  <button className="btn" data-braid="ideology">Political ideologies</button>
+              ),
+              how: field('Scale', (
+                <div className="tl-seg" id="braidMode" role="group" aria-label="Scale">
+                  <button className="tl-seg__item" data-v="norm">Share of world</button>
+                  <button className="tl-seg__item" data-v="abs">Absolute</button>
                 </div>
-              </div>
-            </aside>
+              )),
+              what: field('System', (
+                <div className="tl-seg" id="braidSystem" role="group" aria-label="Belief system">
+                  <button className="tl-seg__item" data-braid="religion">Religions</button>
+                  <button className="tl-seg__item" data-braid="ideology">Ideologies</button>
+                </div>
+              )),
+            })}
             {/* conn — every id and class from the old #tab-conn subtree, intact.
                 THE GRAMMAR LEGEND IS FOLDED IN HERE rather than floating at the
                 bottom right of the canvas: see the note on .tl-col--r below for
                 why Connections has no right-hand panels any more.
                 buildConnLegend() fills #connGrammar by id, so it does not care
                 that the element now lives inside a <details>. */}
-            <aside {...panel('br', ['conn'], 'Controls')}>
-              <div className="tl-panel__grip" aria-hidden="true" />
-              {hd('Controls')}
-              <div className="tl-panel__bd">
-                {groupSeg()}
-                {/* THE FIVE RANDOM CONTROLS ARE GONE — connections.ts asked for
-                    this deletion in Lab.tsx and here it is. Two guided-tour
-                    jumps and a zoom preset are what the ONE search box is for;
-                    "Share of lane" normalised ribbon thickness and there are no
-                    ribbons left; and nothing else in the app carries a
-                    clear-selection button (empty canvas clears, so does Escape,
-                    so does the card's ✕).
-
-                    RESET VIEW IS NOT ONE OF THEM. It is the row every view
-                    carries, and it is the reason a reader can get lost here and
-                    come back. It is wired from this file — a new id, so the
-                    hiding loop in connections.ts cannot mistake it for the
-                    "Whole span" preset it retired. */}
+            {/* CONNECTIONS HAS ONE GROUP AND THAT IS THE POINT. The five
+                random controls went two rounds ago (two guided-tour jumps, a
+                zoom preset, a share-of-lane normaliser with no ribbons left to
+                normalise, and a clear-selection button nothing else in the app
+                carries). What is left is the one row every view has, and under
+                the spine that absence now READS: there is no HOW row and no WHAT
+                row here, so the panel is short — it does not promote the Grammar
+                legend up into the space to look busy. */}
+            {ctrlPanel(['conn'], {
+              seg: groupSeg(),
+              where: (
                 <div className="tl-cluster">
-                  <button className="btn" id="connReset" title="Back to the framing this view opens on"
-                    onClick={() => { const h = connHome.current; if (h) Conn.animTo(h[0], h[1]); }}>Reset view</button>
+                  {/* Wired from this file — a NEW id, so the hiding loop in
+                      connections.ts cannot mistake it for the "Whole span"
+                      preset it retired. */}
+                  <ResetBtn id="connReset" title="Back to the framing this view opens on"
+                    onClick={() => { const h = connHome.current; if (h) Conn.animTo(h[0], h[1]); }} />
                 </div>
-                <span className="note">scroll to zoom · drag to pan</span>
-                {/* #connCap WENT BACK TO A READING PANEL. It was folded in here
-                    to stop three panels starving one column — but "Reading" is
-                    furniture the reader is entitled to find in the same corner
-                    on every view, and a fold is not that corner. It is
-                    collapsible now, like every Reading panel, so the reader can
-                    have the column back with the same gesture. Grammar stays
-                    folded: it is a legend, not a reading. */}
-                <details className="tl-disc">
-                  <summary>Grammar<span className="tl-disc__v">shape &amp; weight</span></summary>
-                  <div className="tl-disc__bd"><div className="grammar" id="connGrammar" /></div>
-                </details>
-              </div>
-            </aside>
-            {/* CUBE. One panel, not two: splitting ~14 controls across a --tl
-                and a --tr panel would have hidden half of them on a phone,
-                where app.css keeps only the primary panel. Every id below is
-                resolved once by cube.ts; #cubeChain ships EMPTY because cube.ts
-                writes the lineage chips into it.
+              ),
+              /* THE LEGEND IS NOT A CONTROL, so it sits below all three groups
+                 with the note, in the register the panel uses for things it is
+                 telling you rather than things you can press. */
+              note: (
+                <>
+                  <span className="note">scroll to zoom · drag to pan</span>
+                  <details className="tl-disc">
+                    <summary>Grammar<span className="tl-disc__v">shape &amp; weight</span></summary>
+                    <div className="tl-disc__bd"><div className="grammar" id="connGrammar" /></div>
+                  </details>
+                </>
+              ),
+            })}
+            {/* ══ THE CUBE: TWENTY-FIVE CONTROLS, RE-READ ══════════════════════
+                One panel held projection, six camera presets, sovereign,
+                lineage, chain, solid mode, a cut range, cut lo/hi, caps, a slice
+                toggle, a slice transport, a slice index, mesh resolution, time
+                spacing, a ghost opacity slider, snapshot outlines, ghost
+                coastlines and auto-orbit — twenty-five things, split into three
+                folds that were organised by ENGINE FEATURE ("cut & slice",
+                "view & detail") rather than by what a reader is trying to do.
 
-                AND IT DOES NOT SCROLL ITS PRIMARY CONTROLS AWAY. One flat list
-                of fourteen controls was 1086px of instrument in a 531px body at
-                1280x800: Fly to, Ghost world, Cut through time, Single slice,
-                Time axis, Snapshot outlines, Ghost coastlines and Auto-orbit
-                were all below the fold, behind a scroll with no cue that
-                anything was down there. More than half the richest instrument
-                in the app, invisible on an ordinary laptop.
+                FIVE ARE GONE. Each was a setting with a sane default that no
+                reader was ever going to change twice:
+                  · "Low" — a fourth camera angle beside Top/Front/Side, which
+                    are the three axes of the block and mean something. Low was a
+                    nice screenshot.
+                  · "Cap the cut" — whether the cut face is filled. On by
+                    default, and a hollow cut is a rendering artefact, not a
+                    reading.
+                  · "Ghost coastlines" — a sub-setting of the ghost world, on by
+                    default. The ghost world is one thing; it does not need two
+                    switches and an opacity dial.
+                  · "Auto-orbit" — a screensaver. Same family as Follow Rome.
+                  · the ghost OPACITY SLIDER, which became the ghost toggle: a
+                    continuous 0–0.55 dial for how faint the background world is
+                    was a preference, and the only two values anyone wanted were
+                    "there" and "not there".
+                Every one of them keeps its default in CubeState, so the block
+                draws exactly as it does today; what is gone is the invitation to
+                fiddle. None had a keyboard route, so nothing is orphaned.
 
-                So the panel is now three tiers, split by what a reader is doing
-                rather than by what the engine exposes:
+                THE REST ARE UNDER THE SPINE. WHERE YOU ARE is the camera and
+                the position in time — and the transport came UP out of the slice
+                fold to get there, which is why Play now sits at the same height
+                on the Cube as it does on Borders and Habitation. HOW IT IS DRAWN
+                is the one folded group in the app, and it is folded on the
+                founder's own test — every control in it has a sane default. WHAT
+                IS IN IT is the subject: which polity, how much of its lineage,
+                how the volume is built, and which part of the block you kept.
 
-                  OPEN, ALWAYS — the subject. What am I looking at, and what is
-                  it made of: trace, lineage, and how the trace is built.
-                  <details> CUT & SLICE — the two ways of taking the block
-                  apart. Off by default, and both are verbs, not settings.
-                  <details> VIEW & DETAIL — camera presets, projection, mesh,
-                  and the four ways of drawing the ghost world.
-
-                Every summary row is visible without scrolling, so "there is
-                more, and here is what it is" is now a piece of the layout
-                rather than a fact about a scrollbar. cube.ts opens a group
-                whose contents are no longer at rest (paintDisc), so a closed
-                group can never hide a setting that is doing something. */}
-            <aside {...panel('br', ['cube'], 'Controls')}>
-              <div className="tl-panel__grip" aria-hidden="true" />
-              {hd('Controls')}
-              <div className="tl-panel__bd">
-                {groupSeg()}
-                {/* THE UNIFIED HEAD — projection, then reset, then the view's own
-                    subject. Both rows came up out of "View & detail": the cube's
-                    projection IS the projection switch every other view puts at
-                    the top of Controls, and "Home" is what every other view
-                    calls "Reset view". The fold loses exactly what it gave up,
-                    so the three summary rows sit where they sat.
-                    cube.ts binds #cubeViews' children by data-v at init, which
-                    happens after React has mounted this — so moving the element
-                    keeps every binding and renaming a label costs nothing. */}
-                <div className="tl-field-group">
-                  <span className="tl-label">Projection</span>
-                  <div className="tl-seg" id="cubeProj" role="group" aria-label="Projection">
-                    <button className="tl-seg__item" data-v="persp">Perspective</button>
-                    <button className="tl-seg__item" data-v="ortho">Isometric</button>
+                Every id below is resolved once by cube.ts and every one of its
+                helpers is null-safe, so a cut costs nothing. #cubeChain ships
+                EMPTY — cube.ts writes the lineage chips into it. */}
+            {ctrlPanel(['cube'], {
+              seg: groupSeg(),
+              where: (
+                <>
+                  <div className="tl-cluster" id="cubeViews">
+                    <ResetBtn dataV="home" title="Fly the camera home" />
+                    <button className="chip" data-v="focus">Frame the trace</button>
+                    <button className="chip" data-v="top">Top</button>
+                    <button className="chip" data-v="front">Front</button>
+                    <button className="chip" data-v="side">Side</button>
                   </div>
-                </div>
-                <div className="tl-cluster" id="cubeViews">
-                  <button className="btn" data-v="home" title="Fly the camera home">Reset view</button>
-                  <button className="chip" data-v="focus">Frame the trace</button>
-                  <button className="chip" data-v="top">Top</button>
-                  <button className="chip" data-v="front">Front</button>
-                  <button className="chip" data-v="side">Side</button>
-                  <button className="chip" data-v="low">Low</button>
-                </div>
-                {/* TRACE A POLITY — THE BOX IS GONE, THE BROWSE STAYS.
-                    "Search anything should be the same as 'Trace a polity
-                    search'." #cubeFilter ranked the same 147 polities the
-                    global field already ranks, and its only extra act was to
-                    hand the winner to Cube.select(). So the global field does
-                    that: take a polity there while you are standing on the cube
-                    and the block is traced from it, here, without leaving
-                    (takeRow → landingFor). #cubeCnt went with it — "N of M"
-                    only ever meant "this list is narrowed", and nothing narrows
-                    it now.
-
-                    THE <select> IS NOT A SEARCH AND IT SURVIVES. It is the
-                    alphabetical BROWSE — the way to find a polity whose name
-                    you do not know — and it is the readout of which one the
-                    block is traced from; cube.ts writes its value on every
-                    trace, from whichever direction the trace arrived. */}
-                <div className="tl-field-group">
-                  <span className="tl-label">Trace a polity</span>
-                  <select id="cubeSov" aria-label="Polity to trace" defaultValue="" style={{ width: '100%' }} />
-                  <span className="note" id="cubeNote" />
-                </div>
-                <div className="tl-field-group">
-                  <span className="tl-label">Follow lineage<span className="tl-label__v" id="cubeLineageV" /></span>
-                  <div className="tl-seg" id="cubeLineage" role="group" aria-label="Lineage depth">
-                    <button className="tl-seg__item" data-v="0">Off</button>
-                    <button className="tl-seg__item" data-v="1">1</button>
-                    <button className="tl-seg__item" data-v="2">2</button>
-                    <button className="tl-seg__item" data-v="3">3</button>
-                  </div>
-                  {/* MUST ship EMPTY — cube.ts appendChild()s the chain. */}
-                  <div className="tl-cluster" id="cubeChain" />
-                </div>
-                <div className="tl-field-group">
-                  <span className="tl-label">Solid</span>
-                  <div className="tl-seg" id="cubeMode" role="group" aria-label="How the trace is built">
-                    <button className="tl-seg__item" data-v="lofted">Volume</button>
-                    <button className="tl-seg__item" data-v="prisms">Prisms</button>
-                    <button className="tl-seg__item" data-v="off">Off</button>
-                  </div>
-                </div>
-
-                {/* ── CUT & SLICE. The two verbs. Both are off at rest, which is
-                    what makes them safe to fold away — and cube.ts opens this
-                    group the moment either one stops being at rest, including
-                    when the A or P shortcut is what turned it on. */}
-                <details className="tl-disc" id="cubeDiscCut">
-                  <summary>Cut &amp; slice<span className="tl-disc__v" id="cubeDiscCutV" /></summary>
-                  <div className="tl-disc__bd">
-                    <div className="tl-field-group" id="cubeCutRow">
-                      <span className="tl-label">Cut through time<span className="tl-label__v" id="cubeCutV" /></span>
-                      {/* Two handles, one track. Not two overlaid <input type=range>:
-                          they fight over pointer capture at the ends. cube.ts does
-                          the pointer maths; the engine snaps to slab faces. */}
-                      <div className="tl-cutrange" id="cubeCut" data-cutting="false">
-                        <div className="tl-cutrange__track" />
-                        <div className="tl-cutrange__fill" id="cubeCutFill" />
-                        <div className="tl-cutrange__h" id="cubeCutLo" title="from" />
-                        <div className="tl-cutrange__h" id="cubeCutHi" title="to" />
-                      </div>
-                      <label className="tl-toggle">
-                        <input type="checkbox" id="cubeCaps" defaultChecked />
-                        <span className="tl-toggle__track" /><span className="tl-toggle__label">Cap the cut</span>
-                      </label>
-                    </div>
-                    <div className="tl-field-group" id="cubeSliceRow" data-off="true">
-                      <span className="tl-label">Single slice<span className="tl-label__v" id="cubeSliceV">off</span></span>
-                      <label className="tl-toggle">
-                        <input type="checkbox" id="cubeSlice" />
-                        <span className="tl-toggle__track" /><span className="tl-toggle__label">One snapshot at a time</span>
-                      </label>
-                      <div className="tl-cluster tl-transport" id="cubeStep">
-                        <button className="tl-iconbtn" data-a="prev" aria-label="Previous snapshot" title="Previous  [">{I.prev}</button>
-                        <button className="btn" data-a="play" id="cubePlay" aria-pressed="false">Play</button>
-                        <button className="tl-iconbtn" data-a="next" aria-label="Next snapshot" title="Next  ]">{I.next}</button>
-                      </div>
-                      <input type="range" id="cubeSliceIdx" min="0" max="17" step="1" defaultValue="0"
-                        aria-label="Which snapshot" />
-                    </div>
-                  </div>
-                </details>
-
-                {/* ── VIEW & DETAIL. Where the camera is and how the block is
-                    drawn. Every one of these has a keyboard route as well
-                    (R/T/F/E/Z/I), and every one of them has a sane default —
-                    which is the test for whether a control may be folded. */}
+                  {/* THE TRANSPORT LEFT THE FOLD. It used to live inside "Cut &
+                      slice", dimmed and pointer-events:none until Single slice
+                      was ticked — so the one control that TURNS SLICE ON could
+                      not be clicked until slice was on. It is the same component
+                      the map and Habitation use now, in the same group, and
+                      pressing it enables slice mode the way it always meant to. */}
+                  <Transport playId="cubePlay" unit="snapshot" data />
+                </>
+              ),
+              how: (
+                /* THE ONE FOLDED GROUP IN THE APP, and its summary names the
+                   spine group rather than an engine feature, so folding it
+                   teaches the structure instead of hiding it. The rule for a
+                   folded control is unchanged: it may be out of sight only while
+                   it is at rest, and cube.ts opens this group the moment
+                   anything in it leaves its default. */
                 <details className="tl-disc" id="cubeDiscView">
-                  <summary>View &amp; detail<span className="tl-disc__v" id="cubeDiscViewV" /></summary>
+                  <summary>How it is drawn<span className="tl-disc__v" id="cubeDiscViewV" /></summary>
                   <div className="tl-disc__bd">
-                    <div className="tl-field-group">
-                      <span className="tl-label">Mesh detail</span>
+                    {field('Projection', (
+                      <div className="tl-seg" id="cubeProj" role="group" aria-label="Projection">
+                        <button className="tl-seg__item" data-v="persp">Perspective</button>
+                        <button className="tl-seg__item" data-v="ortho">Isometric</button>
+                      </div>
+                    ))}
+                    {field('Detail', (
                       <div className="tl-seg" id="cubeRes" role="group" aria-label="Mesh detail">
                         <button className="tl-seg__item" data-v="draft">Draft</button>
                         <button className="tl-seg__item" data-v="normal">Normal</button>
                         <button className="tl-seg__item" data-v="fine">Fine</button>
                       </div>
-                    </div>
-                    <div className="tl-field-group">
-                      <span className="tl-label">Time axis</span>
+                    ))}
+                    {field('Time axis', (
                       <div className="tl-seg" id="cubeSpacing" role="group" aria-label="Time axis spacing">
                         <button className="tl-seg__item" data-v="even">Even</button>
                         <button className="tl-seg__item" data-v="true">True years</button>
                       </div>
-                    </div>
-                    <div className="tl-field-group">
-                      <span className="tl-label">Ghost world<span className="tl-label__v" id="cubeGhostV" /></span>
-                      <input type="range" id="cubeGhost" min="0" max="0.55" step="0.01" defaultValue="0.16"
-                        aria-label="Opacity of the ghost world" />
-                    </div>
+                    ))}
+                    <label className="tl-toggle">
+                      <input type="checkbox" id="cubeGhost" defaultChecked />
+                      <span className="tl-toggle__track" /><span className="tl-toggle__label">Ghost world</span>
+                    </label>
                     <label className="tl-toggle">
                       <input type="checkbox" id="cubeOutlines" />
                       <span className="tl-toggle__track" /><span className="tl-toggle__label">Snapshot outlines</span>
                     </label>
-                    <label className="tl-toggle">
-                      <input type="checkbox" id="cubeGhostLines" defaultChecked />
-                      <span className="tl-toggle__track" /><span className="tl-toggle__label">Ghost coastlines</span>
-                    </label>
-                    <label className="tl-toggle">
-                      <input type="checkbox" id="cubeSpin" />
-                      <span className="tl-toggle__track" /><span className="tl-toggle__label">Auto-orbit</span>
-                    </label>
                   </div>
                 </details>
-              </div>
-            </aside>
+              ),
+              what: (
+                <>
+                  {/* TRACE A POLITY — THE BOX IS GONE, THE BROWSE STAYS.
+                      "Search anything should be the same as 'Trace a polity
+                      search'." #cubeFilter ranked the same 147 polities the
+                      global field already ranks. The <select> is not a search: it
+                      is the alphabetical BROWSE, and the readout of which polity
+                      the block is traced from, whichever direction the trace
+                      arrived from. */}
+                  {field('Trace a polity', (
+                    <>
+                      <select id="cubeSov" aria-label="Polity to trace" defaultValue="" style={{ width: '100%' }} />
+                      <span className="note" id="cubeNote" />
+                    </>
+                  ))}
+                  {field('Follow lineage', (
+                    /* MUST ship EMPTY — cube.ts appendChild()s the chain. */
+                    <>
+                      <div className="tl-seg" id="cubeLineage" role="group" aria-label="Lineage depth">
+                        <button className="tl-seg__item" data-v="0">Off</button>
+                        <button className="tl-seg__item" data-v="1">1</button>
+                        <button className="tl-seg__item" data-v="2">2</button>
+                        <button className="tl-seg__item" data-v="3">3</button>
+                      </div>
+                      <div className="tl-cluster" id="cubeChain" />
+                    </>
+                  ), <span className="tl-label__v" id="cubeLineageV" />)}
+                  {field('Solid', (
+                    <div className="tl-seg" id="cubeMode" role="group" aria-label="How the trace is built">
+                      <button className="tl-seg__item" data-v="lofted">Volume</button>
+                      <button className="tl-seg__item" data-v="prisms">Prisms</button>
+                      <button className="tl-seg__item" data-v="off">Off</button>
+                    </div>
+                  ))}
+                  {/* THE TWO VERBS, still folded and still for the same reason:
+                      both are off at rest, and cube.ts opens the group the moment
+                      either one stops being — including when the A or P shortcut
+                      is what turned it on. */}
+                  <details className="tl-disc" id="cubeDiscCut">
+                    <summary>Cut &amp; slice<span className="tl-disc__v" id="cubeDiscCutV" /></summary>
+                    <div className="tl-disc__bd">
+                      <div className="tl-field-group" id="cubeCutRow">
+                        <span className="tl-label">Cut through time<span className="tl-label__v" id="cubeCutV" /></span>
+                        {/* Two handles, one track. Not two overlaid <input type=range>:
+                            they fight over pointer capture at the ends. cube.ts does
+                            the pointer maths; the engine snaps to slab faces. */}
+                        <div className="tl-cutrange" id="cubeCut" data-cutting="false">
+                          <div className="tl-cutrange__track" />
+                          <div className="tl-cutrange__fill" id="cubeCutFill" />
+                          <div className="tl-cutrange__h" id="cubeCutLo" title="from" />
+                          <div className="tl-cutrange__h" id="cubeCutHi" title="to" />
+                        </div>
+                      </div>
+                      <div className="tl-field-group" id="cubeSliceRow" data-off="true">
+                        <span className="tl-label">Single slice<span className="tl-label__v" id="cubeSliceV">off</span></span>
+                        <label className="tl-toggle">
+                          <input type="checkbox" id="cubeSlice" />
+                          <span className="tl-toggle__track" /><span className="tl-toggle__label">One snapshot at a time</span>
+                        </label>
+                        <input type="range" id="cubeSliceIdx" min="0" max="17" step="1" defaultValue="0"
+                          aria-label="Which snapshot" />
+                      </div>
+                    </div>
+                  </details>
+                </>
+              ),
+            })}
             {/* THE TIMELINE'S "RELATED" PANEL — the same pattern as Connections'.
                 Click a spread or an event on either projection and relations.ts
                 renders the ranked, grouped relation list (plus the Wikipedia link,

@@ -1266,6 +1266,11 @@ body.tl-dragging { cursor: grabbing; }
   .tl-panel__bd :is(.btn, .tl-btn) { height: 28px; }
   .tl-panel__bd .tl-label { line-height: 1.2; }
   .tl-panel__bd .tl-disc__bd { gap: var(--tl-space-3); padding-top: var(--tl-space-3); }
+  /* The spine's group rule sits centred in the body's gap, so when the gap
+     compacts the channel around the hairline has to compact with it — otherwise
+     three groups grow 24px of air back on the shortest screens, which is exactly
+     where the panel could least afford it. */
+  .tl-panel__bd { --tl-group-pad: var(--tl-space-3); }
 }
 
 /* ── THE OVERFLOW, MADE LEGIBLE — AT EVERY WIDTH NOW ──────────────────────────
@@ -1466,9 +1471,12 @@ body.tl-dragging { cursor: grabbing; }
 
 /* Slice mode owns the time axis while it is on, so the cut is inert — and says
    so, rather than silently doing nothing. Same the other way round. */
+/* The transport is NOT in this list any more, and that is a fix rather than an
+   omission: it moved up to WHERE YOU ARE, and while it lived in here
+   pointer-events:none made the one control that TURNS SLICE MODE ON unclickable
+   until slice mode was already on. */
 #cubeCutRow[data-off="true"] .tl-cutrange,
 #cubeCutRow[data-off="true"] .tl-toggle,
-#cubeSliceRow[data-off="true"] .tl-transport,
 #cubeSliceRow[data-off="true"] input[type=range] {
   opacity: .4;
   pointer-events: none;

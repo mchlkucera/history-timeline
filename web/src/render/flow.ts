@@ -644,11 +644,34 @@ export const Flow = Ribbons({
  *  sets of words — and neither of them may hardcode a resting label, because the label
  *  names the mode a click would GO TO, which is a function of the live mode and nothing
  *  else. Braid's button is minted in braid.ts and lands here for its wording. */
-export function labelModeButton(btn: HTMLButtonElement, mode: string) {
-  btn.textContent = mode === 'norm' ? 'Absolute scale' : 'Share of world';
-  btn.title = mode === 'norm'
-    ? 'Every year fills the plate — thickness is a share of that year’s world. Switch to one fixed scale for the whole span.'
-    : 'One fixed scale for the whole span — equal weight, equal thickness in every year. Switch to each year filling the plate.';
+/* THE SCALE SWITCH — ONE IMPLEMENTATION, TWO VIEWS.
+   "We should separate view control and toggling of the view (relative/absolute)."
+
+   It used to be a single .btn whose label named the mode you were NOT in: the
+   plate showed shares of the world and the button said "Absolute scale". That
+   is a fine idiom for an action and a bad one for a STATE, and this is a state —
+   it is the answer to "what does thickness mean here", which is the most
+   important sentence on the view. A reader who wanted to know had to reason
+   backwards from a verb.
+
+   So it is a two-item .tl-seg, both readings on screen, aria-pressed carrying
+   which one is live — the same shape as the Cube's Projection and Habitation's
+   Detail, in the same spine group on both views that have it. This function
+   binds and paints one; Flow and Braid each hand it their own mode accessor, so
+   the pair cannot drift apart. Null-safe: a view may drop the control. */
+export function bindModeSeg(sel: string, get: () => string, set: (m: string) => void) {
+  const el = document.querySelector<HTMLElement>(sel); if (!el) return;
+  const paint = () => el.querySelectorAll<HTMLElement>('[data-v]').forEach(b => {
+    const on = b.dataset.v === get();
+    b.setAttribute('aria-pressed', String(on));
+    b.title = b.dataset.v === 'norm'
+      ? 'Every year fills the plate — thickness is a share of that year’s world.'
+      : 'One fixed scale for the whole span — equal weight, equal thickness in every year.';
+  });
+  el.querySelectorAll<HTMLElement>('[data-v]').forEach(b => {
+    b.addEventListener('click', () => { set(b.dataset.v!); paint(); });
+  });
+  paint();
 }
 
 export const REGIONNAMES: Record<string, string> = { EU: 'Europe', ME: 'MidEast & Africa', AS: 'Asia', AM: 'Americas & Oceania', AF: 'Africa' };
@@ -769,24 +792,18 @@ export function initFlow() {
   Flow.items = POLITIES;
   Flow.init();
   buildRegionRow();
-  // Reset the query too: "Follow Rome" is a framing, and arriving at year -300
-  // with two thirds of the plate still dimmed by a stale filter reads as broken.
-  $('#flowRome')!.addEventListener('click', () => { Flow.setQuery(''); Flow.animTo(-300, 900); });
-  $('#flowSplit')!.addEventListener('click', () => Flow.animTo(180, 820));
+  /* #flowRome AND #flowSplit ARE GONE, HANDLERS AND MARKUP TOGETHER.
+     "Follow rome and great split - remove." They were two hardcoded flights —
+     to 300 BCE–900 and to 180–820 — kept from the prototype, when this view had
+     no other way in. It has one now: search reaches all 147 polities, and taking
+     one frames its ribbon and lights it. A button that can only ever mean one
+     year cannot compete with a field that means any of them, and the pair were
+     eating the top row of the instrument to say it.
+
+     Reset survives them, because reset is the row that lets a reader get lost on
+     purpose and come back — the one framing verb every view in the app has. */
   $('#flowAll')!.addEventListener('click', () => Flow.animTo(-1200, 2026));
-  /* THE BUTTON NAMES WHAT A CLICK WILL DO, not what is on the plate — so its resting
-     label is the OTHER mode. Lab.tsx ships it reading "Absolute scale", which was right
-     while this view booted in share-of-world and is a lie the moment the default changes.
-     The label is therefore written from the LIVE mode at init, by the same expression the
-     click uses, and there is nothing left to keep in step by hand. */
-  const modeBtn = $<HTMLButtonElement>('#flowMode')!;
-  const syncModeBtn = () => labelModeButton(modeBtn, Flow.mode);
-  syncModeBtn();
-  modeBtn.addEventListener('click', () => {
-    Flow.mode = Flow.mode === 'norm' ? 'abs' : 'norm';
-    syncModeBtn();
-    Flow.render();
-  });
+  bindModeSeg('#flowMode', () => Flow.mode, m => { Flow.mode = m as any; Flow.render(); });
   /* THIS VIEW NO LONGER HAS A SEARCH FIELD OF ITS OWN. #flowSearch and #flowCnt
      were a second, weaker search sitting three inches from the global one: they
      could only match a substring of a polity NAME, only inside this one view,

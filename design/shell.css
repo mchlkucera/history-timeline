@@ -674,6 +674,36 @@ button.tl-mark__word[aria-expanded="true"] .tl-mark__chev { transform: rotate(18
 .tl-panel[data-collapsed="true"] .tl-panel__hd { border-bottom-color: transparent; }
 .tl-panel__grip { display: none; }
 
+/*
+   ── THE SPINE. THREE GROUPS, ONE ORDER, EVERY VIEW ──────────────────────────
+
+   Every Controls panel answers the same three questions in the same order —
+   WHERE YOU ARE (reset, play, framing), HOW IT IS DRAWN (projection, scale,
+   detail), WHAT IS IN IT (regions, systems, filters) — and a view with no answer
+   to one of them omits the group rather than reshuffling the other two. That
+   omission is the whole point: Reset view is the first thing under the masthead
+   on Borders, Empires, Connections and the Cube because nothing can ever be
+   inserted above it, and nothing below it can push it down.
+
+   The hairline is the group boundary, and it is drawn by ADJACENCY rather than
+   by an <hr> a panel remembers to include — three panels used to carry a
+   .tl-hr in a different place each and two carried none at all. `gap: inherit`
+   keeps a group's internal rhythm identical to the body's, including inside the
+   max-height:820px compaction in app.css, so introducing the wrapper cost the
+   layout nothing: the panel/canvas geometry lock stays at 0.000px.
+*/
+.tl-group { display: flex; flex-direction: column; gap: inherit; }
+/* The masthead — the group's view switch — is not part of the spine: it chooses
+   WHICH VIEW rather than saying anything about this one, so it sits above the
+   first group, on the far side of the same hairline. The flex gap already puts
+   space ABOVE the line; the padding puts the same space below it, so the rule
+   sits centred in the channel rather than crowding the row it introduces. */
+.tl-group + .tl-group,
+.tl-field-group + .tl-group {
+  border-top: var(--tl-border) solid var(--tl-rule-soft);
+  padding-top: var(--tl-group-pad, var(--tl-space-5));
+}
+
 .tl-field-group { display: flex; flex-direction: column; gap: var(--tl-space-3); }
 .tl-field-group > .tl-label { margin-bottom: var(--tl-space-1); }
 .tl-cluster { display: flex; flex-wrap: wrap; gap: var(--tl-space-3); }

@@ -20,7 +20,8 @@
 // The grid is deliberately visible (discrete cells, "Plate") so the reader can see the
 // resolution of the claim. "Field" smooths it for legibility; it is the same numbers.
 //
-// DOM ids: popCanvas / popCap / popPanel / popYear / popSlider / popPlay, with the
+// DOM ids: popCanvas / popCap / popYear / popSlider / popPlay / popDetail / popStyle /
+// popNames, with the
 // legacy carto* ids accepted as a fallback so this survives the shell rewrite either way.
 
 import {
@@ -548,7 +549,7 @@ export const Pop = {
         w.play = true;
       }
     }
-    if (!w.panel) w.panel = this.buildPanel(this.el('#popPlay', '#cartoPlay'));
+    if (!w.panel) w.panel = this.bindPanel();
     return true;
   },
   // The label text of #popPlay is ours, but only if it is a text button. If the shell
@@ -558,37 +559,43 @@ export const Pop = {
     pl.setAttribute('aria-pressed', on ? 'true' : 'false');
     if (!pl.firstElementChild) pl.textContent = on ? 'Pause' : 'Play';
   },
-  buildPanel(playBtn: HTMLElement | null): boolean {
-    const host = $('#popPanel') || (playBtn ? playBtn.parentElement : null);
-    if (!host) return false;
-    if (host.querySelector('[data-pop]')) return true;
-    const row = (label: string, opts: [string, string, string][], get: () => string, set: (v: string) => void) => {
-      const d = document.createElement('div');
-      d.style.cssText = 'display:flex;gap:6px;align-items:center;flex-wrap:wrap;margin-top:6px';
-      const l = document.createElement('span');
-      l.className = 'note'; l.textContent = label; l.style.cssText = 'min-width:44px';
-      d.appendChild(l);
-      for (const [val, txt, title] of opts) {
-        const b = document.createElement('button');
-        b.type = 'button'; b.className = 'chip' + (get() === val ? ' on' : '');
-        b.textContent = txt; b.title = title; b.dataset.pop = label;
-        b.addEventListener('click', () => {
-          set(val);
-          d.querySelectorAll('.chip').forEach(c => c.classList.remove('on'));
-          b.classList.add('on');
-          this.render();
-        });
-        d.appendChild(b);
-      }
-      host.appendChild(d);
+  /* THE PANEL IS DECLARED, NOT MINTED.
+     This used to appendChild() three rows of its own into #popPanel, built from
+     `display:flex;gap:6px;align-items:center` and a .note masquerading as a
+     field label — which is why Detail, Style and Names sat out of step with
+     every declared row above them and in an order no file stated. Lab.tsx
+     declares them now, in the two spine groups they belong to (Detail and Style
+     under HOW IT IS DRAWN, Names under WHAT IS IN IT), wearing .tl-field-group
+     and .tl-seg like every other control in the app.
+
+     What is left here is what genuinely lives here: the STATE. `step`, `style`
+     and `names` are this object's, so this object binds the switches and paints
+     them — the same division of labour cube.ts has always had. Both helpers are
+     null-safe, so the view still boots if a control is ever taken away. */
+  bindPanel(): boolean {
+    const seg = (sel: string, set: (v: string) => void) => {
+      const el = $(sel); if (!el) return false;
+      el.querySelectorAll<HTMLElement>('[data-v]').forEach(b => {
+        b.addEventListener('click', () => { set(b.dataset.v!); this.paintPanel(); this.render(); });
+      });
+      return true;
     };
-    row('Detail', [['4', 'Coarse', '4° cells'], ['2', 'Medium', '2° cells'], ['1', 'Fine', '1° cells']],
-      () => String(this.step), v => { this.step = +v; });
-    row('Style', [['plate', 'Plate', 'One square per cell — the resolution of the claim is visible'], ['field', 'Field', 'The same numbers, smoothed']],
-      () => this.style, v => { this.style = v as any; });
-    row('Names', [['1', 'On', ''], ['0', 'Off', '']],
-      () => (this.names ? '1' : '0'), v => { this.names = v === '1'; });
-    return true;
+    const ok = seg('#popDetail', v => { this.step = +v; })
+      && seg('#popStyle', v => { this.style = v as any; });
+    const names = $<HTMLInputElement>('#popNames');
+    names?.addEventListener('change', () => { this.names = names.checked; this.render(); });
+    this.paintPanel();
+    return ok;
+  },
+  /** aria-pressed carries which item of a .tl-seg is live — nothing else does. */
+  paintPanel() {
+    const mark = (sel: string, value: string) => {
+      $(sel)?.querySelectorAll<HTMLElement>('[data-v]')
+        .forEach(b => b.setAttribute('aria-pressed', String(b.dataset.v === value)));
+    };
+    mark('#popDetail', String(this.step));
+    mark('#popStyle', this.style);
+    const names = $<HTMLInputElement>('#popNames'); if (names) names.checked = this.names;
   },
 
   // Read-only probe: no repaint, so hovering a 15,000-cell field stays free.

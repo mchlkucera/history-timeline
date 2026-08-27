@@ -36,6 +36,9 @@ const REGION: Record<string, string> = {
 const REG_ORDER = ['EU', 'ME', 'AF', 'AS', 'AM'];
 
 /** the resting state — here, not in the engine, for the same erasure reason */
+/** The opacity the ghost slider shipped at, and now the "on" side of its toggle. */
+const GHOST_ON = 0.16;
+
 const INITIAL: CubeState = {
   polity: 'roman-republic', lineage: 3, mode: 'lofted', ghost: 0.16, spacing: 'even',
   res: 'normal', outlines: false, ghostLines: true, cutLo: 0, cutHi: 1, caps: true,
@@ -102,15 +105,18 @@ export const Cube = {
       });
     });
 
-    // ghost ------------------------------------------------------------------
+    /* THE GHOST IS A SWITCH NOW, NOT A DIAL. It was an <input type=range> from
+       0 to 0.55 with a numeric readout — a continuous preference for how faint
+       the background world is, when the only two answers anyone ever wanted were
+       "show me where this is" and "get out of the way". GHOST_ON is the value the
+       slider shipped at, so the default picture is unchanged. */
     const ghost = $<HTMLInputElement>('#cubeGhost');
-    ghost?.addEventListener('input', () => {
-      this.S.ghost = +ghost.value; E()?.applyGhost(); this.paintGhost();
+    ghost?.addEventListener('change', () => {
+      this.S.ghost = ghost.checked ? GHOST_ON : 0; E()?.applyGhost(); this.paintDisc();
     });
 
     // the cut ----------------------------------------------------------------
     this.bindCut();
-    this.toggle('#cubeCaps', v => { this.S.caps = v; E()?.setCaps(v); });
 
     // single slice -----------------------------------------------------------
     this.toggle('#cubeSlice', v => {
@@ -134,13 +140,12 @@ export const Cube = {
       });
     });
 
-    // the small toggles ------------------------------------------------------
+    /* THE SMALL TOGGLE. One left of three: "Cap the cut", "Ghost coastlines"
+       and "Auto-orbit" are gone from the panel — each was a setting with a sane
+       default, none had a keyboard route, and all three keep that default in
+       CubeState, so the block draws exactly as it did. Snapshot outlines earns
+       its row: it is the only control that says what the block is MADE of. */
     this.toggle('#cubeOutlines', v => { this.S.outlines = v; E()?.buildEmpire(); });
-    this.toggle('#cubeGhostLines', v => {
-      this.S.ghostLines = v;
-      const e = E(); if (e) { e.applyGhost(); if (this.S.slice) e.applySlice(); }
-    });
-    this.toggle('#cubeSpin', v => { this.S.spin = v; E()?.setSpin(v); });
 
     // Canvas text does not reflow when a webfont lands, and the block's year
     // labels are canvas textures — so redraw them when the faces arrive.
@@ -259,9 +264,15 @@ export const Cube = {
       b.addEventListener('click', () => { on(b.dataset.v!); this.paint(); });
     });
   },
+  /* …AND THE SUMMARY IS REPAINTED AFTER EVERY ONE OF THEM. The rule for a
+     folded control is that it may be out of sight only while it is at rest, and
+     .tl-disc__v is how a closed group says what is awake inside it — but nothing
+     called paintDisc() when a checkbox changed, so "outlines" and "no ghost"
+     could be true with the group closed and silent about it. The segs already
+     repainted through paint(); the toggles do now too. */
   toggle(sel: string, on: (v: boolean) => void) {
     const el = $<HTMLInputElement>(sel); if (!el) return;
-    el.addEventListener('change', () => on(el.checked));
+    el.addEventListener('change', () => { on(el.checked); this.paintDisc(); });
   },
   paintSeg(sel: string, value: string | number) {
     $(sel)?.querySelectorAll<HTMLElement>('[data-v]')
@@ -370,10 +381,8 @@ export const Cube = {
     this.paintSeg('#cubeSpacing', S.spacing);
     const lin = $('#cubeLineageV');
     if (lin) lin.textContent = S.lineage ? `${S.lineage} link${S.lineage > 1 ? 's' : ''}` : 'single';
-    const g = $<HTMLInputElement>('#cubeGhost'); if (g) g.value = String(S.ghost);
-    this.paintGhost();
-    for (const [id, v] of [['#cubeCaps', S.caps], ['#cubeSlice', S.slice], ['#cubeOutlines', S.outlines],
-      ['#cubeGhostLines', S.ghostLines], ['#cubeSpin', S.spin]] as [string, boolean][]) {
+    for (const [id, v] of [['#cubeGhost', S.ghost > 0.005], ['#cubeSlice', S.slice],
+      ['#cubeOutlines', S.outlines]] as [string, boolean][]) {
       const el = $<HTMLInputElement>(id); if (el) el.checked = v;
     }
     const idx = $<HTMLInputElement>('#cubeSliceIdx'); if (idx) idx.value = String(S.sliceI);
@@ -404,10 +413,8 @@ export const Cube = {
       S.proj !== D.proj ? 'isometric' : '',
       S.res !== D.res ? S.res : '',
       S.spacing !== D.spacing ? 'true years' : '',
-      Math.abs(S.ghost - D.ghost) > 0.005 ? 'ghost ' + S.ghost.toFixed(2) : '',
+      S.ghost > 0.005 ? '' : 'no ghost',
       S.outlines ? 'outlines' : '',
-      S.ghostLines === D.ghostLines ? '' : 'no coastlines',
-      S.spin ? 'orbiting' : '',
     ].filter(Boolean);
     const cut = [cutOn ? 'cut' : '', sliceOn ? 'slice' : ''].filter(Boolean);
     const set = (id: string, parts: string[], rest: string) => {
@@ -420,8 +427,6 @@ export const Cube = {
     set('cubeDiscCut', cut, 'whole block');
     set('cubeDiscView', view, '');
   },
-
-  paintGhost() { const v = $('#cubeGhostV'); if (v) v.textContent = this.S.ghost.toFixed(2); },
 
   paintPlay() {
     const b = $<HTMLButtonElement>('#cubePlay'); if (!b) return;

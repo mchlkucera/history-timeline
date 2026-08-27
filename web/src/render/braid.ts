@@ -2,7 +2,7 @@
 // ================= ⑥a BRAIDED RIVERS =================
 // Ported verbatim from prototypes/partB.html — the same Ribbons engine as ③.
 import { $, BELIEFS } from './shared';
-import { labelModeButton, Ribbons } from './flow';
+import { bindModeSeg, Ribbons } from './flow';
 
 // selKind 'belief': a braid stream is a belief, not a polity, and the card already
 // describes 'belief:<id>'. Everything else — the fixed absolute reference, the click
@@ -18,31 +18,19 @@ export const Braid = Ribbons({
   canvas: '#braidCanvas', d0: -1000, d1: 2026, height: 440, mode: 'abs', colorBy: 'root', selKind: 'belief',
 });
 
-/* THE MODE TOGGLE, MINTED HERE. Lab.tsx owns the Controls panel and gave Braid a
-   "Reset view" cluster but no scale switch; this appends a second button into that
-   existing cluster — the same posture flow.ts takes with #flowRegionRow, append only,
-   never restructure — so Beliefs ends up with the pair Empires already has, in the same
-   corner, wearing the same words. The panel is addressed by what Lab declares about it
-   (data-panelfor / aria-label) rather than by a class chain, so a re-skin of the panel
-   cannot silently drop the control. */
-function buildBraidMode() {
-  const bd = document.querySelector<HTMLElement>('aside[data-panelfor~="braid"][aria-label="Controls"] .tl-panel__bd');
-  if (!bd) return;
-  let btn = bd.querySelector<HTMLButtonElement>('#braidMode');
-  if (!btn) {
-    const cluster = bd.querySelector<HTMLElement>('.tl-cluster');   // the row Reset view stands in
-    if (!cluster) return;
-    btn = document.createElement('button');
-    btn.type = 'button'; btn.className = 'btn'; btn.id = 'braidMode';
-    cluster.appendChild(btn);
-    btn.addEventListener('click', () => {
-      Braid.mode = Braid.mode === 'norm' ? 'abs' : 'norm';
-      labelModeButton(btn!, Braid.mode);
-      Braid.render();
-    });
-  }
-  labelModeButton(btn, Braid.mode);                                 // …and never a hardcoded resting label
-}
+/* THE MODE TOGGLE IS NO LONGER MINTED HERE.
+
+   This file used to build its own scale button at runtime: it went looking for
+   `aside[data-panelfor~="braid"] .tl-panel__bd`, found the first .tl-cluster in
+   it, and appended a second .btn into whatever row that happened to be. It did
+   that because Lab.tsx had given Braid a Reset cluster and no scale switch — one
+   of the two views on the same engine had the control and the other did not.
+
+   That is exactly the fragmentation this round set out to end. Lab.tsx declares
+   the switch now, in the HOW IT IS DRAWN group where Empires keeps its identical
+   one, and this file binds it — the honest division: the shell owns the shape of
+   the panel, the renderer owns the state behind it. bindModeSeg is flow.ts's, so
+   there is literally one implementation of "relative or absolute" in the app.  */
 
 /* ── WHERE EACH BELIEF SYSTEM OPENS ────────────────────────────────────────────
    A property OF THE SYSTEM, not a branch inside a click handler: the framing is a fact
@@ -81,13 +69,18 @@ const OPENS_UNTIL = 2026;
 
 export function initBraid() {
   Braid.init();
-  buildBraidMode();
+  bindModeSeg('#braidMode', () => Braid.mode, m => { Braid.mode = m as any; Braid.render(); });
   const pick = (id: string) => {
     const sys = (BELIEFS.systems || []).find((s: any) => s.id === id);
     Braid.items = sys ? sys.streams : [];
     Braid.d0 = OPENS_AT[id] ?? -1000; Braid.d1 = OPENS_UNTIL;
     $('#braidNote')!.textContent = sys ? `${sys.label} · ${sys.streams.length} streams` : 'no data';
-    document.querySelectorAll<HTMLElement>('[data-braid]').forEach(b => b.classList.toggle('hero', b.dataset.braid === id));
+    // A .tl-seg carries its selection in aria-pressed, like every other
+    // exclusive choice in the app. It used to be a .hero class on a .btn, which
+    // put an accent on a panel control — and an accent means "where you are in
+    // TIME" here, nothing else.
+    document.querySelectorAll<HTMLElement>('[data-braid]')
+      .forEach(b => b.setAttribute('aria-pressed', String(b.dataset.braid === id)));
     Braid.render();
   };
   document.querySelectorAll<HTMLElement>('[data-braid]').forEach(b => b.addEventListener('click', () => pick(b.dataset.braid!)));
