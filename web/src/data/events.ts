@@ -63,7 +63,16 @@ export const EVENTS: TLEvent[] = [
 [1492,0,"Columbus reaches the Americas","EU",2,"exploration spain"],
 [1517,0,"Luther's 95 theses — Reformation","EU",2,"religion reformation"],
 [1588,0,"Spanish Armada defeated","EU",4,"spain england war"],
-[1618,1648,"Thirty Years' War","EU",3,"war religion germany"],
+// IMPORTANCE 2, NOT 3, AND THE REASON IS THE LAYER MODEL. facetOf() gives every
+// cat=war mark to its region's Wars facet exclusively, and `eu-war` is a library
+// layer — not on the spine. Essentials adopts a region's war SPANS back, but only
+// at importance 1–2 (layers.ts, "THE FOUNDER BAR"), so at 3 this was the defining
+// event of its own century with no lane on the default board to draw it: stand at
+// 1620 on a fresh install and the Thirty Years' War is nowhere. It is not a
+// borderline call at that tier either — it killed something like a third of the
+// German population and ended in the Westphalia settlement the corpus already
+// carries. Nothing else about the row changes; it is still a war, still in Wars.
+[1618,1648,"Thirty Years' War","EU",2,"war religion germany"],
 [1618,0,"Defenestration of Prague","EU",4,"prague czech war"],
 [1642,1651,"English Civil War","EU",4,"england war"],
 [1683,0,"Ottomans turned back at Vienna","EU",4,"ottoman austria war"],
@@ -110,10 +119,17 @@ export const EVENTS: TLEvent[] = [
 [1948,0,"State of Israel founded","ME",3,"israel"],
 [1960,0,"Year of Africa — 17 nations born","ME",2,"africa independence"],
 [1994,0,"Mandela elected president","ME",3,"africa south-africa"],
-[-2600,-1900,"Indus Valley civilization","AS",3,"india bronze"],
+// A LIFE BAR ALREADY HAS TWO END CAPS, and they are the birth and the death.
+// "Buddha born" (-563) and "Confucius born" (-551) sat here as moments beside
+// the LIVES rows for the same two men, at the same year, in the same band — a
+// dot drawn on the left cap of a bar that was already on the board, and two
+// rows in the search dropdown for one person. They are gone; the life bars in
+// data/lives.json carry the same dates at a STRONGER importance (2 against 3),
+// so nothing left the board. A birth or death earns its own row only when it
+// says something the bar cannot — "Bach & Handel born" names a second man the
+// corpus holds no life for, and "Bach dies — Baroque ends" dates a period.
+[-2600,-1900,"Indus Valley Civilisation","AS",3,"india bronze"],
 [-1600,-1046,"Shang dynasty — Chinese writing","AS",3,"china bronze writing"],
-[-563,0,"Buddha born","AS",3,"india buddhism religion"],
-[-551,0,"Confucius born","AS",3,"china philosophy"],
 [-321,-185,"Maurya Empire unites India","AS",3,"india empire"],
 [-268,0,"Ashoka turns to Buddhism","AS",3,"india buddhism"],
 [-221,0,"Qin unifies China","AS",2,"china empire"],
@@ -171,12 +187,8 @@ export const EVENTS: TLEvent[] = [
 [1685,0,"Bach & Handel born","MU",3,"music baroque bach"],
 [1723,0,"Vivaldi's Four Seasons","MU",5,"music baroque"],
 [1750,0,"Bach dies — Baroque ends","MU",4,"music baroque bach"],
-[1756,0,"Mozart born","MU",3,"music classical mozart"],
-[1770,0,"Beethoven born","MU",4,"music beethoven"],
-[1791,0,"Mozart dies at 35","MU",4,"music mozart"],
 [1804,0,"Eroica — Romanticism opens","MU",4,"music beethoven romanticism"],
 [1824,0,"Beethoven's Ninth","MU",4,"music beethoven"],
-[1841,0,"Dvořák born","MU",5,"music czech dvorak"],
 [1874,0,"Smetana begins Má vlast","MU",5,"music czech smetana prague"],
 [1877,0,"Recorded sound (phonograph)","MU",4,"music technology"],
 [1913,0,"Rite of Spring riot","MU",4,"music stravinsky modernism"],
@@ -235,6 +247,52 @@ export const EVENTS: TLEvent[] = [
 [1788,0,"Last three symphonies in six weeks","MZ",4,"mozart symphony"],
 [1791,0,"Magic Flute · unfinished Requiem · dies Dec 5","MZ",4,"mozart death requiem"]
 ];
+
+/* =============================================================================
+   NOTES — the one line the card prints under the dates.
+
+   THE GAP THIS FILLS. Every curated dataset in the corpus carries a note and
+   fills it: 147 of 147 polities, 20 of 20 spreads, 461 of 461 curated lane
+   members. The EVENTS tuple has no note slot at all, and neither does a LIVES
+   row (data/lives.json is merged in as six columns), so the card drew a blank
+   where the description belongs for all 242 of them — the founder found it on
+   Mozart and on "Germany unified", but it was every event and every life.
+
+   KEYED BY TITLE, because that is how this corpus already joins: CATMAP,
+   PLACEMAP and overrides.json's rename/recat/retype all key on the title
+   string, and describe() has the title in hand. A lane member's own note still
+   wins — it is authored beside the row it belongs to.
+
+   THE REGISTER IS THE LANE NOTES', not the map capsules'. Both exist in this
+   file, and they are read in different places: a capsule is a paragraph about a
+   whole world at one date, and it is prose. This slot is the same slot a lane
+   note lands in, on the same card, in the same typeface — so it is a lowercase
+   fragment, one fact, no closing full stop, and it never repeats the title.
+
+   NOT A BACKLOG. This is deliberately partial: it holds the rows a reader is
+   most likely to stop on, and a row with no entry prints nothing rather than
+   printing filler. Adding one is a curatorial act, not a chore.
+============================================================================= */
+export const NOTES: Record<string, string> = {
+// ── lives ──
+"Wolfgang Amadeus Mozart":"a touring child prodigy, dead at 35 and in debt, having remade opera, concerto and symphony at once",
+"Ludwig van Beethoven":"went deaf in the middle of it and kept writing; the hinge between the Classical and the Romantic",
+"Antonín Dvořák":"carried Bohemian tunes into the symphony, and took the argument to New York",
+"The Buddha":"renounced a north Indian princedom for the middle way; the dates are traditional and argued over by a century",
+"Confucius":"an advisor no ruler would keep, whose pupils' notes became the Chinese state's textbook for two thousand years",
+"Laozi":"the Tao Te Ching's traditional author; the man may be a composite of several, and the dates are convention rather than record",
+// ── events ──
+"Germany unified":"proclaimed at Versailles with the war against France still running: a new great power in the middle of Europe",
+"Thirty Years' War":"the last of Europe's wars of religion and the worst of them; a third of Germany's people gone, and Westphalia at the end of it",
+"Black Death kills a third of Europe":"plague carried west by Genoese galleys; wages rise for the survivors, and serfdom starts to come apart",
+"World War I":"four empires gone, some nine million soldiers dead, and a peace that set the next war's terms",
+"World War II":"the deadliest event in human history — around sixty million dead — and the two superpowers that came out of it",
+"Writing invented (Sumer)":"clay tablets keeping temple accounts; the first records that outlive the people who made them",
+"Farming begins":"the Fertile Crescent trades mobility for surplus, and everything crowded follows — villages, states, plagues",
+"Homo sapiens appears":"anatomically modern humans in Africa, sharing the planet with at least four other kinds of human",
+"Big Bang":"not an explosion in space but the expansion of space itself, dated by the light still arriving from it",
+};
+
 export const CAPSULES: Record<string, string> = {
 "-3000":"First cities. Writing is brand new in Sumer, Egypt has just been unified, the Great Pyramid isn't built yet. Almost everyone else on the planet: hunter-gatherers and early farmers.",
 "-1000":"Iron is replacing bronze after the Bronze Age collapse. David's Jerusalem, Zhou China, and Phoenician traders carrying the new alphabet around the Mediterranean.",

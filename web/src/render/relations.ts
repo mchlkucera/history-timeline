@@ -9,6 +9,14 @@
 import {
   BELIEFS, EVENTS, POLITIES, SelStore, type Tokens, clamp, evId, fmtY, tokens,
 } from './shared';
+// The ONE rule for how long a belief stream lasted — a stream's row stops at a
+// schism, and `end` there is the end of its undivided phase, not its death.
+// The search reads its dates from this directory rather than from describe(),
+// so without this the dropdown would still offer "Islam 610 – 632" under a card
+// that had been fixed. Imported as a FUNCTION and called only from inside
+// buildRelIndex(), so the subject.ts ↔ relations.ts pair has nothing to
+// evaluate at module load and the cycle is inert.
+import { beliefLifeEnd } from './subject';
 
 // ---------- the data contract (data/relations/SCHEMA.md) ----------
 export interface Spread {
@@ -100,7 +108,7 @@ export function buildRelIndex() {
   for (const s of REL.spreads) relDir.set('spread:' + s.id, { name: s.name, kind: 'spread', start: s.start, end: s.end, note: s.note || '' });
   for (const p of POLITIES) relDir.set('polity:' + p.id, { name: p.name, kind: 'polity', start: p.start, end: p.end, note: p.note || '' });
   for (const sys of (BELIEFS.systems || [])) for (const st of (sys.streams || []))
-    relDir.set('belief:' + st.id, { name: st.name, kind: 'belief', start: st.start, end: st.end, note: st.note || '' });
+    relDir.set('belief:' + st.id, { name: st.name, kind: 'belief', start: st.start, end: beliefLifeEnd(st.id), note: st.note || '' });
   for (const e of EVENTS) {                          // 'event:'/'entity:' by exact title, first-wins
     const id = evId(e);
     if (relDir.has(id)) continue;

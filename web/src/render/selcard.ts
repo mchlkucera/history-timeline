@@ -42,21 +42,47 @@
    first. The accent is still never spent on a button — minium means "where you
    are", and the focus ring is the card's only mark of it.
 
-   DEGRADATION is the difference between NEVER and NOWHERE. A life can never
-   have a territory and is not a polity, so Flow, Map and Cube are NOT RENDERED
-   for it — a permanently dead cell on all thirty-nine lives teaches the user
-   the app is broken. All three hang off the same test, `s.polity`, because
-   that is the one join all three views are reached through.
+   DEGRADATION IS ONE RULE, AND IT IS ABOUT WHAT PRESSING DOES.
+
+     · pressing it works, here and now        → a live cell
+     · pressing it works but has to TRAVEL    → a live cell, and the title says
+                                                where it will take you
+     · pressing it can do nothing, and no act
+       of the reader's could change that      → NO CELL AT ALL
+     · pressing it can do nothing YET, and
+       something outside the subject could
+       change that                            → the hatched cell, reason on it
+
+   A life can never have a territory and is not a polity, so Flow, Map and Cube
+   are not rendered for it — a permanently dead cell on all thirty-three lives
+   teaches the reader the app is broken. All three hang off the same test,
+   `s.polity`, because that is the one join all three views are reached through.
+
+   That same "permanently dead" reasoning had been quietly reversed in three
+   later cells, which hatched a NEVER instead of dropping it: Timeline for a
+   belief stream (on no lane, and no lane can be added that would draw one),
+   Flow for a polity carrying no weight curve, Map for a polity drawn in none
+   of the eighteen snapshots. The Buddhism card was the proof — a TIMELINE chip
+   you could focus and press, that did nothing, whose whole explanation lived in
+   a title attribute and a screen-reader span. The argument for hatching was
+   that hiding would imply the subject is the wrong KIND of thing for the view;
+   but the destination row is not a claim about kinds, it is a set of doors, and
+   a door that opens onto nothing is not a door. Those three now do not render.
+
+   ONE hatched state survives, and it is the recoverable one: the atlas is
+   fetched lazily and can fail, so a polity with real territory can be
+   temporarily unmappable through no fault of its own. Nothing about the subject
+   opens that door and nothing about the subject is what shut it — which is
+   exactly the "not now" the hatch was invented for.
 
    A polity that HAS territory is always reachable, whatever year you are on.
    Map used to hatch whenever the CURRENT year had no borders — Rome selected
    in 1783 — but with 18 atlas snapshots across five millennia that is the
    normal case for almost every polity almost all of the time, and it left the
-   map unreachable for a subject that is very much on it. The cell now travels:
-   it goes to the first snapshot the thing is actually drawn in, and its title
-   names that year before you press it. Only a polity drawn in NO snapshot is
-   still hatched, because there the door really does open onto nothing. Order is
-   never touched either way.
+   map unreachable for a subject that is very much on it. The cell travels
+   instead: it goes to the first snapshot the thing is actually drawn in, and
+   its title names that year before you press it. Order is never touched either
+   way — the group is built in a fixed order and only ever FILTERED.
 
    NOTHING IN HERE WRITES TimeStore. "Timeline" moves the timeline's WINDOW, and
    the year follows the window's centre by the global centre-year rule that lives
@@ -623,14 +649,12 @@ export const SelCard = {
     const el = this.el; if (!el) return;
     const s = describe(SelStore.id);
     if (!s) { this.hide(); return; }
-    const year = TimeStore.year;
     el.setAttribute('aria-label', s.name);
 
     const dates = s.end > s.start ? `${fmtBig(s.start)} – ${fmtY(s.end)}` : fmtBig(s.start);
     const band = bandLabel(s);
     const folded = foldedInto(s.id);
     const rels = topRelations(s.id, 4);
-    const total = relCount(s.id);
     const present = this.presence(s);
 
     // ── head: identity, then the measurement ───────────────────────────────
@@ -645,7 +669,7 @@ export const SelCard = {
       `<div class="tl-selcard__top">` +
       `<div class="tl-selcard__meta"${dot}>` +
       `<span class="tl-selcard__dot" aria-hidden="true"></span>` +
-      `<span><b>${esc(catLabel(s))}</b> · ${esc(typeLabel(s))}${band ? ' · ' + esc(band) : ''}</span>` +
+      `<span class="tl-selcard__kicker"><b>${esc(catLabel(s))}</b> · ${esc(typeLabel(s))}${band ? ' · ' + esc(band) : ''}</span>` +
       `</div>` +
       `<button type="button" class="tl-selcard__x" data-act="close" aria-label="Close" title="Close  Esc">` +
       `<svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5" aria-hidden="true">` +
@@ -653,15 +677,27 @@ export const SelCard = {
       `</div>` +
       `<h3 class="tl-selcard__name">${esc(s.name)}</h3>`;
 
-    // THE DATES. The miniature rail that used to sit above them — a scaled bar
-    // for the life with the global year as a minium index — is gone at the
-    // founder's request. It was the card's one graphic and it was carrying a
-    // fact the two lines below already state in words: the dates, the year you
-    // are on, and (on the map) whether anything of it is actually drawn there.
-    // A picture that only restates its own caption is decoration, and this card
-    // is read at a glance beside the thing it describes.
+    // THE DATES, AND ONLY THE SUBJECT'S. This line used to end with a second,
+    // unlabelled number flush right — TimeStore.year, in the same mono face at
+    // the same size, a hand's width from the subject's own dates. It read as a
+    // third date belonging to the subject, and it was usually a stale cursor
+    // from whatever gesture happened last: the Copernicus card (1473–1543)
+    // printed 1621, and "Germany unified" (1871) printed 1764.
+    //
+    // Dropped rather than labelled. It is not a fact about the subject, which
+    // is the only kind of fact in this block; the year is already engraved on
+    // the shell's rail at the foot of the window, with the SELECTION'S OWN SPAN
+    // drawn against it (#railSel), so nothing is lost; and where the year
+    // genuinely bears on the subject the card already says so in words on the
+    // presence line below ("not on the map at 1783 (nearest snapshot …)"). A
+    // label would have spent a line of the card's smallest block restating
+    // chrome that never leaves the screen.
+    //
+    // (The miniature rail that used to sit above these dates went earlier, at
+    // the founder's request, for the same reason: a picture that only restates
+    // its own caption is decoration.)
     html += `<div class="tl-selcard__span" data-kind="${s.end === s.start ? 'moment' : 'span'}">` +
-      `<div class="tl-selcard__ends"><b>${esc(dates)}</b><span>${esc(fmtY(year))}</span></div>` +
+      `<div class="tl-selcard__ends"><b>${esc(dates)}</b></div>` +
       (present ? `<div class="tl-selcard__present">${esc(present)}</div>` : '') +
       `</div>`;
 
@@ -749,31 +785,27 @@ export const SelCard = {
   dests(s: Subject): Dest[] {
     const out: Dest[] = [];
 
-    // TIMELINE — always, for everything with a curated span. It is the only
-    // destination that exists for every object in the corpus. (A bare border
-    // feature has no span of its own worth framing — its dates ARE one
-    // snapshot's stratum — so it is suppressed there exactly as it always was.)
-    if (!s.minimal) {
+    // TIMELINE — for everything the timeline could ever draw, which is all but
+    // two kinds of subject. A bare border feature has no span of its own worth
+    // framing (its dates ARE one snapshot's stratum), and a belief stream is
+    // drawn by no lane at all; everything else in the corpus reaches it.
+    //
+    // NEVER IS NOT RENDERED. A subject whose lane is merely absent or
+    // under-detailed is NOT NOW — pressing this adds it (see act('persp')), so
+    // the cell stays live. A belief stream is on no lane at all and no lane can
+    // be added that would draw it, so the cell is DROPPED rather than hatched:
+    // hatching it printed a permanently dead control whose only explanation was
+    // a title attribute and a screen-reader span, on the one card where the row
+    // is otherwise all live. (Without the guard this framed five thousand empty
+    // years, which is the phantom zoom the search box was fixed for.)
+    if (!s.minimal && planReveal(s.id).need !== 'never') {
       const [a0, a1] = perspectiveSpan(s);
       const deep = fmtBig(a0) !== fmtY(a0);            // beyond 20,000 years
-      // NEVER vs NOT NOW, in the one cell where the difference had never been
-      // drawn. A subject whose lane is merely absent or under-detailed is
-      // NOT NOW — pressing this adds it (see act('persp')), so the cell
-      // stays live. A belief stream is on no lane at all and no lane can be
-      // added that would draw it: the door opens onto nothing, so it is shown
-      // SHUT with the reason on it, exactly as the Map cell is for a polity
-      // drawn in no snapshot. Otherwise this framed five thousand empty years,
-      // which is the phantom zoom the search box was fixed for.
-      const plan = planReveal(s.id);
-      const nowhere = plan.need === 'never';
       out.push({
         act: 'persp', label: 'Timeline',
-        title: nowhere
-          ? `${s.name} is ${plan.why || 'not drawn on this timeline'} — there is no lane to add`
-          : deep
-            ? `Frame the timeline on the ${a1 - a0} years around it`
-            : `Frame the timeline on ${fmtY(a0)} – ${fmtY(a1)} — what else was going on`,
-        off: nowhere,
+        title: deep
+          ? `Frame the timeline on the ${a1 - a0} years around it`
+          : `Frame the timeline on ${fmtY(a0)} – ${fmtY(a1)} — what else was going on`,
       });
     }
 
@@ -791,51 +823,48 @@ export const SelCard = {
     // destination is added. It is not the per-card reordering the header
     // forbids: [timeline, flow, map, cube] is now the order on EVERY card, and
     // a card without a polity still shows Timeline alone in the first slot.
-    if (!s.minimal && s.polity) {
-      const ribbon = isRibbon(s.polity);
+    // A polity the flow corpus does not carry has nothing behind this door at
+    // any year, any pan, any region, and nothing the reader can do changes
+    // that — so the cell is not rendered, by the same rule as Timeline above.
+    // (A polity whose REGION chip is merely switched off is the other case
+    // entirely: genuinely "not now", recoverable by the click itself, so the
+    // wiring travels there and the cell is live. Nothing transient is hidden,
+    // and nothing permanent is hatched.)
+    if (!s.minimal && s.polity && isRibbon(s.polity)) {
       out.push({
         act: 'flow', label: 'Flow',
-        title: ribbon
-          ? 'Follow its ribbon through the flow of empires — how its weight rose and fell against every other power'
-          : `${s.name} carries no weight curve, so it is drawn in the flow of empires as no ribbon`,
-        // NEVER vs NOT NOW, decided exactly as the Map cell decides it. A
-        // polity the flow corpus does not carry has nothing behind the door at
-        // any year, any pan, any region — so the door is shown SHUT, with the
-        // reason on it, rather than hidden: hiding would claim the subject is
-        // the wrong KIND of thing for this view, and it is not; it is the right
-        // kind with no data. (A polity whose REGION chip is merely switched off
-        // is the other case entirely — genuinely "not now", and recoverable by
-        // the click itself, so the wiring travels there and this cell stays
-        // live. Nothing transient is ever hatched.)
-        off: !ribbon,
+        title: 'Follow its ribbon through the flow of empires — how its weight rose and fell against every other power',
       });
     }
 
-    // MAP — only for something that HAS a territory, and hatched rather than
-    // hidden when that territory is empty at this year. Hiding it there would
-    // imply the subject never had a map presence, which is a lie about the
-    // corpus; the user has to be able to see that the door exists and is shut.
+    // MAP — only for something that HAS a territory the atlas actually draws.
+    //
+    // THE ONE SURVIVING HATCH, and the only door on this card that is shut on
+    // something a reader can wait out. The atlas is fetched lazily and can
+    // fail; the territory is still in the corpus, and the next ensureAtlas()
+    // may well bring it back — so the cell is rendered SHUT with the reason on
+    // it. A polity drawn in none of the eighteen snapshots is the other case:
+    // nothing opens that door, ever, so no cell is drawn for it at all.
+    //
+    // Neither of those is the ordinary case. Standing in the wrong century for
+    // a polity is not a shut door — the click TRAVELS to the snapshot the thing
+    // is actually drawn in (see act('map')), which is what keeps the map
+    // reachable across 5,000 years and 18 snapshots.
     if (!s.minimal && s.polity) {
-      const shown = territoryAt(s.polity, this.snapYear()).size;
-      const first = firstMapYear(s.polity);
-      out.push({
-        act: 'map', label: 'Map',
-        title: shown
-          ? 'Highlight its territory on the map, at the year you are already on'
-          : first !== null
-            ? `Not drawn at ${this.whenOnMap()} — go to ${fmtY(first)}, where its borders first appear`
-            : atlasState() === 'failed'
-            ? 'The atlas could not be loaded — the map is unavailable'
-            : `${s.name} is never drawn on any of the ${YEARS.length} atlas snapshots`,
-        // A DOOR IS ONLY SHUT WHEN THERE IS NOTHING BEHIND IT. This used to be
-        // shut whenever the CURRENT year had no borders, which made the map
-        // unreachable for a polity you were merely standing in the wrong century
-        // for — the overwhelmingly common case, since the atlas has 18 snapshots
-        // across 5,000 years. Now it is shut only when the thing is drawn in no
-        // snapshot at all, and otherwise the click travels to where it is (see
-        // act()). That is the difference between "not here" and "nowhere".
-        off: first === null,
-      });
+      const down = atlasState() === 'failed';
+      const first = down ? null : firstMapYear(s.polity);
+      if (down || first !== null) {
+        const shown = down ? 0 : territoryAt(s.polity, this.snapYear()).size;
+        out.push({
+          act: 'map', label: 'Map',
+          title: down
+            ? `The atlas could not be loaded — the map is unavailable`
+            : shown
+              ? 'Highlight its territory on the map, at the year you are already on'
+              : `Not drawn at ${this.whenOnMap()} — go to ${fmtY(first as number)}, where its borders first appear`,
+          off: down,
+        });
+      }
     }
 
     // CUBE — never disabled by the year: it traces the whole life as a solid.

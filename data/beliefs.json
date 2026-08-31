@@ -1,4 +1,5 @@
 {
+  "_note": "A stream's end is normally a death. \"divides\": true says it is a DIVISION instead — the tradition did not stop, it split into the streams in \"to\", and its span here is only its undivided phase. subject.ts follows it so a card never prints a fork year as an end.",
   "systems": [
     {
       "id": "religion",
@@ -89,6 +90,7 @@
           "name": "Christianity",
           "start": 30,
           "end": 451,
+          "divides": true,
           "weight": [[30, 0.1], [100, 0.3], [313, 2.5], [380, 4], [451, 5]],
           "from": ["judaism"],
           "to": ["chalcedonian-christianity", "oriental-orthodoxy", "church-of-the-east"],
@@ -99,6 +101,7 @@
           "name": "Chalcedonian Christianity",
           "start": 451,
           "end": 1054,
+          "divides": true,
           "weight": [[451, 3.8], [600, 3.4], [750, 2.8], [900, 3.2], [1054, 4]],
           "from": ["christianity"],
           "to": ["catholicism", "eastern-orthodoxy"],
@@ -129,6 +132,7 @@
           "name": "Catholicism",
           "start": 1054,
           "end": 1517,
+          "divides": true,
           "weight": [[1054, 2.4], [1200, 2.9], [1350, 2.6], [1450, 3], [1517, 3.4]],
           "from": ["chalcedonian-christianity", "european-paganism"],
           "to": ["roman-catholicism", "lutheranism", "reformed"],
@@ -239,6 +243,7 @@
           "name": "Islam",
           "start": 610,
           "end": 632,
+          "divides": true,
           "weight": [[610, 0.1], [622, 0.2], [632, 0.6]],
           "from": ["judaism", "oriental-orthodoxy"],
           "to": ["sunni-islam", "shia-islam"],
@@ -319,6 +324,7 @@
           "name": "Buddhism",
           "start": -500,
           "end": 100,
+          "divides": true,
           "weight": [[-500, 0.3], [-250, 1.4], [-100, 2.2], [100, 3]],
           "from": ["vedic-religion"],
           "to": ["theravada", "mahayana"],
@@ -402,7 +408,7 @@
           "weight": [[-350, 0.2], [142, 0.7], [750, 2.5], [1200, 1.9], [1600, 1.4], [1900, 0.9], [1970, 0.2], [2026, 0.8]],
           "from": ["chinese-folk-religion"],
           "to": [],
-          "note": "the Way and non-action; organised as a church from 142 and patronised by the Tang"
+          "note": "the Way and non-action, spelled Taoism in the older books; organised as a church from 142 and patronised by the Tang"
         },
         {
           "id": "shinto",
@@ -505,6 +511,7 @@
           "name": "Socialism",
           "start": 1800,
           "end": 1848,
+          "divides": true,
           "weight": [[1800, 0.1], [1825, 0.5], [1848, 1.4]],
           "from": ["liberalism"],
           "to": ["marxism", "anarchism"],
@@ -515,6 +522,7 @@
           "name": "Marxism",
           "start": 1848,
           "end": 1917,
+          "divides": true,
           "weight": [[1848, 0.4], [1871, 1], [1889, 2.2], [1917, 3]],
           "from": ["socialism", "classical-economics"],
           "to": ["marxism-leninism", "social-democracy"],

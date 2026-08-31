@@ -1,7 +1,10 @@
 {"_note":"Applied after the four classifier agents, from the taxonomy review of 19.8.2026. 'recat' moves events into the new 'reach' category (movement across the map: exploration, migration, colonisation, trade routes, first contact) — the review found this cluster scattered across nature/power/society by four independent classifiers. Independence events stay 'power': that is regime change, not movement. 'eras' exercises the 'era' shape, which the review noted was correct but unexercised and already hacked around via the CAPSULES structure.",
 
+"_rename_note":"A rename lets a title be edited in partA/events.ts without orphaning the classifier and geocoder joins, which stay keyed on the old string. 'Indus Valley civilization' was the event row's spelling while the polity said 'Indus Valley Civilisation' — one thing, two spellings, and links.json calls the pair same-as at weight 1.0. The search dedupes by name, so it could not tell they were the same and offered both, in two different lanes. The event now carries the polity's spelling, which is also the corpus's own: -isation throughout.",
+
 "rename":{
-  "French Revolution begins":"French Revolution"
+  "French Revolution begins":"French Revolution",
+  "Indus Valley civilization":"Indus Valley Civilisation"
 },
 
 "retype":{

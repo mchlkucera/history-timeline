@@ -19,6 +19,10 @@
    ============================================================================= */
 
 import { BELIEFS, EVENTS, GEO, PLACES, POLITIES, evId, CATBY, LANES, fmtY, pip, sharpnessOf, clamp } from './shared';
+// The event corpus's note table, keyed by title. Not routed through shared.ts:
+// nothing else needs it, and shared.ts re-exports EVENTS because every renderer
+// draws them — this is read in exactly one place, by describe().
+import { NOTES } from '@/data/events';
 import { REL, SPREADCAT, lvlOfWeight, peakOf, relDir, relIndex } from './relations';
 
 // ---------- the polity alias table ----------
@@ -186,6 +190,71 @@ const laneLabel = (k: string) =>
   ({ CO: 'Deep time', EU: 'Europe', ME: 'MidEast & Africa', AS: 'Asia', AM: 'Americas' } as Record<string, string>)[k]
   || LANES.find(l => l.key === k)?.label || k;
 
+/* ---------------------------------------------------------------------------
+   A FORK YEAR IS NOT AN END.
+
+   The belief corpus models a religion as a LINEAGE TREE, and a stream's row
+   ends where the tradition DIVIDES: Islam's stream runs 610–632 because at 632
+   it becomes Sunni and Shia, Christianity's runs 30–451 because Chalcedon
+   splits it three ways, Buddhism's runs −500–100. That is the right shape for
+   the braid, which draws the division as a fork and carries the daughters on.
+
+   It is a lie everywhere else. The card and the search row print `start – end`
+   as the subject's dates, so the top hit for "islam" read **Islam 610 – 632**
+   and the Buddhism card read **500 BCE – 100** — the product telling a reader
+   that the two largest religions on Earth are over. `end` there is the end of
+   the UNDIVIDED PHASE; the stream's own note says so ("undivided only while
+   Muhammad lived"), but nothing carried that into what the card claimed.
+
+   WHY THE RULE IS CURATED AND NOT STRUCTURAL. "Follow every child" is wrong:
+   Ancient Near Eastern polytheism is a parent of Judaism and did genuinely end
+   at 550, and Norse/Celtic/Slavic paganism hands its ground to Catholicism at
+   1054 without surviving it. "Follow children that begin exactly where the
+   parent stops" is also wrong — Vedic religion "dissolved into the questioning
+   age of the Upanishads" at −500, Enlightenment rationalism "ended as a
+   movement by becoming a revolution" in 1789, and both would be dragged to
+   2026 by their heirs. Whether an end is a death or a division is a historical
+   judgement, so it is stored as one: `"divides": true` in data/beliefs.json,
+   on the seven streams whose row stops at a schism (Christianity, Chalcedonian
+   Christianity, Catholicism, Islam, Buddhism, Socialism, Marxism).
+
+   Only what the card and the search row CLAIM changes. The tree is untouched,
+   `start` is untouched, and a stream without the flag keeps its honest end.
+--------------------------------------------------------------------------- */
+// Indexed by id so a fork can be followed without rescanning both systems.
+// The signature is the BELIEFS OBJECT ITSELF, not a count: shared.ts exports it
+// as a live `let` and initData() replaces it wholesale, so identity is exact and
+// free, and a hot reload that hands over a same-sized corpus still invalidates.
+let _streams: Map<string, any> | null = null;
+let _streamsOf: unknown = null;
+function streamIndex(): Map<string, any> {
+  if (!_streams || _streamsOf !== BELIEFS) {
+    _streamsOf = BELIEFS; _streams = new Map();
+    for (const sys of (BELIEFS.systems || [])) for (const st of (sys.streams || [])) _streams.set(st.id, st);
+  }
+  return _streams;
+}
+
+/**
+ * The last year this tradition is held to exist: its own `end` unless that end
+ * is a division, in which case the latest end of what it divided INTO. Depth
+ * first, with a seen-set, so a cycle in the corpus cannot hang the card.
+ */
+export function beliefLifeEnd(streamId: string, seen?: Set<string>): number {
+  const st = streamIndex().get(streamId);
+  if (!st) return 0;
+  if (!st.divides) return st.end;
+  const been = seen || new Set<string>();
+  if (been.has(streamId)) return st.end;
+  been.add(streamId);
+  let end = st.end;
+  for (const kid of (st.to || [])) {
+    const e = beliefLifeEnd(kid, been);
+    if (e > end) end = e;
+  }
+  return end;
+}
+
 export function describe(id: string | null): Subject | null {
   if (!id) return null;
 
@@ -225,9 +294,10 @@ export function describe(id: string | null): Subject | null {
   if (id.startsWith('belief:')) {
     for (const sys of (BELIEFS.systems || [])) for (const st of (sys.streams || [])) {
       if ('belief:' + st.id !== id) continue;
+      const end = beliefLifeEnd(st.id);
       return {
-        id, name: st.name, start: st.start, end: st.end, cat: 'belief', type: 'belief',
-        note: st.note || '', lvl: 3, peakYear: curvePeak(st.weight) ?? Math.round((st.start + st.end) / 2),
+        id, name: st.name, start: st.start, end, cat: 'belief', type: 'belief',
+        note: st.note || '', lvl: 3, peakYear: curvePeak(st.weight) ?? Math.round((st.start + end) / 2),
         hasCurve: curvePeak(st.weight) !== null, polity: null, band: null,
       };
     }
@@ -237,12 +307,19 @@ export function describe(id: string | null): Subject | null {
   if (ev) {
     const isMoment = !ev[1];
     const start = ev[0], end = isMoment ? ev[0] : ev[1];
-    // a curated lane member carries its note on the registry, not on the tuple
+    // WHERE AN EVENT'S NOTE COMES FROM. A curated lane member carries one on the
+    // registry, authored beside the row it belongs to, and that always wins. A
+    // plain EVENTS row and a LIVES row have no note slot in their tuple at all —
+    // which is why the card drew a blank gap under Mozart and under "Germany
+    // unified" — so they are joined to NOTES by title, the same way this corpus
+    // already joins its categories and its places. No entry means no note, and
+    // the card omits the paragraph rather than reserving space for it.
     let note = '';
     if (id.startsWith('lane:')) {
       const [, k, mid] = id.split(':');
       note = LANES.find(l => l.key === k)?.members?.find(m => m.id === mid)?.note || '';
     }
+    if (!note) note = NOTES[ev[2]] || '';
     return {
       id, name: ev[2], start, end, cat: ev[6] || 'power', type: ev[7] || (isMoment ? 'moment' : 'episode'),
       note, lvl: ev[4] || 3, peakYear: Math.round((start + end) / 2), hasCurve: false,

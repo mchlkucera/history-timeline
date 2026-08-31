@@ -139,7 +139,7 @@
    "kind": "lineage"
   },
   {
-   "a": "event:Indus Valley civilization",
+   "a": "event:Indus Valley Civilisation",
    "b": "spread:writing",
    "w": 0.35,
    "kind": "about"
@@ -1867,12 +1867,6 @@
    "kind": "origin"
   },
   {
-   "a": "event:Buddha born",
-   "b": "belief:buddhism",
-   "w": 0.9,
-   "kind": "origin"
-  },
-  {
    "a": "event:Qin unifies China",
    "b": "polity:qin-dynasty",
    "w": 1.0,
@@ -1941,12 +1935,6 @@
   {
    "a": "entity:Plato",
    "b": "event:Plato founds the Academy",
-   "w": 1.0,
-   "kind": "part-of"
-  },
-  {
-   "a": "entity:Wolfgang Amadeus Mozart",
-   "b": "event:Mozart born",
    "w": 1.0,
    "kind": "part-of"
   },
@@ -2029,12 +2017,6 @@
    "kind": "part-of"
   },
   {
-   "a": "entity:Antonín Dvořák",
-   "b": "event:Dvořák born",
-   "w": 1.0,
-   "kind": "part-of"
-  },
-  {
    "a": "lane:AR:renaissance",
    "b": "spread:renaissance",
    "w": 1.0,
@@ -2047,7 +2029,7 @@
    "kind": "same-as"
   },
   {
-   "a": "event:Indus Valley civilization",
+   "a": "event:Indus Valley Civilisation",
    "b": "polity:indus-valley-civilization",
    "w": 1.0,
    "kind": "same-as"

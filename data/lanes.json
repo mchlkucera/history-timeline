@@ -1956,6 +1956,20 @@
      "place": "Jerusalem"
     },
     {
+     "name": "Tao Te Ching",
+     "type": "spread",
+     "start": -400,
+     "end": -250,
+     "cat": "belief",
+     "imp": 4,
+     "sharpness": 0.15,
+     "tags": "tao taoism daoism daodejing laozi china text",
+     "note": "compiled from older sayings rather than written: the Guodian slips of about 300 BCE still have it in pieces",
+     "lat": 34.62,
+     "lon": 112.45,
+     "place": "Luoyang"
+    },
+    {
      "name": "Buddhist expansion across Asia",
      "type": "spread",
      "start": -250,
@@ -1968,6 +1982,20 @@
      "lat": 25.59,
      "lon": 85.14,
      "place": "Pataliputra"
+    },
+    {
+     "name": "Bhagavad Gita",
+     "type": "spread",
+     "start": -200,
+     "end": 200,
+     "cat": "belief",
+     "imp": 4,
+     "sharpness": 0.2,
+     "tags": "hinduism krishna arjuna dharma devotion india",
+     "note": "a battlefield dialogue inside the Mahabharata; duty and devotion made a path of their own",
+     "lat": 29.97,
+     "lon": 76.88,
+     "place": "Kurukshetra"
     },
     {
      "name": "Jesus of Nazareth",
@@ -2010,6 +2038,20 @@
      "lat": 31.78,
      "lon": 35.23,
      "place": "Jerusalem"
+    },
+    {
+     "name": "Buddhism reaches China",
+     "type": "event",
+     "start": 67,
+     "end": 0,
+     "cat": "belief",
+     "imp": 3,
+     "sharpness": 0.3,
+     "tags": "buddhism china silk-road luoyang transmission",
+     "note": "traditional date, the White Horse Temple at Luoyang; securely attested a century later, and half of Asia follows",
+     "lat": 34.62,
+     "lon": 112.45,
+     "place": "Luoyang"
     },
     {
      "name": "Rabbinic Judaism",
@@ -2110,6 +2152,20 @@
      "place": "Chalcedon"
     },
     {
+     "name": "Buddhism reaches Japan",
+     "type": "event",
+     "start": 552,
+     "end": 0,
+     "cat": "belief",
+     "imp": 4,
+     "sharpness": 0.5,
+     "tags": "buddhism japan baekje yamato kami",
+     "note": "a gilded Buddha sent from Baekje to the Yamato court, and a thirty-year fight at court over accepting it",
+     "lat": 34.47,
+     "lon": 135.81,
+     "place": "Asuka"
+    },
+    {
      "name": "Muhammad",
      "type": "life",
      "start": 570,
@@ -2136,6 +2192,20 @@
      "lat": 31.9,
      "lon": 44.6,
      "place": "Sura"
+    },
+    {
+     "name": "Chan and Zen Buddhism",
+     "type": "spread",
+     "start": 600,
+     "end": 1300,
+     "cat": "belief",
+     "imp": 4,
+     "sharpness": 0.2,
+     "tags": "zen chan meditation china japan bodhidharma",
+     "note": "meditation set above scripture and study; carried from China to Japan after 1191 as Zen",
+     "lat": 34.51,
+     "lon": 112.94,
+     "place": "Mount Song"
     },
     {
      "name": "Bhakti movement",
@@ -2234,6 +2304,20 @@
      "lat": 48.85,
      "lon": 2.34,
      "place": "Paris"
+    },
+    {
+     "name": "Neo-Confucianism",
+     "type": "spread",
+     "start": 1130,
+     "end": 1905,
+     "cat": "belief",
+     "imp": 4,
+     "sharpness": 0.35,
+     "tags": "confucianism zhu-xi examinations china korea vietnam",
+     "note": "Zhu Xi's synthesis, and the commentaries every examinee in China, Korea and Vietnam memorised until 1905",
+     "lat": 26.07,
+     "lon": 119.3,
+     "place": "Fuzhou"
     },
     {
      "name": "Rumi",
@@ -2362,6 +2446,20 @@
      "place": "Epworth"
     },
     {
+     "name": "Guru Granth Sahib made the last Guru",
+     "type": "event",
+     "start": 1708,
+     "end": 0,
+     "cat": "belief",
+     "imp": 4,
+     "sharpness": 1,
+     "tags": "sikhism gobind-singh scripture punjab",
+     "note": "Gobind Singh ends the human line of Gurus: the scripture itself becomes the Sikhs' living teacher",
+     "lat": 19.15,
+     "lon": 77.32,
+     "place": "Nanded"
+    },
+    {
      "name": "Evangelical revivalism",
      "type": "spread",
      "start": 1730,
@@ -2402,6 +2500,20 @@
      "lat": 52.4,
      "lon": -0.72,
      "place": "Kettering"
+    },
+    {
+     "name": "State Shinto",
+     "type": "spread",
+     "start": 1868,
+     "end": 1945,
+     "cat": "belief",
+     "imp": 4,
+     "sharpness": 0.9,
+     "tags": "shinto japan meiji emperor separation",
+     "note": "Meiji Japan prises the kami out of Buddhism and makes them an imperial cult, disestablished by the occupation",
+     "lat": 35.68,
+     "lon": 139.76,
+     "place": "Tokyo"
     },
     {
      "name": "World's Parliament of Religions",

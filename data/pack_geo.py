@@ -1,5 +1,17 @@
 #!/usr/bin/env python3
-"""Pack historical-basemaps GeoJSON into compact delta-encoded worlds.js."""
+"""Pack historical-basemaps GeoJSON into compact delta-encoded worlds.js.
+
+LOCAL CORRECTIONS TO THE VENDORED ATLAS. geo/*.geojson is a copy of the
+upstream historical-basemaps data, and the labels are whatever it shipped —
+including its misspellings, which the app then engraves on the map. Anything
+fixed by hand is listed here so a re-import does not quietly restore it:
+
+  · world_1600.geojson — "Poland-Llituania" -> "Poland-Lithuania" (NAME,
+    ABBREVN, SUBJECTO, PARTOF). It is the only snapshot that spelt it that way;
+    world_1492.geojson already had it right. web/scripts/build-polities.mjs
+    keeps the misspelling in its alias list for the commonwealth, so the join
+    survives either spelling.
+"""
 import json, glob, os, re
 
 D = os.path.join(os.path.dirname(os.path.abspath(__file__)), 'geo')

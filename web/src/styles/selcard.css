@@ -132,6 +132,20 @@
   background: var(--tl-dot, currentColor);
 }
 .tl-selcard__meta b { font-weight: var(--tl-w-medium); color: var(--tl-ink-2); }
+/* THE ELLIPSIS HAS TO BE ON THE TEXT, NOT ON THE ROW. .tl-selcard__meta is a
+   FLEX container holding the domain dot and one text span, and text-overflow
+   only ever applies to a box's own inline content — so the rule above clipped
+   the span at the row's edge and drew nothing to say it had: Cubism's kicker
+   read "Art & culture · movement · Western art movemen". The truncation now
+   happens on the span, where there is inline text for the ellipsis to sit at
+   the end of. min-width:0 because a flex item's automatic minimum size is its
+   content, which would otherwise refuse to shrink at all. */
+.tl-selcard__kicker {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
 
 .tl-selcard__x {
   flex: none;
@@ -178,13 +192,18 @@
    describes, where a second scale competes with the real one at the foot of
    the window.
 
-   What remains is the measurement in words — the subject's dates on the left,
-   the year you are standing in on the right, and the presence line beneath.
+   What remains is the measurement in words — the subject's own dates, and the
+   presence line beneath.
 */
 .tl-selcard__span { display: flex; flex-direction: column; gap: var(--tl-space-2); }
 
-/* Ends of the scale: the subject's own dates on the left, the year you are
-   standing in on the right. A DATE IS A MEASUREMENT, so both are mono. */
+/* THE SUBJECT'S DATES, and nothing else. A second number used to sit flush
+   right here: TimeStore.year, unlabelled, in the same mono face at the same
+   size, which read as a third date belonging to the subject and was usually a
+   stale cursor left by the previous gesture (the Copernicus card printed 1621).
+   It is gone — the year is engraved on the shell's rail with the selection's
+   own span drawn against it, so this block can be purely the thing you clicked.
+   A DATE IS A MEASUREMENT, so it is mono. */
 .tl-selcard__ends {
   display: flex;
   justify-content: space-between;
@@ -302,7 +321,13 @@
   font-weight: var(--tl-w-semi);
   letter-spacing: var(--tl-track-caps);
   text-transform: uppercase;
+  /* Same rule as the kicker: these cells shrink (flex: 1 1 auto) and the card
+     clips its own overflow, so a narrow card with five destinations must cut
+     CONNECTIONS with an ellipsis rather than at whatever pixel the edge falls
+     on. Nothing is ever cut at the default width; this is the honest edge. */
   white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
   transition: background var(--tl-dur-fast) var(--tl-ease),
               border-color var(--tl-dur-fast) var(--tl-ease),
               color var(--tl-dur-fast) var(--tl-ease);

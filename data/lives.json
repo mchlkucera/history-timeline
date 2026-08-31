@@ -1,6 +1,7 @@
 {"_note":"Human lifespans — exercises the 'life' shape (bar with birth dot + death cap). Dates are conventional textbook dates; ancient ones are approximate by nature. band: which timeline row. cat: the domain they mattered in (colour). lat/lon: birthplace.",
 "lives":[
 {"name":"Confucius","start":-551,"end":-479,"band":"AS","cat":"belief","imp":2,"tags":"china philosophy confucius","lat":35.58,"lon":116.99,"place":"Qufu"},
+{"name":"Laozi","start":-601,"end":-531,"band":"AS","cat":"belief","imp":3,"tags":"tao taoism daoism laozi china philosophy","lat":33.86,"lon":115.48,"place":"Luyi, Chu"},
 {"name":"The Buddha","start":-563,"end":-483,"band":"AS","cat":"belief","imp":2,"tags":"india buddhism religion","lat":27.48,"lon":83.28,"place":"Lumbini"},
 {"name":"Plato","start":-428,"end":-348,"band":"EU","cat":"belief","imp":3,"tags":"greece philosophy plato","lat":37.98,"lon":23.73,"place":"Athens"},
 {"name":"Aristotle","start":-384,"end":-322,"band":"EU","cat":"belief","imp":3,"tags":"greece philosophy aristotle science","lat":40.31,"lon":23.60,"place":"Stagira"},
