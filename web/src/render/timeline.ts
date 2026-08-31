@@ -21,6 +21,16 @@ import {
   bindPinch, slopFor, TAP_PAD, armSafariGestureGuard, refuseSafariGestures, coarsePointer,
 } from './gesture';
 import { FOLD, roleWord } from './fold';
+/* ONE MATCHER FOR THE WHOLE SEARCH. The canvas used to run its own raw
+   substring test — name/tags/note for a spread, name/tags for a dot — while the
+   dropdown ranked through search.ts. Two implementations of "does this word
+   match" behind one box is two searches wearing one box, and the split had a
+   visible edge: search.ts answers a YEAR ("1776" finds the things that started,
+   ended or were alive then), a substring test cannot, so a year query filled the
+   dropdown and lit nothing on the canvas while dimming everything else to 12%.
+   queryMatch is the one answer now; this file asks it and reads it as a
+   boolean, because the canvas dims, it does not rank. */
+import { queryMatch } from './search';
 import { SelCard } from './selcard';
 import {
   Layers, layerDef, layerDefs, layerIdFor, layerIdOfEvent, passesDetail, polityLvl,
@@ -53,7 +63,16 @@ interface SpreadItem {
   v0: number; v1: number;
 }
 interface LSpread { it: SpreadItem; row: number; x0: number; x1: number; lodA: number; isMatch: boolean }
-interface LEvent { ev: any[]; id: string; x0: number; row: number; lodA: number; mode: 'right' | 'left' | 'none'; labelW: number; isMatch: boolean }
+/* `x0` is LIVE (where the dot is drawn this frame); `xp` is the LATCHED x the
+   packer and the label plan were both decided against. A label is stored as the
+   plan left it — text, font, and `dx`, its left edge IN LATCHED SPACE — and rides
+   its dot at paint time by the one offset (x0 − xp). That is what keeps event
+   labels bit-frozen between rungs while the dots slide under the wheel. */
+interface LEvent {
+  ev: any[]; id: string; x0: number; xp: number; row: number; lodA: number;
+  mode: 'right' | 'left' | 'none'; labelW: number; text: string; font: string; dx: number;
+  isMatch: boolean;
+}
 interface LaneLayout {
   key: string; label: string; si: number | null; isCur: boolean;
   // ── the layer this band draws ──────────────────────────────────────────────
@@ -427,10 +446,128 @@ const eraRank = (a: LSpread, b: LSpread) =>
 // selection here means "frame this thing AGAINST the lanes", and the relation
 // links are secondary garnish — see the note on dimAlpha in relations.ts.
 const DIM_FLOOR = 0.42;
+/* ── THE FAINT END OF A SOFT SPREAD IS STILL INK ─────────────────────────────
+
+   A spread's sharpness ramps its own edges toward transparent, and the canvas is
+   painted on an opaque ground, so "toward transparent" IS "toward the page" — the
+   fade composites onto T.panel and needs no second mechanism to know which way
+   the ground goes. That part was always right. What was wrong was the FLOOR
+   under it: the ramp bottomed out at s, and only s, with a token 0.06 guard.
+
+   The corpus has spreads down there. The Silk Road carries sharpness 0.08 and The
+   Enlightenment 0.15, which are honest numbers — neither has a dated end — but
+   0.15 of a fill on a near-white page is a contrast ratio of 1.29:1 against the
+   ground, and 1.29 is not a colour, it is the page. Measured on the light theme
+   at 1500–2000, The Enlightenment's ramps cover 42.5% of its width on each side,
+   so nearly half the bar and the whitespace its label sits on had faded out of
+   existence: the founder's "soft" had become "absent", and the mark's right half
+   simply was not there to read.
+
+   So the floor is a FLOOR ON THE INK, not a token: the faintest end of any
+   envelope is at least EDGE_A of the plateau's alpha. Measured against the light
+   ground (#f5f7f6) the tip lands at 1.65:1 — the contrast of a hairline rule, so
+   it reads as the quiet end of a mark rather than as paper — and in dark the same
+   alpha over the dark ground gives the same reading, because both grounds are
+   opaque and the fill is composited the same way onto either.
+
+   WHY 0.30 AND NOT MORE. 0.42 puts the tip at 2.07:1, which is a visible EDGE —
+   at that point a soft spread has ends, and "fades in and out" has stopped being
+   the thing the legend says it is. WHY NOT LESS: 0.22 is 1.45:1, which is a tint
+   you have to look for, and the whole complaint was that you could not see it.
+
+   AND IT COSTS THE GRAMMAR NOTHING. The floor moves only the ALPHA at the tips;
+   the ramp WIDTH R is still 0.5·(1−s)·W, so the Silk Road at 0.08 still ramps
+   over 46% of its width and an era at 0.25 over 37.5% — soft still reads as soft,
+   and every sharp spread (s ≥ 0.6, the ones that also get a stroke) is untouched,
+   because max(s, 0.30) is s for all of them. */
+const EDGE_A = 0.30;
 
 // rectangle height by importance tier — the ONLY height variation permitted;
 // never a weight curve (founder decision 2).
 const TIER_H: Record<number, number> = { 1: 20, 2: 17, 3: 14, 4: 12, 5: 10 };
+
+/* ══ A LABEL MAY SHORTEN. THE TOP TWO TIERS MAY NOT GO SILENT. ═══════════════
+
+   THE FAILURE. At 1780–1960, Europe's first row read: a labelled World War I, a
+   bare orange block, and a labelled Cold War. The bare block was World War II —
+   importance 1, the highest the corpus has — and the only way to learn its name
+   was to hover it. The same window turns 1848 and 1871 into anonymous dots. A
+   reader looking at that picture cannot tell that the unnamed thing outranks
+   both of its labelled neighbours; the whole promise of an importance ladder is
+   that the eye can read the ranking off the page, and an anonymous block beside
+   a named one says the opposite of the truth.
+
+   The old rule was a four-rung fall with a trapdoor at the bottom: ellipsize
+   INSIDE the bar → whole name to the RIGHT → whole name to the LEFT → nothing.
+   Every rung was a hard fit test against one neighbour, and "nothing" was
+   reachable from any of them. Worse, the third rung's guard was the reason the
+   war lost: World War II's own left gap was clear, but it was measured against
+   `prevEnd`, which already included World War I's right-hand label — so the
+   LESS important mark had taken the space first, simply by being further left.
+
+   THE CUT: lvl ≤ 2, both strata. It is the ladder's own cut, not a new one.
+   STEPS admits tier 1 at `all of time` and tier 2 at `prehistory`, so a lvl ≤ 2
+   mark is one that has been on screen since long before the reader zoomed in —
+   the skeleton the picture is drawn on at nearly every rung. TIER_H says the
+   same thing in pixels (20 and 17 against 14/12/10), and passesDetail's `less`
+   dial keeps exactly these two when a reader asks for only the turning points.
+   Three separate mechanisms already agree on where the top of the ladder ends;
+   this one does not get to invent a fourth. It is also bounded: the corpus holds
+   a few hundred lvl ≤ 2 spreads in total, so "never drop" can never mean "flood
+   the row" — at any window a single row holds a handful of them.
+
+   THE DEGRADATION ORDER, and why it is in this order:
+
+     1. INSIDE THE BAR, ellipsized, at the rung's type (≥3 chars + "…").
+        The strongest binding there is: the name is ON the thing.
+     2. OUTSIDE, whole name, right then left, at the rung's type.
+        The name is intact; only its position has moved, and a 7px gap still
+        reads as "this belongs to that".
+     3. OUTSIDE, whole name, ONE SIZE DOWN.                    [never-drop only]
+        A WHOLE NAME AT SMALLER TYPE BEATS A CUT NAME AT FULL TYPE. The name is
+        the information; the size is emphasis, and emphasis is what a crowded
+        row can afford to spend. One step buys ~19% of the width back.
+     4. INSIDE, one size down, cut to ≥2 chars.                [never-drop only]
+        Once the name MUST be cut, cut it ON the mark rather than beside it: a
+        truncation sitting on a bar is unambiguously that bar's, while one
+        floating in a gap could belong to either neighbour.
+     5. OUTSIDE, cut to ≥3 chars, at the rung's type.               [every mark]
+        The founder's own rule for the inside of a bar — "as much of the name as
+        fits plus an ellipsis, never a blank bar" — applied to the gap beside it.
+        This is also what makes label presence CONTINUOUS in the available width
+        rather than binary (see the layer-rail note below).
+     6. OUTSIDE, cut to ≥2 chars, one size down.               [never-drop only]
+
+   NOT ON THE LIST: STACKING A LINE. A row is a mark plus its leading — 20px of
+   rectangle in a 24px slot at the reference rung — so a second line of type has
+   to come out of the NEXT row. That is a mark printed through a mark, which is
+   worse than the thing being fixed, and it would make the label a layout input,
+   which is the one thing this file does not allow.
+
+   AND THE GUARANTEE IS STRUCTURAL, NOT HEROIC. The rungs alone would not be
+   enough — a tiny bar between two long ones can genuinely have nowhere to put a
+   word. What makes the promise keepable is that A ROW'S LABELS ARE ALLOCATED IN
+   IMPORTANCE ORDER (planLabels), so the contest for a gap is settled by rank
+   before it is settled by geometry: the important mark claims first and the less
+   important neighbour is the one that falls to a shorter rung. Where a
+   never-drop mark still ends with nothing, everything blocking it outranks it —
+   which is the one arrangement the reader is not misled by. */
+const ND_LVL = 2;
+// One step down the type ladder, and the floor it may not go under: 9.5px is the
+// smallest face anywhere in this app (the axis's own mono is 11), so it is the
+// smallest thing this file is willing to ask anyone to read.
+const LAB_SMALL = 0.84, LAB_SMALL_MIN = 9.5;
+
+/** A mark as the label planner sees it: a footprint, three anchors, a rank. */
+interface LabMark {
+  a: number; b: number;        // the mark's own extent — no label may print on it
+  rx: number; lx: number;      // where a label to the RIGHT starts / one to the LEFT ends
+  ix: number; iw: number;      // where an INSIDE label starts, and its room (≤0 ⇒ no inside)
+  lvl: number; name: string;
+}
+/** …and what the planner decided. `x` is the left of the text, `w` its width. */
+interface LabPlan { mode: 'in' | 'right' | 'left' | 'none'; text: string; font: string; x: number; w: number }
+const NO_LAB: LabPlan = { mode: 'none', text: '', font: '', x: 0, w: 0 };
 
 export const TL = {
   cv: null as unknown as HTMLCanvasElement, d0: -3000, d1: 2026,
@@ -905,7 +1042,7 @@ export const TL = {
      ellipsize()'s cache useful: the truncation of a name is re-derived once per
      rung and then re-used for every frame spent on it, instead of being
      re-measured against a width that moves every frame. */
-  _fStep: -1, _fIn: '', _fUi: '',
+  _fStep: -1, _fIn: '', _fUi: '', _fInS: '', _fUiS: '',
   fonts() {
     if (this._fStep === this.step) return;
     const p = STEPS[Math.max(0, this.step)].pitch;
@@ -916,9 +1053,148 @@ export const TL = {
     // rectangle carrying 14px type reads as a bar with a caption rather than as a
     // labelled object. The top pitch is 2.27 now; 1.45/1.34 keeps the inner label
     // at 15px inside a 43px level-1 bar and still fits a level-5 bar's 21px.
-    this._fIn = fontUI(q(10.5 * clamp(p, 0.94, 1.45)), 600);
-    this._fUi = fontUI(q(11.5 * clamp(p, 0.94, 1.34)));
+    const inPx = q(10.5 * clamp(p, 0.94, 1.45)), uiPx = q(11.5 * clamp(p, 0.94, 1.34));
+    this._fIn = fontUI(inPx, 600);
+    this._fUi = fontUI(uiPx);
+    // ONE STEP DOWN, and it is a property of the rung for the same reason the
+    // other two are: rung 3 of the degradation order (see the never-drop note)
+    // re-measures a name at this size, and re-measuring against a size that moved
+    // every frame would throw away ellipsize()'s cache exactly where it is needed
+    // most — on the crowded rows that are the only ones ever to reach rung 3.
+    this._fInS = fontUI(q(Math.max(LAB_SMALL_MIN, inPx * LAB_SMALL)), 600);
+    this._fUiS = fontUI(q(Math.max(LAB_SMALL_MIN, uiPx * LAB_SMALL)));
     this._fStep = this.step;
+  },
+
+  /**
+   * PLAN ONE ROW'S LABELS, ALL OF THEM, BEFORE ANY OF THEM IS DRAWN.
+   *
+   * The read of the whole thing is in the never-drop note above TIER_H. What is
+   * here is the mechanism, and it has exactly three moving parts:
+   *
+   *   · THE ORDER IS IMPORTANCE, NOT x. The old pass walked the row left to
+   *     right and carried a single `prevEnd`, so the mark that happened to be
+   *     further left took the space first whatever it was worth. Sorting by
+   *     (level, then the wider footprint, then x) is what makes "degrade the
+   *     LESS important neighbour first" true by construction rather than by a
+   *     special case: by the time a lvl-4 mark asks for a gap, every lvl-1 and
+   *     lvl-2 mark in the row has already been served.
+   *   · A CLAIM IS AN INTERVAL, NOT A HIGH-WATER MARK. Every granted label
+   *     reserves its own [x, x+w]; a candidate is tested against every mark's
+   *     footprint AND every claim already granted. `prevEnd` could only ever
+   *     describe the rightmost thing so far, which is why a mark's own clear
+   *     left gap could be refused for a label a hundred pixels away.
+   *   · THE FRAME IS AN OBSTACLE LIKE ANY OTHER. Nothing may be granted outside
+   *     [G, right], so a label cannot be half-painted against the gutter — the
+   *     map's rule ("a half-label is a collision with the frame"), which is what
+   *     turned "Writing invented (Sumer)" into "g invented (Sumer)" and
+   *     "Madagascar" into "adagascar" before it. A mark whose own footprint is
+   *     entirely off the plot gets no label at all: a name with nothing under it
+   *     is worse than a name you have to pan to.
+   *
+   * `marks` is not mutated. ctx.font IS — every caller sets its own font before
+   * it next draws, because the planner has to change it to measure.
+   */
+  planLabels(ctx: CanvasRenderingContext2D, marks: LabMark[], G: number, right: number,
+    inF: string, uiF: string, inS: string, uiS: string): LabPlan[] {
+    const n = marks.length;
+    const plan: LabPlan[] = new Array(n).fill(NO_LAB);
+    if (!n) return plan;
+    const claims: number[][] = [];
+    // Marks are separated by 4px from any label, the same clearance the old
+    // `nx - 4` test gave. A mark is never an obstacle to its OWN label: the ±7/9
+    // anchors already put the text clear of it.
+    const stopR = (self: number, from: number) => {
+      let end = right;
+      const hit = (a: number, b: number) => {
+        if (b <= from) return;                       // entirely left of the run
+        if (a <= from) { if (from < end) end = from; return; }   // straddles it: no run
+        if (a < end) end = a;
+      };
+      for (let k = 0; k < n; k++) if (k !== self) hit(marks[k].a - 4, marks[k].b + 4);
+      for (const c of claims) hit(c[0], c[1]);
+      return end;
+    };
+    const stopL = (self: number, to: number) => {
+      let start = G;
+      const hit = (a: number, b: number) => {
+        if (a >= to) return;
+        if (b >= to) { if (to > start) start = to; return; }
+        if (b > start) start = b;
+      };
+      for (let k = 0; k < n; k++) if (k !== self) hit(marks[k].a - 4, marks[k].b + 4);
+      for (const c of claims) hit(c[0], c[1]);
+      return start;
+    };
+    const grant = (i: number, mode: 'right' | 'left', text: string, font: string, x: number, w: number) => {
+      claims.push([x, x + w]);
+      plan[i] = { mode, text, font, x, w };
+      return true;
+    };
+    /** An INSIDE label claims nothing: it sits on its own mark, and a mark is
+     *  already an obstacle to everything else. `give` hands back some of the
+     *  6px-a-side air the caller reserved: air is leading, and leading comes
+     *  down with the type, so the reduced-size rung is allowed 4px a side. */
+    const inside = (i: number, font: string, min: number, give = 0) => {
+      const m = marks[i];
+      if (!(m.iw + give > 0)) return false;
+      ctx.font = font;
+      const t = ellipsize(ctx, m.name, m.iw + give, font, min);
+      if (!t) return false;
+      plan[i] = { mode: 'in', text: t, font, x: m.ix - give / 2, w: textW(ctx, t, font) };
+      return true;
+    };
+    /** Right first, then left — a name reads off its mark the way the page does.
+     *  `min` 0 means "the whole name or nothing"; anything else lets it be cut
+     *  into whatever run is actually there, and the side that keeps MORE of the
+     *  name wins. */
+    const outside = (i: number, font: string, min: number) => {
+      const m = marks[i];
+      ctx.font = font;
+      const whole = textW(ctx, m.name, font);
+      const eR = stopR(i, m.rx);
+      if (m.rx + whole <= eR) return grant(i, 'right', m.name, font, m.rx, whole);
+      const sL = stopL(i, m.lx);
+      if (m.lx - whole >= sL) return grant(i, 'left', m.name, font, m.lx - whole, whole);
+      if (min <= 0) return false;
+      const tR = ellipsize(ctx, m.name, eR - m.rx, font, min);
+      const tL = ellipsize(ctx, m.name, m.lx - sL, font, min);
+      if (tR && tR.length >= tL.length) return grant(i, 'right', tR, font, m.rx, textW(ctx, tR, font));
+      if (tL) { const w = textW(ctx, tL, font); return grant(i, 'left', tL, font, m.lx - w, w); }
+      return false;
+    };
+    const order: number[] = [];
+    for (let i = 0; i < n; i++) if (marks[i].b > G && marks[i].a < right) order.push(i);
+    order.sort((p, q) => marks[p].lvl - marks[q].lvl
+      || (marks[q].b - marks[q].a) - (marks[p].b - marks[p].a)
+      || marks[p].a - marks[q].a);
+    /* A STUB IS NOT A NAME — but only the top tiers get to say so. The founder's
+       rule is that a bar too narrow for its name shows as much of it as fits and
+       never sits blank, and for most of the corpus that is exactly right: the
+       name is ON the thing and the reader can finish it. It stops being right
+       when the truncation keeps less than half the word. "World War I" on a 57px
+       bar at 1875–1955 becomes "Wor…", and "Wor…" beside "World…" is two marks
+       the reader cannot tell apart — while three hundred pixels of empty row sat
+       to the right of both, wide enough for either name whole.
+       So for lvl ≤ 2 ONLY, a stub is held rather than accepted: the outside gap
+       is tried first, and the stub comes back if the gap will not have it. Every
+       other level keeps the founder's rule untouched. */
+    const stub = (i: number) => {
+      const t = plan[i].text;
+      return t !== marks[i].name && (t.length - 1) * 2 < marks[i].name.length;
+    };
+    for (const i of order) {
+      const nd = marks[i].lvl <= ND_LVL;
+      const got = inside(i, inF, 3);                         // 1
+      if (got && !(nd && stub(i))) continue;
+      if (outside(i, uiF, 0)) continue;                      // 2
+      if (nd && outside(i, uiS, 0)) continue;                // 3
+      if (got) continue;                                     // …the stub stands
+      if (nd && inside(i, inS, 2, 4)) continue;              // 4
+      if (outside(i, uiF, 3)) continue;                      // 5
+      if (nd) outside(i, uiS, 2);                            // 6
+    }
+    return plan;
   },
 
   // ---- pure layout pass: filter, pack, measure → per-lane continuous rows ----
@@ -1078,7 +1354,7 @@ export const TL = {
         // ("only the turning points", "everything we hold"), so it is decided
         // before anything looks at the viewport or the zoom.
         if (!passesDetail(detail, def.kind as any, it.lvl, it.type, it.start, it.end)) continue;
-        const isMatch = !!q && (it.name.toLowerCase().includes(q) || it.tags.includes(q) || it.note.toLowerCase().includes(q));
+        const isMatch = !!q && queryMatch(it, this.q) > 0;      // a SpreadItem is a Haystack
         // SOFT WINDOW first, against the LATCH: the only cull is the pad, 30% of
         // the window away, so nothing can leave the layout in a single pan frame
         // — and nothing can leave it during a zoom at all.
@@ -1137,7 +1413,7 @@ export const TL = {
       for (const ev of evs) {
         const id = evId(ev);
         const title = ev[2];
-        const isMatch = !!q && (title.toLowerCase().includes(q) || ev[5].includes(q));
+        const isMatch = !!q && queryMatch({ name: title, tags: ev[5] || '', start: ev[0], end: ev[1] }, this.q) > 0;
         const fold = FOLD[title];
         if (fold && drawn.has(fold.spread)) {
           if (isMatch) foldedMatch.add(fold.spread);   // a search for it lands on its parent
@@ -1208,8 +1484,41 @@ export const TL = {
         laneEnd[lane] = Math.max(prevEnd, xp + 8 + (mode === 'right' ? labelW : 0));
         dotEnd[lane] = Math.max(dotEnd[lane], xp + 8);
         if (isMatch || id === sel) evSpare[lane] = true;
-        events.push({ ev, id, x0, row: lane, lodA, mode, labelW, isMatch });
+        events.push({ ev, id, x0, xp, row: lane, lodA, mode, labelW, text: title, font: uiF, dx: xp + 7, isMatch });
       }
+      /* ── THE DOTS ARE PACKED. THE NAMES ARE PLANNED SEPARATELY. ───────────
+         Everything above this line is LAYOUT: laneEnd and dotEnd decide which
+         row a dot lands on and therefore how many rows the stratum has, so not
+         one number in it may move. What it also did, as a side effect, was
+         decide the labels — greedily, left to right, with no left-edge test at
+         all (`xp + 7 + labelW >= cw - 4` guards the right edge and nothing
+         guards the other one, which is how "Writing invented (Sumer)" came to
+         be painted as "g invented (Sumer)" against the gutter), and with the
+         earliest dot in the row taking the space whatever its importance. That
+         is what left 1848 and 1871 as anonymous dots beside labelled ones.
+
+         So the labels are re-decided here, by rank, AFTER the packing is final
+         and against exactly the same latched coordinates the packing used. The
+         row set, the row count, every dot's row and every dot's x are the ones
+         the packer chose — this pass reads them and writes back only `mode`,
+         `text`, `font`, `labelW` and `dx`. Nothing it can do moves a mark, so
+         the stratum's height is the same number it was a line ago. */
+      for (let r = 0; r < laneEnd.length; r++) {
+        const inRow = events.filter(e => e.row === r);
+        if (!inRow.length) continue;
+        const lp = this.planLabels(ctx, inRow.map(e => ({
+          // a dot is a point; ±4 is the clearance the packer itself uses, and
+          // iw = 0 says "no inside label" — there is no bar to write on
+          a: e.xp - 4, b: e.xp + 4, rx: e.xp + 7, lx: e.xp - 9,
+          ix: 0, iw: 0, lvl: e.ev[4] || 3, name: e.ev[2],
+        })), G, cw - 4, uiF, uiF, this._fUiS, this._fUiS);
+        for (let i = 0; i < inRow.length; i++) {
+          const P = lp[i], E = inRow[i];
+          E.mode = P.mode === 'in' ? 'none' : P.mode;
+          E.text = P.text; E.font = P.font || uiF; E.labelW = P.w; E.dx = P.x;
+        }
+      }
+      ctx.font = uiF;                       // the planner measured in other faces
       // THE STRATUM'S HEIGHT is the rung's allowance or the packing's demand,
       // whichever is larger. The rung's floor is what keeps an empty-ish stratum
       // from collapsing as the reader wheels; the packing's demand is what keeps
@@ -1881,6 +2190,7 @@ export const TL = {
         h.raf = requestAnimationFrame(holdStep);
       };
       track.addEventListener('pointerdown', e => {
+        hideTip();                    // see THE TOOLTIP'S LIFE
         const tb = thumb.getBoundingClientRect();
         const inside = e.clientY >= tb.top && e.clientY <= tb.bottom;
         thumb.style.opacity = '.85';
@@ -1981,7 +2291,7 @@ export const TL = {
   // gradient stops — globalAlpha stays 1, no double multiply.
   drawSpread(ctx: CanvasRenderingContext2D, x0: number, x1: number, yC: number, h: number, col: string, alpha: number, s: number, W = Math.max(x1 - x0, 2)) {
     const R = Math.min(0.5 * (1 - s) * W, 96);
-    const lo = alpha * Math.max(s, 0.06);
+    const lo = alpha * Math.max(s, EDGE_A);
     const g = ctx.createLinearGradient(x0, 0, x0 + W, 0);
     g.addColorStop(0, withA(col, lo));
     g.addColorStop(R / W, withA(col, alpha));
@@ -2000,7 +2310,7 @@ export const TL = {
     if (!(R > 0)) return alpha;
     const d = Math.min(x - x0, x0 + W - x);
     if (d >= R) return alpha;
-    const lo = alpha * Math.max(s, 0.06);
+    const lo = alpha * Math.max(s, EDGE_A);
     return lo + (alpha - lo) * clamp(d / R, 0, 1);
   },
 
@@ -2161,7 +2471,24 @@ export const TL = {
         const fade = clamp(g / Math.max(L.rowG[r] || g, 1e-3), 0, 1);
         const textGate = clamp((g - LAB_G0) / (LAB_G1 - LAB_G0), 0, 1);
         const yC = top0 + L.rowY[r] + slot / 2;
-        let prevEnd = -1e18;
+        /* ── THE WHOLE ROW'S LABELS ARE DECIDED BEFORE ANY MARK IS PAINTED ──
+           They used to be decided one at a time inside the draw loop, against a
+           single running `prevEnd`, which is why the row's leftmost mark took
+           the space whatever it was worth. planLabels settles the row by RANK
+           first and geometry second, so a level-1 war can no longer lose its
+           name to a level-3 neighbour that merely started earlier — and its own
+           clear left gap can no longer be refused because something a hundred
+           pixels away was measured into `prevEnd`. See the never-drop note above
+           TIER_H for the ladder each mark falls down.
+           IT MOVES NOTHING. Every input here is already-decided drawn geometry;
+           the output is text, a font and an x. */
+        const plan = this.planLabels(ctx, rowItems.map(s => {
+          const vx0 = Math.max(s.x0, G);
+          return {
+            a: s.x0, b: s.x1, rx: s.x1 + 7, lx: s.x0 - 9,
+            ix: vx0 + 6, iw: (s.x1 - vx0) - 12, lvl: s.it.lvl, name: s.it.name,
+          };
+        }), G, cw - 4, inF, uiF, this._fInS, this._fUiS);
         for (let i = 0; i < rowItems.length; i++) {
           const s = rowItems[i], it = s.it;
           const searchDim = q ? (s.isMatch ? 1 : 0.12) : 1;
@@ -2200,32 +2527,14 @@ export const TL = {
             ctx.globalAlpha = 1; ctx.strokeStyle = T.accent2; ctx.lineWidth = 1.6;
             ctx.beginPath(); ctx.roundRect(s.x0 - 1, yC - h / 2 - 1, W + 2, h + 2, 4); ctx.stroke();
           }
-          // ---- THE LABEL, and the founder's truncation rule --------------------
-          // A rectangle too narrow for its full name shows AS MUCH OF THE NAME AS
-          // FITS plus an ellipsis — never a blank bar. Only when fewer than three
-          // characters plus "…" would fit does it fall back to the outside-label
-          // algorithm, and only then to nothing. ellipsize() caches per (font, text,
-          // 8px width bucket), so a continuous zoom re-uses one answer across an
-          // 8px band of widths instead of re-measuring every frame.
-          const visX0 = Math.max(s.x0, G);
-          ctx.font = inF;
-          const inner = (s.x1 - visX0) - 12;
-          const inText = ellipsize(ctx, it.name, inner, inF, 3);
-          let mode: 'in' | 'right' | 'left' | 'none' = 'none';
-          let labelW = 0;
-          if (inText) mode = 'in';
-          else {
-            ctx.font = uiF;
-            labelW = textW(ctx, it.name, uiF);
-            const nx = i + 1 < rowItems.length ? rowItems[i + 1].x0 : 1e18;
-            if (s.x1 + 7 + labelW < Math.min(nx - 4, cw - 4)) mode = 'right';
-            else if (s.x0 - 9 - labelW > Math.max(G, prevEnd + 4)) mode = 'left';
-          }
+          // ---- THE LABEL: paint what the row's plan decided --------------------
+          const P = plan[i];
           // text fades in with the row (60%→85% grown) and with its own alpha,
           // continuously — the old hard cutoff at 0.25 popped every label
           const textA = clamp((s.lodA * dimA * fade - 0.10) / 0.15, 0, 1) * textGate;
-          if (textA > 0.02) {
-            if (mode === 'in') {
+          if (textA > 0.02 && P.mode !== 'none') {
+            ctx.font = P.font;
+            if (P.mode === 'in') {
               // INK BY MEASURED CONTRAST on the real composite, not by a lightness
               // threshold. The old `effL > 50 ? ink : white` test picked the WORSE of
               // the two on 23/160 light variants and 108/160 dark ones — in dark BOTH
@@ -2235,31 +2544,33 @@ export const TL = {
               ctx.globalAlpha = Math.min(1, fillA + 0.2) * textA;
               // the word spans a stretch of the envelope, so ask what the fill is doing
               // at BOTH of its ends and take the ink whose worst end is still legible
-              const inkX0 = visX0 + 6, inkX1 = inkX0 + textW(ctx, inText, inF);
               ctx.fillStyle = inkFor(col, T.panel,
-                this.spreadAlphaAt(inkX0, s.x0, W, it.sharpness, fillA),
-                this.spreadAlphaAt(inkX1, s.x0, W, it.sharpness, fillA), T.ink, T.panel);
-              ctx.fillText(inText, visX0 + 6, yC + 3.5);
-            } else if (mode === 'right') {
+                this.spreadAlphaAt(P.x, s.x0, W, it.sharpness, fillA),
+                this.spreadAlphaAt(P.x + P.w, s.x0, W, it.sharpness, fillA), T.ink, T.panel);
+              ctx.fillText(P.text, P.x, yC + 3.5);
+            } else {
               ctx.globalAlpha = textA; ctx.fillStyle = T.ink;
-              ctx.fillText(it.name, s.x1 + 7, yC + 4);
-            } else if (mode === 'left') {
-              ctx.globalAlpha = textA; ctx.fillStyle = T.ink;
-              ctx.fillText(it.name, s.x0 - 9 - labelW, yC + 4);
+              ctx.fillText(P.text, P.x, yC + 4);
             }
           }
           ctx.globalAlpha = 1;
-          prevEnd = Math.max(prevEnd, s.x1 + (mode === 'right' ? 8 + labelW : 0));
           // A MARK STILL ARRIVING IS NOT YET A TARGET. The row floor asks "is this row
           // tall enough to aim at"; the mark's own fade asks "is this thing actually
           // there yet" — without the second test a rectangle at 4% alpha, one wheel
           // notch past the rung that admitted it, answered a click on empty canvas.
-          if (g >= HIT_FLOOR && s.lodA >= HIT_FLOOR) this.boxes.push({
-            x: mode === 'left' ? s.x0 - 11 - labelW : s.x0 - 2,
-            y: yC - h / 2 - 2,
-            w: (s.x1 - s.x0) + 4 + (mode === 'right' ? 10 + labelW : mode === 'left' ? 12 + labelW : 0),
-            h: h + 4, kind: 'spread', id: it.id, it, band: L.label, isMatch: s.isMatch, row: r,
-          });
+          //
+          // THE BOX IS THE UNION OF THE MARK AND ITS LABEL, taken from the plan
+          // rather than re-derived from a mode: an outside label may now be
+          // ellipsized, so its width is not the name's width and the old
+          // `10 + labelW` arithmetic would aim at the wrong rectangle.
+          if (g >= HIT_FLOOR && s.lodA >= HIT_FLOOR) {
+            const bx0 = P.mode === 'left' ? Math.min(s.x0 - 2, P.x - 2) : s.x0 - 2;
+            const bx1 = P.mode === 'right' ? Math.max(s.x1 + 2, P.x + P.w + 2) : s.x1 + 2;
+            this.boxes.push({
+              x: bx0, y: yC - h / 2 - 2, w: bx1 - bx0,
+              h: h + 4, kind: 'spread', id: it.id, it, band: L.label, isMatch: s.isMatch, row: r,
+            });
+          }
         }
       }
 
@@ -2274,7 +2585,6 @@ export const TL = {
         if (slot <= 0.05) continue;
         const g = clamp(slot / EPd, 0, 1);
         const fade = clamp(g / Math.max(L.evG[E.row] || g, 1e-3), 0, 1);
-        const title = E.ev[2];
         const searchDim = q ? (E.isMatch ? 1 : 0.12) : 1;
         if (q && E.isMatch) hitCount++;
         const a = clamp(E.lodA * dimAlpha(E.id, sel, rels, DIM_FLOOR) * searchDim * fade, 0, 1);
@@ -2290,17 +2600,29 @@ export const TL = {
         }
         ctx.fillStyle = T.ink;
         const textA = clamp((a - 0.10) / 0.15, 0, 1) * clamp((g - LAB_G0) / (LAB_G1 - LAB_G0), 0, 1);
-        if (textA > 0.02) {
-          ctx.globalAlpha = textA;
-          if (E.mode === 'right') ctx.fillText(title, E.x0 + 7, yy + 4);
-          else if (E.mode === 'left') ctx.fillText(title, E.x0 - 9 - E.labelW, yy + 4);
+        // THE LABEL RIDES ITS DOT. The plan is in latched space; the dot is drawn
+        // at the live x; the offset between them is the whole of the difference.
+        const lx = E.dx + (E.x0 - E.xp);
+        if (textA > 0.02 && E.mode !== 'none'
+          // …AND IT IS NEVER PAINTED HALF. The plan put it inside the plot when
+          // it was made, but a wheel moves the live x while the latch stands
+          // still, so the frame is re-tested here — a name sliced by the gutter
+          // is worse than a name that waits for the next rung. (map.ts calls the
+          // same rule "a half-label is a collision with the frame".)
+          && lx >= G && lx + E.labelW <= cw - 2) {
+          ctx.globalAlpha = textA; ctx.font = E.font;
+          ctx.fillText(E.text, lx, yy + 4);
         }
         ctx.globalAlpha = 1;
-        if (g >= HIT_FLOOR && E.lodA >= HIT_FLOOR) this.boxes.push({
-          x: E.mode === 'left' ? E.x0 - 11 - E.labelW : E.x0 - 8, y: yy - slot / 2,
-          w: 16 + (E.mode === 'none' ? 4 : E.labelW), h: slot, kind: 'ev', id: E.id, ev: E.ev,
-          band: L.label, isMatch: E.isMatch,
-        });
+        if (g >= HIT_FLOOR && E.lodA >= HIT_FLOOR) {
+          // the dot, and whatever of its name was actually placed beside it
+          const bx0 = E.mode === 'left' ? Math.min(E.x0 - 8, lx - 2) : E.x0 - 8;
+          const bx1 = E.mode === 'right' ? Math.max(E.x0 + 12, lx + E.labelW + 2) : E.x0 + 12;
+          this.boxes.push({
+            x: bx0, y: yy - slot / 2, w: bx1 - bx0, h: slot, kind: 'ev', id: E.id, ev: E.ev,
+            band: L.label, isMatch: E.isMatch,
+          });
+        }
       }
 
       // ---- the row-cap affordance: it OPENS the lane, it does not zoom ----
@@ -2325,12 +2647,21 @@ export const TL = {
     // the layout last moved, and the reader should be able to see which rung a
     // given picture belongs to.
     const rd = $('#zoomReadout');
-    // NAMED IN WORDS AS WELL AS DRAWN. The rail says "there is more below"; this
-    // says how to get there, in the one strip that is already reporting what the
-    // plot is doing, and only while it is true.
+    /* ONE HINT FOR ONE GESTURE, AND IT IS THE RAIL'S CUE.
+       This line used to append "⇧ + scroll to move down" (or, on a coarse
+       pointer, "drag up to move down the sheet") whenever there was sheet below
+       the fold. The rail's cue says the same sentence, pointer-aware in exactly
+       the same way, two hundred pixels away and pointing at the affordance it
+       names — so a reader with a tall plot was told how to scroll twice, in two
+       different wordings, in one view. Two sentences for one gesture is not
+       twice as helpful; it reads as two gestures.
+
+       The cue is the one that survives, because it is the one that is ATTACHED:
+       it sits at the fold, beside the rail it describes, and it goes the moment
+       the reader has scrolled once. This strip is a measurement of the rung and
+       stays one. */
     if (rd) rd.textContent = `importance ≤ ${baseL} of 5 · span ${fmtSpan(this.span())}`
-      + ` · step ${this.step + 1}/${STEPS.length} · ${STEPS[this.step].name}`
-      + (sst.over > 2 ? (coarsePointer() ? ' · drag up to move down the sheet' : ' · ⇧ + scroll to move down') : '');
+      + ` · step ${this.step + 1}/${STEPS.length} · ${STEPS[this.step].name}`;
     const sc = $('#searchCnt'); if (sc) sc.textContent = q ? `${hitCount} hits` : '';
     /* ── THE SET YEAR HAS NO LINE ON THIS CANVAS ─────────────────────────────
        There used to be a minium stub rising off the axis at x(TimeStore.year).
@@ -2492,6 +2823,31 @@ export const TL = {
   },
 
   _storesBound: false,
+  /* ── THE TOOLTIP'S LIFE ──────────────────────────────────────────────────
+     A TOOLTIP IS A HOVER ARTEFACT. It exists because the pointer is resting on
+     something and for no other reason, so ANY COMMITTED GESTURE ENDS IT: the
+     hand has stopped pointing and started doing.
+
+     It used to end on exactly one thing — the pointer leaving a mark, i.e.
+     another hover. Every other gesture left it standing, and #tip is a fixed,
+     high-stacking element positioned from the cursor, so what the reader got
+     was a caption that had come loose: measured, the World War II tip survived
+     seven consecutive drag-pans, still naming a rectangle that was by then two
+     bands and a thousand years away, and a click on a dot opened the selection
+     card UNDERNEATH it — the summary sitting on top of the fuller answer it was
+     a summary of.
+
+     So it is hidden at the START of each gesture rather than at the end of the
+     hover, in the four places a gesture can begin, and each one is the earliest
+     moment that gesture is knowable:
+       · the WHEEL — both what it does, the time zoom and ⇧-scroll;
+       · a PRESS ON THE PLOT — startDrag(), which is also where a pinch that
+         loses a finger rebases, so pan, tap and pinch are all one door;
+       · a PRESS ON THE RAIL — the drag and the press-and-hold transport;
+       · the CARD OPENING — pointerup, before SelCard.select.
+     bindPinch's own onStart hides it too, for the two-finger case that never
+     reaches startDrag. Nothing needs to put it back: the next pointermove over
+     a mark writes it afresh. */
   init() {
     const cv = this.cv = $<HTMLCanvasElement>('#zoomCanvas')!;
     armSafariGestureGuard();          // idempotent; whichever view boots first arms it
@@ -2533,6 +2889,7 @@ export const TL = {
     }
     cv.addEventListener('wheel', e => {
       e.preventDefault();
+      hideTip();                      // a wheel is a committed gesture — see THE TOOLTIP'S LIFE
       // SHIFT IS THE SECOND AXIS. Chrome and Safari move a shifted wheel's
       // magnitude onto deltaX (the horizontal-scroll convention), Firefox leaves
       // it on deltaY, and a trackpad sends both — so take whichever is carrying
@@ -2571,6 +2928,7 @@ export const TL = {
        span on every frame it fires. */
     let drag: any = null;
     const startDrag = (p: { clientX: number; clientY: number }) => {
+      hideTip();                      // see THE TOOLTIP'S LIFE, above init()
       const sc0 = this.scroller();
       /* A FINGER ON THE PLOT OUTRANKS THE ANCHOR. b84f9fa gave the one-finger
          drag both axes — X through time, Y down the sheet — and it does Y by
@@ -2687,7 +3045,7 @@ export const TL = {
         const [y0, y1, t, , lvl] = b.ev; const cat = CATBY[b.ev[6]], typ = b.ev[7], pl = b.ev[8];
         showTip(e.clientX, e.clientY, `<div class=t>${t}</div><div class=m>${fmtBig(y0)}${y1 ? ' – ' + fmtY(y1) : ''} · ${b.band}</div>` +
           `<div class=m>${cat ? cat.name : ''} · ${typ}${pl ? ' · ' + pl[2] : ''}</div>` +
-          `<div class=m>importance ${'●'.repeat(6 - lvl)}${'○'.repeat(lvl - 1)} (${lvl}) · click to select · Wikipedia in the Related panel</div>`);
+          `<div class=m>importance ${'●'.repeat(6 - lvl)}${'○'.repeat(lvl - 1)} (${lvl}) · click to select</div>`);
         cv.style.cursor = 'pointer';
       } else { hideTip(); cv.style.cursor = 'crosshair'; }
     });
@@ -2716,7 +3074,11 @@ export const TL = {
         return;
       }
       // Click means select, and the card appears BESIDE the mark — never over
-      // it. Empty canvas clears the selection, exactly as before.
+      // it. Empty canvas clears the selection, exactly as before. THE TIP GOES
+      // FIRST: the card says everything the tip said and more, and #tip has the
+      // higher stacking order, so leaving it up puts the summary on top of the
+      // answer it was summarising.
+      hideTip();
       SelCard.select(b ? b.id : null, b ? this.rectOf(b) : null);
     });
     cv.addEventListener('pointerleave', () => { hideTip(); this.hoverX = null; this.render(); });
@@ -2761,8 +3123,8 @@ export function buildGrammarLegend() {
     r.innerHTML = `<span class="note" style="font-weight:600">Mark =</span>` +
       g(`<rect x="3" y="3.5" width="24" height="7" rx="2" fill="${c}" opacity=".75"/><rect x="3" y="3.5" width="24" height="7" rx="2" fill="none" stroke="${c}" stroke-width="1"/>`, 'spread, sharp — dated ends') +
       g(`<defs><linearGradient id="${gid}" x1="0" y1="0" x2="1" y2="0">` +
-        `<stop offset="0" stop-color="${c}" stop-opacity=".05"/><stop offset=".38" stop-color="${c}" stop-opacity=".75"/>` +
-        `<stop offset=".62" stop-color="${c}" stop-opacity=".75"/><stop offset="1" stop-color="${c}" stop-opacity=".05"/>` +
+        `<stop offset="0" stop-color="${c}" stop-opacity=".22"/><stop offset=".38" stop-color="${c}" stop-opacity=".75"/>` +
+        `<stop offset=".62" stop-color="${c}" stop-opacity=".75"/><stop offset="1" stop-color="${c}" stop-opacity=".22"/>` +
         `</linearGradient></defs><rect x="2" y="3.5" width="26" height="7" rx="2" fill="url(#${gid})"/>`, 'spread, soft — fades in and out') +
       g(`<circle cx="15" cy="7" r="3.2" fill="${c}"/>`, 'event — a moment') +
       `<span class="note" style="margin-left:6px">taller = more important</span>` +
