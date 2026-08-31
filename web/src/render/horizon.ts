@@ -2,7 +2,8 @@
 // ================= ⑥b INFORMATION HORIZON =================
 // Ported from prototypes/partB.html. Only change: `cv` is resolved in init().
 import {
-  $, EVENTS, GEO, YEARS, catColor, fitCanvas, fmtY, fontMono, fontUI, repaintOnFonts, tokens,
+  $, EVENTS, GEO, YEARS, catColor, fitCanvas, fmtY, fontMono, fontUI, repaintOnFonts,
+  TimeStore, tokens,
 } from './shared';
 
 export const Horizon = {
@@ -26,6 +27,54 @@ export const Horizon = {
     return 2 * R * Math.asin(Math.min(1, Math.sqrt(h)));
   },
   nearestYear(y: number) { let best = YEARS[0]; for (const Y of YEARS) if (Math.abs(Y - y) < Math.abs(best - y)) best = Y; return best; },
+
+  /* ── THE STANDPOINT IS THE GLOBAL MOMENT ──────────────────────────────────
+     "?v=horizon&y=1620 renders 1776."
+
+     A city AND a year are the standpoint this view answers from, so its year is
+     not a private setting like the map's zoom — it is the app's one "where you
+     are in time", drawn from a different place. It used to be neither read nor
+     published: booting from a URL, or arriving from the map at 1621, left the
+     rings around whatever the input had last been set to, and scrubbing here
+     moved nothing anywhere else.
+
+     Two methods, and between them the store and this view can never disagree:
+
+     syncToYear() ADOPTS without writing back — the same contract, and the same
+     name, as WorldMap.syncToYear. Called on every arrival (renderTab), so
+     boot-from-URL and a tab switch are the one code path.
+
+     setYear() PUBLISHES — every user gesture that changes the year lands here,
+     which is the whole of the anti-loop discipline shared.ts asks for: stores
+     are written from input handlers only. The subscriber side is syncToYear's
+     early return, so a year we set ourselves cannot come back as a change. */
+
+  /** The extent this view can actually stand in — the number field's own guard. */
+  clampYear(y: number) { return Math.max(-2999, Math.min(2026, Math.round(y))); },
+
+  /** Put the year on the field, unless the reader is mid-keystroke in it — an
+   *  assignment while it has focus eats the caret. */
+  showYear() {
+    const inp = $<HTMLInputElement>('#hzYear');
+    if (inp && document.activeElement !== inp) inp.value = String(this.year);
+  },
+
+  /** Adopt the global moment, NEAREST this view can serve it. Writes nothing. */
+  syncToYear(y: number) {
+    const v = this.clampYear(y);
+    if (v === this.year) return;
+    this.year = v;
+    this.showYear();
+  },
+
+  /** The reader moved the standpoint. The moment moves with it, app-wide. */
+  setYear(y: number) {
+    this.year = this.clampYear(y);
+    this.showYear();
+    TimeStore.set(this.year, 'ui');
+    this.render();
+  },
+
   render() {
     if (!this.cv) return;
     const d = fitCanvas(this.cv, this.H); if (!d) return;
@@ -110,10 +159,15 @@ export const Horizon = {
     this.CITIES.forEach((c, i) => { const o = document.createElement('option'); o.value = String(i); o.textContent = c[0]; sel.appendChild(o); });
     this.city = this.CITIES[0];
     sel.addEventListener('change', () => { this.city = this.CITIES[+sel.value]; this.render(); });
-    $('#hzYear')!.addEventListener('input', (e: any) => { const v = +e.target.value; if (v > -3000 && v < 2027) { this.year = v; this.render(); } });
-    document.querySelectorAll<HTMLElement>('[data-hz]').forEach(b => b.addEventListener('click', () => {
-      this.year = +b.dataset.hz!; ($('#hzYear') as HTMLInputElement).value = String(this.year); this.render();
-    }));
+    // Both year controls go through setYear, so every route into this view's
+    // standpoint — typing, the three chips, and the time rail's drag, which
+    // dispatches `input` on this very field — publishes the same moment.
+    $('#hzYear')!.addEventListener('input', (e: any) => {
+      const v = +e.target.value;
+      if (v > -3000 && v < 2027) this.setYear(v);
+    });
+    document.querySelectorAll<HTMLElement>('[data-hz]').forEach(
+      b => b.addEventListener('click', () => this.setYear(+b.dataset.hz!)));
     repaintOnFonts(() => this.render());
   },
 };

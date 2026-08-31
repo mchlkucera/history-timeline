@@ -41,7 +41,7 @@ import { Pop, loadPopulation } from '@/render/population';
 import { buildGallery } from '@/render/gallery';
 import { Conn, initConn, loadRelations } from '@/render/connections';
 import { searchCorpus, searchLayers, queryMatch, yearOf, type Haystack, type Hit, type LayerHit } from '@/render/search';
-import { Layers, planReveal, reveal, type RevealPlan } from '@/render/layers';
+import { Layers, layerDef, planReveal, reveal, type RevealPlan } from '@/render/layers';
 import { describe, perspectiveSpan, setPolityAliases, type Subject } from '@/render/subject';
 import { railPos, railYear, railNum, railEraOf, SNAPSHOTS } from './rail';
 
@@ -400,13 +400,26 @@ function renderTab(v: ViewId) {
   switch (v) {
     case 'map': WorldMap.render(); break;
     case 'pop': Pop.render(); break;
-    case 'horizon': Horizon.render(); break;
+    // THE STANDPOINT ADOPTS THE MOMENT. Horizon draws ONE year, so arriving on
+    // it with the app standing at 1621 and drawing 1776 is the same lie the map
+    // was fixed of: syncToYear takes the moment (nearest it can serve) and
+    // writes nothing back, exactly as WorldMap.syncToYear does. Idempotent, so
+    // the resize and sheet-collapse calls into renderTab cost nothing and a
+    // year the reader set HERE is never yanked back — setYear published it, so
+    // the store already agrees.
+    case 'horizon': Horizon.syncToYear(TimeStore.year); Horizon.render(); break;
     case 'zoom': TL.ensureYearVisible(); TL.render(); break;
     case 'vertical': TL.ensureYearVisible(); VT.render(); break;
     case 'flow': Flow.render(); break;
     case 'braid': Braids.religion.render(); break;
     case 'ideology': Braids.ideology.render(); break;
     case 'conn': Conn.dirty = true; Conn.render(); break;
+    // NO ARRIVAL YEAR ON THE CUBE, and the answer is not "not yet". The block
+    // IS every year at once — all eighteen sheets, `slice: false` — so it is
+    // already showing 1621, and there is no window to pan. The one thing that
+    // could take a year is the cutting plane, which is OFF by default and
+    // hides seventeen sheets when it is on: switching it on to honour a moment
+    // nobody pointed at here would throw away the view's whole proposition.
     case 'cube': Cube.render(); break;
     case 'concepts': break;                       // no canvas
   }
@@ -648,6 +661,7 @@ function showInConnections(id: string, from: SelSource = 'point') {
   const sub = describe(shown);
   if (!sub) return;
   const [f0, f1] = padSpan(...perspectiveSpan(sub));
+  holdSpan = 'conn';                           // a chosen framing outranks the arrival pan
   try { (Conn as unknown as { animTo?: (a: number, b: number) => void }).animTo?.(f0, f1); } catch { /* framing is a courtesy */ }
 }
 
@@ -661,6 +675,68 @@ const padSpan = (a: number, b: number): [number, number] => {
   const pad = Math.max(40, Math.round((b - a) * 0.18));
   return [a - pad, Math.min(2026, b + pad)];
 };
+
+/* ── ARRIVING AT A MOMENT ─────────────────────────────────────────────────────
+   "YEAR/ZOOM IS LOST ON EVERY VIEW SWITCH. Map @1621 → Flow = 1200 BCE–2026."
+
+   TimeStore carries WHERE YOU ARE IN TIME for the whole app, and the timeline
+   already consults it on arrival: TL.ensureYearVisible(), called from
+   renderTab() for `zoom` and `vertical`, which are one window. The other four
+   span views each keep a window of their own and never asked.
+
+   THE RULE IS THE TIMELINE'S, WITH ONE CHANGE. ensureYearVisible re-CENTRES;
+   this PANS THE LEAST IT CAN, because a re-centre throws away more of the
+   reader's framing than an arrival is worth on a view the moment is not read
+   off. The same restraint at both ends of it:
+
+     · the moment ALREADY INSIDE the window → nothing happens. Not a nudge, not
+       a re-centre. A reader who framed 1500–1600, stepped to the map and came
+       back finds 1500–1600.
+     · the span NEVER changes. This is a pan; the zoom belongs to the reader.
+     · outside what this view can draw AT ALL → nothing happens either.
+       Connections holds the last seven centuries; sliding it to 3000 BCE to
+       honour a moment the map can show and it cannot would land the reader on
+       an empty canvas, which is the phantom zoom the app already refuses to
+       perform. The view's OPENING framing is that extent — read off the
+       renderer itself at boot (spanHome below) rather than written down here as
+       a second copy of numbers flow.ts, braid.ts and connections.ts own.
+
+   AND A DELIBERATE FRAMING OUTRANKS IT. "Show this in Flow" animates the window
+   onto a ribbon's own span and THEN navigates, so without a hold this would
+   yank it back to a moment the reader never asked about — the argument
+   TL._holdYear exists to settle, one view family along. It is set by the three
+   showIn* helpers below, which is every route into a span view's framing, and
+   consumed by the NEXT arrival whatever that is: a framing that did not
+   navigate (the cell was pressed on the view it lands on) leaves the flag
+   standing, and clearing it on any arrival is what stops it swallowing a later
+   one. */
+let holdSpan: ViewId | null = null;
+
+/** The four views that keep a time window of their own. */
+interface SpanWindow { d0: number; d1: number; animTo(a: number, b: number): void }
+const spanWindow = (v: ViewId): SpanWindow | null =>
+  v === 'flow' ? Flow
+    : v === 'braid' ? Braids.religion
+      : v === 'ideology' ? Braids.ideology
+        : v === 'conn' ? Conn
+          : null;
+
+/** Pan `v`'s window the minimum it takes to hold the global moment. `home` is
+ *  the framing that view opens on — everything it has to show. */
+function arriveAtMoment(v: ViewId, home?: [number, number]) {
+  const held = holdSpan; holdSpan = null;
+  const w = spanWindow(v);
+  if (!w || held === v) return;
+  const y = TimeStore.year, s = w.d1 - w.d0;
+  if (!Number.isFinite(y) || !(s > 0)) return;
+  if (y >= w.d0 && y <= w.d1) return;                     // the reader's framing stands
+  if (home && (y < home[0] || y > home[1])) return;       // this view draws nothing there
+  // A hair in from the edge rather than flush on it — "comfortable, not merely
+  // visible", the same rule centreMark applies on the other axis.
+  const pad = s * 0.12;
+  const [a, b] = y < w.d0 ? [y - pad, y - pad + s] : [y + pad - s, y + pad];
+  w.animTo(a, b);
+}
 
 /**
  * PUT A POLITY ON THE FLOW CANVAS — the one implementation, shared by the
@@ -691,7 +767,11 @@ function showInFlow(pid: string) {
   }
   SelStore.set('polity:' + pid);
   const sub = describe('polity:' + pid);
-  if (sub) { const [f0, f1] = padSpan(...perspectiveSpan(sub)); Flow.animTo(f0, f1); }
+  if (sub) {
+    const [f0, f1] = padSpan(...perspectiveSpan(sub));
+    holdSpan = 'flow';                         // a chosen framing outranks the arrival pan
+    Flow.animTo(f0, f1);
+  }
 }
 
 /**
@@ -748,7 +828,11 @@ function showInBeliefs(id: string): ViewId {
   // and the parked corner is the one place the reader can predict.
   SelCard.select(id, null, null, 'search');
   const sub = describe(id);
-  if (sub) { const [f0, f1] = padSpan(...perspectiveSpan(sub)); b.animTo(f0, f1); }
+  if (sub) {
+    const [f0, f1] = padSpan(...perspectiveSpan(sub));
+    holdSpan = v;                              // a chosen framing outranks the arrival pan
+    b.animTo(f0, f1);
+  }
   return v;
 }
 
@@ -786,6 +870,14 @@ interface Notice {
   n: number;
 }
 let noticeN = 0;
+
+/* WHO IS SAYING IT. goToSubject announces its own reveal — it is the only
+   caller that can see the DIAL move as well as the lane arrive ("Raised X to
+   Y"), which a diff of the id list cannot — so it claims the lane for the
+   duration of reveal() and the model-level announcer below stands down. Every
+   other route into Layers lands there instead. Cleared the instant reveal()
+   returns, so a plan that only raised a dial cannot swallow the next real add. */
+let laneClaimed: string | null = null;
 
 /** WHAT TO CALL A VIEW ON THE ONE BUTTON THAT GOES THERE. The rail's own word
  *  for it — except the horizontal timeline, where the rail says "Horizontal"
@@ -1010,11 +1102,15 @@ export default function Lab() {
   // back. Null almost always — the common case is that nothing had to change.
   const [notice, setNotice] = useState<Notice | null>(null);
   const booted = useRef(false);
-  // WHERE CONNECTIONS OPENS. Conn computes its own default span from the corpus
-  // (connections.ts, "default span: everything the spreads cover"), so the only
-  // honest reset is the framing it actually arrived at — read once, after init,
-  // rather than a second copy of those numbers written down here.
-  const connHome = useRef<[number, number] | null>(null);
+  // WHERE EACH SPAN VIEW OPENS. Conn computes its default span from the corpus
+  // (connections.ts, "default span: everything the spreads cover") and the other
+  // three carry theirs in their own config, so the only honest reset — and the
+  // only honest answer to "what can this view show at all" — is the framing each
+  // one actually arrived at. Read once, after init, rather than four copies of
+  // those numbers written down here. Feeds two things: the Connections panel's
+  // Reset, and arriveAtMoment's refusal to pan a view onto a moment it has
+  // nothing to draw at.
+  const spanHome = useRef<Partial<Record<ViewId, [number, number]>>>({});
   // Coming back to a group should return you to where you were in it. Seeded
   // from GROUP_DEFAULT; the vertical port flips that seed, not this.
   const lastMember = useRef<Record<string, ViewId>>({ ...GROUP_DEFAULT });
@@ -1313,7 +1409,12 @@ export default function Lab() {
             return null;
           },
         });
-        connHome.current = [Conn.d0, Conn.d1];
+        spanHome.current = {
+          flow: [Flow.d0, Flow.d1],
+          braid: [Braids.religion.d0, Braids.religion.d1],
+          ideology: [Braids.ideology.d0, Braids.ideology.d1],
+          conn: [Conn.d0, Conn.d1],
+        };
         SelCard.setView(viewRef.current);
         setReady(true);
         // THE ATLAS, AFTER THE PIXELS. warmAtlas() waits for the first idle after
@@ -1555,7 +1656,12 @@ export default function Lab() {
     if (view !== 'concepts') lastMember.current[g] = view;
     paintUnread(seen.current, view);
     writeUrl(true);                       // the view is a deliberate move: write it now
-    if (ready) { renderTab(view); syncRail(); SelCard.setView(view); }
+    // renderTab FIRST — arriveAtMoment reads d0/d1 and hands the pan to the
+    // renderer's own animTo, which paints; a canvas that has not been sized yet
+    // would tween against a stale window. The two timeline projections are not
+    // in it: TL.ensureYearVisible() inside renderTab is their version of this,
+    // with its own _holdYear, and calling both would be two courtesies arguing.
+    if (ready) { renderTab(view); arriveAtMoment(view, spanHome.current[view]); syncRail(); SelCard.setView(view); }
   }, [view, ready, syncRail, writeUrl]);
 
   // Selecting something else closes the full list again — the dock is a place
@@ -1957,6 +2063,59 @@ export default function Lab() {
     requestAnimationFrame(tick);
   }, []);
 
+  /* ═══ A LANE THAT ARRIVES ON THE BOARD SAYS SO, WHOEVER PUT IT THERE ══════
+   *
+   * "clicking 'Technology' changed a counter from 13 to 14 and nothing else;
+   * ~10 drag-pans to find the lane."
+   *
+   * Taking a lane out of the library is the same act as revealing one from a
+   * search — the board changed while the reader was looking somewhere else —
+   * and only the search half of it said anything. So the two are one behaviour
+   * now: the same line, in the same words, and the same locate gesture.
+   *
+   * IT HANGS OFF THE MODEL, NOT OFF THE CONTROL, and that is the whole reason
+   * it is here rather than in the library popover. Layers.emit() is the one
+   * thing every route to the board goes through — Layers.add for the library
+   * and for the search's lane row, a direct push for reveal() — so watching the
+   * id list is watching every route there is, including any control added
+   * later. layerpanel.ts subscribed first (at init), so by the time this runs
+   * the panel has already rebuilt and the row flashLayer wants exists.
+   *
+   * ONE LINE PER ARRIVAL, IN ONE VOICE. didLine() is the search's own sentence
+   * — "Added “Technology”" — called rather than copied, so the two can never
+   * drift into two wordings of one event. goToSubject speaks for its own reveal
+   * (it can see a dial move; a diff of ids cannot) and claims the lane while
+   * reveal() runs, which is the only case this stands down for.
+   *
+   * ONE lane, deliberately: a bulk change is a restore or a reset, not a
+   * gesture anyone made, and naming one arbitrary member of it would be a
+   * sentence about nothing the reader did.
+   */
+  useEffect(() => {
+    if (!ready) return;
+    let on = new Set(Layers.ids());
+    return Layers.subscribe(() => {
+      const now = Layers.ids();
+      const fresh = now.filter(id => !on.has(id));
+      on = new Set(now);
+      if (fresh.length !== 1) return;
+      const id = fresh[0];
+      if (id === laneClaimed) return;                  // goToSubject is announcing this one
+      setNotice({
+        text: didLine({
+          need: 'add', layer: id, layerName: layerDef(id)?.name ?? id,
+          detail: null, detailWord: null, why: null,
+        }),
+        n: ++noticeN,
+      });
+      // The panel with the row in it only exists on the horizontal timeline —
+      // flashLayer's own precondition, and the reason the search's lane row has
+      // always navigated before locating.
+      go('zoom');
+      flashLayer(id);
+    });
+  }, [ready, go, flashLayer]);
+
   /* ═══ AND DOWN THE SHEET TO IT — THE OTHER HALF OF "SHOW ME THIS" ════════
    *
    * The founder: "Clicking 'timeline' on a card should scroll me on X on it but
@@ -2093,7 +2252,9 @@ export default function Lab() {
     if (!sub) return;
     const plan = planReveal(id);
     if (plan.need === 'never') return;                 // frame nothing
+    laneClaimed = plan.layer;                          // this one is mine to announce
     const moved = reveal(plan);
+    laneClaimed = null;
     TL.clearSearch();                                  // frame a full world, never 12% of one
     // A REVEAL MEANS YOU POINTED AT NOTHING. selcard.ts's two placements ask
     // one question — was the reader LOOKING at the thing? — and when the lane
@@ -2443,9 +2604,15 @@ export default function Lab() {
     if (r.k === 'v') { go(r.v); return; }
 
     if (r.k === 'l') {
-      if (!Layers.has(r.l.id)) Layers.add(r.l.id);       // add-as-a-lane
+      // ADD-AS-A-LANE, OR LOCATE ONE ALREADY UP — and the two halves are no
+      // longer one call. An add now goes through the model-level announcer
+      // above (the line AND the locate, the same pair the library gets), so
+      // repeating flashLayer here would run two scroll loops at one row. A lane
+      // already on the board changed nothing, so there is nothing to say and
+      // locating it is the whole of the gesture — goToSubject's own rule.
+      if (Layers.has(r.l.id)) { go('zoom'); setNotice(null); flashLayer(r.l.id); return; }
+      Layers.add(r.l.id);
       go('zoom');                                        // the lanes live here
-      flashLayer(r.l.id);                                // …and locate it either way
       return;
     }
 
@@ -3643,7 +3810,7 @@ export default function Lab() {
                       connections.ts cannot mistake it for the "Whole span"
                       preset it retired. */}
                   <ResetBtn id="connReset" title="Back to the framing this view opens on"
-                    onClick={() => { const h = connHome.current; if (h) Conn.animTo(h[0], h[1]); }} />
+                    onClick={() => { const h = spanHome.current.conn; if (h) Conn.animTo(h[0], h[1]); }} />
                 </div>
               ),
               /* THE LEGEND IS NOT A CONTROL, so it sits below all three groups
