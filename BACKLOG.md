@@ -72,9 +72,11 @@ quietly become a different lane.
 The corpus is **476 things**. These are the specific holes found while auditing
 the lanes:
 
-- **The Buddha and Confucius have no rows anywhere.** The Religion lane's own
-  Axial Age note names *"the Buddha, Confucius, the Hebrew prophets and Greek
-  philosophy"* — it names the gap it does not fill.
+- ~~The Buddha and Confucius have no rows anywhere~~ — **WRONG, struck.** Both
+  exist as lives in the corpus (the walkthrough found them; the original claim
+  came from grepping relations.json links, not the corpus). What IS true: each
+  appears twice (a life plus a "born" event — dedupe in flight), and the
+  Religion lane still holds only one Buddhist row.
 - **Gandhi appears nowhere** in the 410-row curated corpus.
 - **Religion's gap is East Asia**, not the West. Its real European/American share
   is ~17 of 40; the rest are Levantine, Mesopotamian, Persian, Indian, Egyptian.
@@ -120,3 +122,32 @@ separate fields. Cheaper to do during a data ETL than before one.
 - **`allConnections()` may now be unreachable** — the card's "All N →" button was
   removed (it was dead on 7 of 10 views) and the Related list lives permanently
   in the field notes. Confirm and delete if so.
+
+---
+
+## From the student walkthrough (2026-08-28) — found, deferred
+
+The walkthrough's blocking findings are being fixed in three passes (search,
+timeline labels, cards+data) plus a queued chrome pass (year survives view
+switches; Horizon reads the URL year; library adds get the same notice and
+framing search adds get). These are the ones deliberately deferred:
+
+- **390px needs a real pass.** The lane rail eats 59% of the width, labels clip
+  on both sides, the Controls sheet covers "+ Add layer" and the bottom lane,
+  and the year scrubber runs off the right edge. A layout pass, not a fix.
+- **The cube's numbers disagree with each other.** One traced empire showed
+  "· 5" (picker), "8 linked polities" and "13 of 18 snapshots" (reading), and
+  "3 links" (lineage) — and a 962–1806 empire traced as 1 BCE – 1938 because
+  FOLLOW LINEAGE defaults to 3. Reconcile the numbers or label them.
+- **No atlas snapshot after 1994.** Every year 1995–2026 shows "the world in
+  1994". Needs an upstream source decision, not a patch.
+- **Panels still collide in corners** on Cube/Flow (field notes over Controls,
+  card over Reading). The card measures and dodges; the popovers do not. One
+  shared collision rule for all floating chrome.
+- **No sticky lane label while panning** — pan past a header and the bars are
+  anonymous.
+- **The per-lane detail popover is hover-only, Escape-proof, and swallows
+  drag** — unreachable on touch entirely.
+- **Empty lanes give no sign they are empty** at the current window.
+- **Search dims the timeline but does nothing visible on Map or Flow.**
+- **Lane names render sentence-case in the rail, ALL-CAPS inline without it.**
