@@ -93,6 +93,27 @@ const LANES: Lane[] = [
   },
 ];
 
+/* ══ WHAT A SELECTION LEAVES OF THE REST OF THE PLATE ══════════════════════════
+   "Why are Connections so dark". Measured against ③ Flow, which draws the same
+   ribbons through the same flowLayout at the same span and viewport, this view was
+   carrying 44% of Flow's ink at rest and 25% of it with something selected. The
+   selected state was the worse half by far: mean luminance sat 5.7 above the panel
+   in the dark theme where Flow's sat 28.8 — a plate you cannot read as anything but
+   black, arrived at by a click the reader made on purpose.
+
+   The cause was a default. dimAlpha() takes a floor and Connections passed none, so
+   it took the shared 0.1 while ② passes 0.42 and ③ dims to its own FOCUS_DIM = 0.34.
+   0.1 was chosen for this file's mat of overlapping ribbons on the argument that a
+   mat needs a deeper floor than a timeline does — but ③ IS a mat of overlapping
+   ribbons, denser than any single lane here, and it reads at 0.34.
+
+   So Connections dims to the same 0.34 its own engine's other view does. The grading
+   is untouched: dimAlpha rescales off the floor rather than clamping to it, so the
+   ordering stays monotone — the selection at 1, a w=1.0 link at 1, a w=0.3 link at
+   0.51, unrelated context at 0.34 — and what changes is only how far down "unrelated"
+   is allowed to go. Nothing about which things light up moves at all. */
+const DIM_FLOOR = 0.34;
+
 // ---------- level of detail, ported verbatim from ② (render/timeline.ts) ----------
 // The visible span decides which importance levels render, and levels fade rather than
 // pop. Same thresholds, same ramp, same 2.5× widening for the "lens" case, so the two
@@ -132,6 +153,7 @@ export const Conn = {
   hits: [] as any[],          // {id, lane, x0, x1, y, r, kind, anchor}
   labels: [] as any[],        // placed after everything else, best-first, collisions dropped
   q: '',                      // the ONE app-wide search box dims everything it does not hit
+  sbox: null as HTMLInputElement | null,   // …and `q` is a MIRROR of it, re-read every frame
   dirty: true, lastW: 0, mode: 'abs',
   // The vertical budget is the STAGE'S, not this file's — see measure(). It used to be
   // a hard-coded 826 against a 611-791px box that does not scroll, so the fourth lane —
@@ -475,7 +497,7 @@ export const Conn = {
   relsOf(id: string) { return relIndex.get(id) || []; },
   relOf(id: string): Map<string, { w: number; kind: string }> { return relOfShared(id); },
   alphaOf(id: string, rels: Map<string, { w: number; kind: string }> | null) {
-    return dimAlpha(id, this.sel, rels);
+    return dimAlpha(id, this.sel, rels, DIM_FLOOR);
   },
 
   // ---------- paint ----------
@@ -496,6 +518,20 @@ export const Conn = {
     this.hits = []; this.labels = [];
     // ONE SEARCH, EVERYWHERE THE SAME: a hit keeps its alpha and takes an accent2 ring,
     // everything else drops to 12% — the app's single top field drives this view too.
+    /* …AND `q` IS RE-READ FROM THE FIELD, NEVER REMEMBERED PAST IT. It used to be
+       written only by the field's `input` event, which is not the only way the field
+       empties: taking a row out of the search list clears it by assignment
+       (`box.value = ''`), and an assignment fires no event. The timeline is told
+       separately — that path calls TL.clearSearch() — but nothing told this view, so
+       Connections went on dimming every non-match to 12% against a query the reader
+       could no longer see in the now-empty box, and stayed dark until they typed and
+       deleted something. Reproduced: type "venice", pick a row, `Conn.q === 'venice'`
+       with `#cmdk.value === ''`.
+       A mirror that can disagree with the thing it mirrors is just a second source of
+       truth, so this reads the field itself — one property read per frame, no event to
+       miss, and no way for a dim to outlive the query that asked for it. The `input`
+       listener stays: it is what makes typing repaint. */
+    if (this.sbox) this.q = this.sbox.value.trim().toLowerCase();
     this._qHits = 0;
     const sDim = (n: Item) => this.q ? (this.matches(n) ? 1 : 0.12) : 1;
     // resting state: nothing is selected, so nothing has earned prominence yet. The view
@@ -566,8 +602,20 @@ export const Conn = {
              direction as everything else here: closer can only add.
              Selection, hover, a search hit and anything the selection points at are
              exempt: this must never be able to hide a relation you asked for. */
+          /* ══ AND THE RESTING PLATE IS NOT THE FAINTEST STATE IN THE VIEW ══════
+             It was: the plate paid 0.6 while nothing was selected and 0.88 once
+             something was, so the picture a reader arrives on — every reader, every
+             time, before they have done anything — was the one drawn with the least
+             ink this file ever spends. ③ Flow rests at 0.86 and lifts kin to 0.98;
+             a 14% lift, not a 47% one. It reads calm at 0.86, and it is the denser
+             mat of the two.
+             So there is one plate strength now, and the selection does its work
+             through dimAlpha alone — the subject holds the 0.88 it already had and
+             the rest drops to DIM_FLOOR beneath it. The contrast is what says
+             WHICH; making the subject brighter than the resting world was paying
+             for that contrast twice, and charging the resting world for it. */
           const fine = (isLit || isSel || isHov || isMatch) ? 1 : clamp((midT - 2) / 3, 0, 1);
-          const fillA = al * (REST ? 0.6 : 0.88) * (0.4 + 0.6 * fine);
+          const fillA = al * 0.88 * (0.4 + 0.6 * fine);
           if (solid) {
             ctx.globalAlpha = fillA; ctx.fillStyle = col; ctx.fill();
             /* ══ THE SEPARATOR YIELDS ON A BAND TOO THIN TO HOLD IT ═══════════════
@@ -1008,7 +1056,7 @@ export const Conn = {
     /* ONE SEARCH, EVERYWHERE THE SAME. ②'s box is the app's single top field, and
        this view rides the same element with the same listener shape — a hit keeps
        full alpha and takes a T.accent2 ring, everything else drops to 12%. */
-    const sbox = $<HTMLInputElement>('#cmdk') || $<HTMLInputElement>('#searchBox');
+    const sbox = this.sbox = $<HTMLInputElement>('#cmdk') || $<HTMLInputElement>('#searchBox');
     if (sbox) sbox.addEventListener('input', (e: any) => this.setQuery(e.target.value));
     armSafariGestureGuard();
     refuseSafariGestures(cv);
