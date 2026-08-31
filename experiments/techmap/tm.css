@@ -1,0 +1,376 @@
+/* =============================================================================
+   techmap — tm.css
+
+   PROTOTYPE CHROME ONLY. The rail, the panels, the tabs and the buttons are the
+   app's own components out of ../../design/shell.css; this file lays them out
+   and adds the page around them. Every value below resolves to a --tl-* token
+   from ../../design/tokens.css — no hex, no font stack, no duration of its own —
+   so the three-state theming (bare :root / prefers-color-scheme / [data-theme])
+   comes for free and a token move moves this page with it.
+
+   ACCENT BUDGET. --tl-accent (Minium) means WHERE YOU ARE IN TIME. On this page
+   it is spent on exactly three things, all of them the same thing: the rail
+   index line, its year flag, and the keyboard focus ring. No tab is accented,
+   no button is accented, no arrival dot is accented. The marks on the map are
+   coloured by the DIFFUSION'S CATEGORY out of the corpus's eight data hues,
+   which is a separate system and must never be confused with the index.
+
+   NAMESPACE: .tm-*, plus positioning-only overrides on .tl-panel / .tl-switch.
+   ============================================================================= */
+
+*, *::before, *::after { box-sizing: border-box; }
+html { -webkit-text-size-adjust: 100%; }
+body {
+  margin: 0;
+  background: var(--tl-canvas-bg);
+  color: var(--tl-ink);
+  font-family: var(--tl-font-ui);
+  font-size: var(--tl-text-base);
+  line-height: var(--tl-lh-ui);
+}
+:where(h1, h2, h3, h4, p, ul, ol, dl, dd, table, figure) { margin: 0; }
+:where(ul, ol) { padding: 0; list-style: none; }
+:where(button) { font: inherit; color: inherit; background: none; border: 0; text-align: left; cursor: pointer; }
+:where(code, kbd) { font-family: var(--tl-font-mono); font-size: 0.92em; color: var(--tl-ink-2); }
+:where(b) { font-weight: var(--tl-w-semi); }
+
+:where(button, a[href], input, summary, [tabindex]):focus-visible {
+  outline: 2px solid var(--tl-focus-ring);
+  outline-offset: 2px;
+  border-radius: var(--tl-radius-xs);
+}
+
+.tm {
+  max-width: 1240px;
+  margin: 0 auto;
+  padding: var(--tl-space-8) var(--tl-space-6) var(--tl-space-11);
+  display: flex;
+  flex-direction: column;
+  gap: var(--tl-space-9);
+}
+
+/* ── page head ───────────────────────────────────────────────────────────── */
+.tm-head { display: flex; flex-direction: column; gap: var(--tl-space-4); }
+.tm-head__top {
+  display: flex; align-items: flex-start; justify-content: space-between;
+  gap: var(--tl-space-6); flex-wrap: wrap;
+}
+.tm-kicker {
+  font-family: var(--tl-font-mono);
+  font-size: var(--tl-text-2xs);
+  letter-spacing: var(--tl-track-caps);
+  text-transform: uppercase;
+  color: var(--tl-ink-3);
+  margin-bottom: var(--tl-space-3);
+}
+.tm-title {
+  font-family: var(--tl-font-mark);
+  font-size: var(--tl-text-3xl);
+  font-weight: var(--tl-w-regular);
+  line-height: var(--tl-lh-tight);
+  letter-spacing: var(--tl-track-tight);
+}
+.tm-lede {
+  max-width: var(--tl-measure);
+  font-size: var(--tl-text-prose);
+  line-height: var(--tl-lh-prose);
+  color: var(--tl-ink-2);
+}
+.tm-em { color: var(--tl-ink); font-style: italic; }
+
+.tm-theme { display: inline-flex; border: var(--tl-border) solid var(--tl-rule); border-radius: var(--tl-radius-sm); overflow: hidden; }
+.tm-theme button {
+  padding: var(--tl-space-3) var(--tl-space-5);
+  font-size: var(--tl-text-2xs);
+  font-weight: var(--tl-w-semi);
+  letter-spacing: var(--tl-track-caps);
+  text-transform: uppercase;
+  color: var(--tl-ink-3);
+  background: var(--tl-surface);
+  border-left: var(--tl-border) solid var(--tl-rule);
+}
+.tm-theme button:first-child { border-left: 0; }
+.tm-theme button[aria-pressed="true"] { background: var(--tl-surface-3); color: var(--tl-ink); }
+.tm-theme button:hover { color: var(--tl-ink-2); }
+
+/* ── the instrument ──────────────────────────────────────────────────────── */
+.tm-instrument {
+  border: var(--tl-border) solid var(--tl-rule);
+  border-radius: var(--tl-radius-md);
+  background: var(--tl-surface);
+  box-shadow: var(--tl-shadow-panel);
+  overflow: hidden;
+  display: flex;
+  flex-direction: column;
+}
+
+.tm-toprail {
+  display: grid;
+  grid-template-columns: minmax(0, auto) minmax(0, 1fr);
+  align-items: center;
+  gap: var(--tl-space-5);
+  padding-right: var(--tl-space-5);
+  background: var(--tl-surface);
+  border-bottom: var(--tl-border) solid var(--tl-rule);
+  min-height: var(--tl-rail-top);
+}
+.tm-toprail .tl-switch { overflow-x: auto; scrollbar-width: none; }
+.tm-toprail .tl-switch::-webkit-scrollbar { display: none; }
+.tm-toprail__end { display: flex; justify-content: flex-end; min-width: 0; }
+.tm-toprail__end .tl-meta {
+  overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+  font-size: var(--tl-text-xs); color: var(--tl-ink-3);
+}
+@media (max-width: 899px) {
+  .tm-toprail { grid-template-columns: minmax(0, 1fr); padding-right: 0; }
+  .tm-toprail__end { display: none; }
+}
+
+/* the stage — the canvas plus the two floating panels */
+.tm-stage {
+  position: relative;
+  background: var(--tl-canvas-bg);
+  height: 560px;
+  min-height: 380px;
+}
+@media (max-width: 899px) { .tm-stage { height: 460px; } }
+@media (max-width: 599px) { .tm-stage { height: 380px; } }
+.tm-canvas { display: block; width: 100%; height: 100%; touch-action: manipulation; }
+
+.tm-legend { width: 218px; }
+.tm-reader { width: 300px; max-height: calc(100% - var(--tl-gutter) * 2); }
+@media (max-width: 899px) {
+  .tm-legend { display: none; }
+  .tm-reader { width: 232px; }
+}
+@media (max-width: 599px) { .tm-reader { display: none; } }
+
+.tm-legend .tl-panel__bd, .tm-reader .tl-panel__bd { gap: var(--tl-space-4); padding: var(--tl-space-4); }
+.tm-legend__x {
+  display: inline-flex; align-items: center; justify-content: center;
+  width: var(--tl-ctl-sm); height: 22px;
+  font-family: var(--tl-font-mono); font-size: var(--tl-text-sm);
+  color: var(--tl-ink-3); border-radius: var(--tl-radius-xs);
+}
+.tm-legend__x:hover { background: var(--tl-hover); color: var(--tl-ink); }
+.tm-legend[data-collapsed="true"] .tl-panel__bd { display: none; }
+
+.tm-key { display: flex; flex-direction: column; gap: var(--tl-space-3); }
+.tm-key__hd {
+  font-size: var(--tl-text-2xs); font-weight: var(--tl-w-semi);
+  letter-spacing: var(--tl-track-caps); text-transform: uppercase;
+  color: var(--tl-ink-3);
+}
+.tm-key__row { display: grid; grid-template-columns: 26px minmax(0, 1fr); align-items: center; gap: var(--tl-space-4); }
+.tm-key__row span:last-child { font-size: var(--tl-text-xs); color: var(--tl-ink-2); }
+.tm-key__g { display: block; width: 26px; height: 14px; color: var(--tm-hue, var(--tl-ink-2)); }
+
+/* the arrivals reader */
+.tm-arr { display: flex; flex-direction: column; gap: var(--tl-space-1); }
+.tm-arr__row {
+  display: grid;
+  grid-template-columns: 42px 16px minmax(0, 1fr);
+  align-items: baseline;
+  gap: var(--tl-space-3);
+  width: 100%;
+  padding: var(--tl-space-3) var(--tl-space-3);
+  border-radius: var(--tl-radius-xs);
+  border-top: var(--tl-border) solid transparent;
+}
+.tm-arr__row + .tm-arr__row { border-top-color: var(--tl-rule-soft); }
+.tm-arr__row:hover { background: var(--tl-hover); }
+.tm-arr__row[aria-current="true"] { background: var(--tl-selected); }
+.tm-arr__y {
+  font-family: var(--tl-font-mono); font-size: var(--tl-text-2xs);
+  font-variant-numeric: tabular-nums; color: var(--tl-ink-3);
+}
+.tm-arr__g { width: 14px; height: 14px; align-self: center; color: var(--tm-hue, var(--tl-ink-2)); }
+.tm-arr__n { font-size: var(--tl-text-xs); color: var(--tl-ink); min-width: 0; }
+.tm-arr__note { display: block; font-size: var(--tl-text-2xs); color: var(--tl-ink-3); line-height: var(--tl-lh-ui); margin-top: 1px; }
+.tm-arr__row[aria-current="true"] .tm-arr__note { color: var(--tl-ink-2); }
+.tm-arr__tag {
+  font-family: var(--tl-font-mono); font-size: var(--tl-text-2xs);
+  color: var(--tl-ink-3); letter-spacing: var(--tl-track-xs);
+}
+.tm-empty { font-size: var(--tl-text-xs); color: var(--tl-ink-3); font-style: italic; }
+
+/* the hover tip — the app's .tl-tip, positioned by JS */
+.tm-tip {
+  position: absolute;
+  z-index: var(--tl-z-tip);
+  max-width: 320px;
+  padding: var(--tl-space-4) var(--tl-space-5);
+  background: var(--tl-surface-over);
+  -webkit-backdrop-filter: blur(14px) saturate(1.3);
+  backdrop-filter: blur(14px) saturate(1.3);
+  border: var(--tl-border) solid var(--tl-rule);
+  border-radius: var(--tl-radius-lg);
+  box-shadow: var(--tl-shadow-pop);
+  pointer-events: none;
+}
+.tm-tip__t { font-size: var(--tl-text-sm); font-weight: var(--tl-w-semi); color: var(--tl-ink); }
+.tm-tip__m {
+  font-family: var(--tl-font-mono); font-size: var(--tl-text-2xs);
+  color: var(--tl-ink-3); letter-spacing: var(--tl-track-xs);
+  margin-top: 1px;
+}
+.tm-tip__s { font-size: var(--tl-text-xs); color: var(--tl-ink-2); line-height: var(--tl-lh-ui); margin-top: var(--tl-space-3); }
+
+/* the corpus sparkline strip */
+.tm-corpus {
+  display: grid;
+  grid-template-columns: 184px minmax(0, 1fr);
+  align-items: center;
+  gap: var(--tl-space-5);
+  height: 46px;
+  padding-left: var(--tl-space-5);
+  background: var(--tl-surface-2);
+  border-top: var(--tl-border) solid var(--tl-rule-soft);
+}
+.tm-corpus__label { display: flex; flex-direction: column; gap: 1px; min-width: 0; }
+.tm-corpus__label .tl-meta { font-family: var(--tl-font-mono); font-size: var(--tl-text-2xs); color: var(--tl-ink-3); }
+.tm-spark { display: block; width: 100%; height: 46px; }
+@media (max-width: 599px) { .tm-corpus { grid-template-columns: minmax(0, 1fr); } .tm-corpus__label { display: none; } }
+
+/* THE RAIL — the app's own .tl-timerail, which has no height of its own.
+   In the app it is a grid TRACK on .tl-app (var(--tl-rail-time)); everything
+   inside .tl-scale is absolutely positioned, so without an explicit height the
+   scale collapses to zero and the rail renders as a blank band. */
+.tm-rail {
+  height: var(--tl-rail-time);
+  border-top: var(--tl-border) solid var(--tl-rule);
+}
+.tm-rail .tl-scale { cursor: ew-resize; }
+.tm-transport {
+  display: flex; align-items: center; gap: var(--tl-space-3);
+  padding: 0 var(--tl-space-5);
+  border-left: var(--tl-border) solid var(--tl-rule-soft);
+}
+@media (max-width: 599px) { .tm-transport { padding: 0 var(--tl-space-3); } .tm-transport .tl-btn--quiet { display: none; } }
+/* arrival ticks engraved into the scale — ink, never accent */
+.tm-scale__marks { position: absolute; left: 0; right: 0; bottom: var(--tl-scale-base, 16px); height: 20px; pointer-events: none; }
+.tm-scale__mark { position: absolute; bottom: 0; width: 1px; height: 5px; background: var(--tl-ink-3); opacity: .55; }
+.tm-scale__mark[data-on="true"] { height: 9px; background: var(--tl-ink); opacity: .85; }
+
+.tm-caption {
+  max-width: var(--tl-measure);
+  font-size: var(--tl-text-sm);
+  line-height: var(--tl-lh-prose);
+  color: var(--tl-ink-3);
+  margin-top: calc(var(--tl-space-6) * -1);
+}
+
+/* ── written plates ──────────────────────────────────────────────────────── */
+.tm-plate {
+  border: var(--tl-border) solid var(--tl-rule);
+  border-radius: var(--tl-radius-md);
+  background: var(--tl-surface);
+  padding: var(--tl-space-8);
+  display: flex;
+  flex-direction: column;
+  gap: var(--tl-space-7);
+}
+.tm-plate--ask { background: var(--tl-surface-2); }
+.tm-sechd { display: flex; flex-direction: column; gap: var(--tl-space-3); }
+.tm-sechd h2 {
+  font-family: var(--tl-font-mark);
+  font-size: var(--tl-text-2xl);
+  font-weight: var(--tl-w-regular);
+  line-height: var(--tl-lh-tight);
+}
+.tm-sechd p { max-width: var(--tl-measure); font-size: var(--tl-text-prose); line-height: var(--tl-lh-prose); color: var(--tl-ink-2); }
+.tm-h3 {
+  font-size: var(--tl-text-2xs); font-weight: var(--tl-w-semi);
+  letter-spacing: var(--tl-track-caps); text-transform: uppercase;
+  color: var(--tl-ink-2);
+}
+
+.tm-code {
+  margin: 0;
+  padding: var(--tl-space-6);
+  background: var(--tl-surface-2);
+  border: var(--tl-border) solid var(--tl-rule-soft);
+  border-radius: var(--tl-radius-sm);
+  overflow-x: auto;
+  font-family: var(--tl-font-mono);
+  font-size: var(--tl-text-sm);
+  line-height: 1.65;
+  color: var(--tl-ink);
+}
+.tm-code code { font-size: inherit; color: inherit; }
+.tm-c { color: var(--tl-ink-3); }
+
+.tm-note {
+  max-width: var(--tl-measure);
+  font-size: var(--tl-text-prose);
+  line-height: var(--tl-lh-prose);
+  color: var(--tl-ink-2);
+}
+
+.tm-lessons { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: var(--tl-space-6); }
+@media (max-width: 899px) { .tm-lessons { grid-template-columns: minmax(0, 1fr); } }
+.tm-lesson {
+  padding: var(--tl-space-6);
+  background: var(--tl-surface-2);
+  border: var(--tl-border) solid var(--tl-rule-soft);
+  border-radius: var(--tl-radius-sm);
+  display: flex; flex-direction: column; gap: var(--tl-space-4);
+}
+.tm-lesson h3 { display: flex; align-items: center; gap: var(--tl-space-4); font-size: var(--tl-text-md); font-weight: var(--tl-w-semi); }
+.tm-lesson__dot { width: 8px; height: 8px; border-radius: var(--tl-radius-full); background: var(--tm-dot, var(--tl-ink-2)); flex: none; }
+.tm-lesson p { font-size: var(--tl-text-prose); line-height: var(--tl-lh-prose); color: var(--tl-ink-2); }
+
+.tm-strains { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: var(--tl-space-4); }
+@media (max-width: 899px) { .tm-strains { grid-template-columns: repeat(2, minmax(0, 1fr)); } }
+.tm-stat {
+  padding: var(--tl-space-5);
+  border: var(--tl-border) solid var(--tl-rule-soft);
+  border-radius: var(--tl-radius-sm);
+  display: flex; flex-direction: column; gap: var(--tl-space-2);
+}
+.tm-stat__n { font-family: var(--tl-font-mono); font-size: var(--tl-text-xl); font-variant-numeric: tabular-nums; letter-spacing: var(--tl-track-num); color: var(--tl-ink); }
+.tm-stat__k { font-size: var(--tl-text-2xs); letter-spacing: var(--tl-track-caps); text-transform: uppercase; color: var(--tl-ink-3); }
+.tm-stat__d { font-size: var(--tl-text-xs); color: var(--tl-ink-2); line-height: var(--tl-lh-ui); }
+
+.tm-table { width: 100%; border-collapse: collapse; font-size: var(--tl-text-sm); }
+.tm-table th, .tm-table td { text-align: left; padding: var(--tl-space-4) var(--tl-space-4); border-bottom: var(--tl-border) solid var(--tl-rule-soft); vertical-align: top; line-height: var(--tl-lh-ui); }
+.tm-table th { font-size: var(--tl-text-2xs); letter-spacing: var(--tl-track-caps); text-transform: uppercase; color: var(--tl-ink-3); font-weight: var(--tl-w-semi); border-bottom-color: var(--tl-rule); }
+.tm-table td { color: var(--tl-ink-2); }
+.tm-table td:first-child { color: var(--tl-ink); white-space: nowrap; }
+.tm-table td:last-child { font-family: var(--tl-font-mono); font-size: var(--tl-text-2xs); white-space: nowrap; }
+.tm-good { color: var(--tl-ink); }
+.tm-ok   { color: var(--tl-ink-2); }
+.tm-bad  { color: var(--tl-ink-3); }
+@media (max-width: 699px) { .tm-table td:first-child { white-space: normal; } }
+
+.tm-list { display: flex; flex-direction: column; gap: var(--tl-space-5); max-width: var(--tl-measure); }
+.tm-list li { font-size: var(--tl-text-prose); line-height: var(--tl-lh-prose); color: var(--tl-ink-2); padding-left: var(--tl-space-6); border-left: 2px solid var(--tl-rule); }
+
+.tm-qs { display: flex; flex-direction: column; gap: var(--tl-space-7); counter-reset: q; }
+.tm-qs li { display: flex; flex-direction: column; gap: var(--tl-space-3); }
+.tm-qs h3 {
+  display: flex; gap: var(--tl-space-4);
+  font-size: var(--tl-text-lg); font-weight: var(--tl-w-semi); line-height: var(--tl-lh-tight);
+}
+.tm-qs h3::before {
+  counter-increment: q; content: counter(q);
+  font-family: var(--tl-font-mono); font-size: var(--tl-text-sm);
+  color: var(--tl-ink-3); flex: none; padding-top: 3px;
+}
+.tm-qs p { max-width: var(--tl-measure); font-size: var(--tl-text-prose); line-height: var(--tl-lh-prose); color: var(--tl-ink-2); padding-left: var(--tl-space-8); }
+
+.tm-foot { font-size: var(--tl-text-sm); color: var(--tl-ink-3); line-height: var(--tl-lh-prose); }
+
+/* THE YEAR FLAG FLIPS AT THE END OF THE SCALE. .tl-index__flag hangs to the
+   RIGHT of the index line and .tl-scale is overflow:hidden, so at the last ~12%
+   of the run the readout is sliced in half — visible at the end of every
+   playthrough. Same line, same colour, other side. */
+.tl-index[data-flip="true"] .tl-index__flag { left: auto; right: 4px; }
+
+/* The diffusion's own answer to "what is an arrival", in full, in the legend.
+   The top rail only has room to ellipsise it. */
+.tm-claim {
+  font-size: var(--tl-text-xs);
+  line-height: var(--tl-lh-ui);
+  color: var(--tl-ink-2);
+}

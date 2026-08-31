@@ -1,0 +1,396 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>A map of how a technology spreads</title>
+<meta name="description" content="Four hand-authored diffusions — printing, gunpowder, mechanised textiles, computing — on the app's own atlas, under the app's own time rail. A local prototype, and a proposal for the data shape.">
+
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500;600&family=Instrument+Sans:wght@400;500;600;700&family=Instrument+Serif&display=swap">
+
+<!-- THE REAL TOKENS AND THE REAL SHELL, loaded from the design system and never
+     copied. The rail below is .tl-timerail / .tl-scale / .tl-index — the app's
+     own classes, doing the app's own job, because "where you are in time" is
+     literally what this prototype is about. -->
+<link rel="stylesheet" href="../../design/tokens.css">
+<link rel="stylesheet" href="../../design/shell.css">
+<link rel="stylesheet" href="tm.css">
+</head>
+<body>
+<main class="tm">
+
+  <!-- ══ HEAD ══════════════════════════════════════════════════════════════ -->
+  <header class="tm-head">
+    <div class="tm-head__top">
+      <div>
+        <div class="tm-kicker">Local prototype · not deployed · experiments/techmap</div>
+        <h1 class="tm-title">A map of how a technology spreads</h1>
+      </div>
+      <div class="tm-theme" role="group" aria-label="Theme">
+        <button type="button" data-theme="light" aria-pressed="false">Light</button>
+        <button type="button" data-theme="system" aria-pressed="true">System</button>
+        <button type="button" data-theme="dark" aria-pressed="false">Dark</button>
+      </div>
+    </div>
+    <p class="tm-lede">
+      <b>“See how printing spread, or gunpowder, or the textile loom, or computing.”</b>
+      Four diffusions, hand authored against conventional scholarship, on the app’s own
+      atlas and under the app’s own time rail. Drag the scrubber and the picture is the
+      state of the spread in that year: what had arrived, where, and along which road.
+    </p>
+    <p class="tm-lede">
+      The corpus already has these four as <code>spreads</code> — a weight curve and a
+      moving footprint, which is <b>when</b> and <b>how big</b>. It has no
+      <b>where-next</b>. So this page has two jobs: show what a diffusion map feels like
+      in the app’s language, and pin down the smallest data shape that would carry one, so
+      that a later ETL has something to aim at. <span class="tm-em">Everything the map is
+      wrong about, it is wrong about out loud.</span>
+    </p>
+  </header>
+
+  <!-- ══ THE INSTRUMENT ════════════════════════════════════════════════════ -->
+  <section class="tm-instrument" aria-label="Diffusion map">
+    <div class="tm-toprail">
+      <div class="tl-switch" role="tablist" aria-label="Diffusion" id="tmTabs"></div>
+      <div class="tm-toprail__end">
+        <span class="tl-meta" id="tmUnitLabel"></span>
+      </div>
+    </div>
+
+    <div class="tm-stage">
+      <canvas id="tmCanvas" class="tm-canvas"></canvas>
+
+      <!-- legend: what the marks mean. Category hue = the domain (the corpus's
+           own eight-hue system); dash = confidence; glyph = the carrier. -->
+      <aside class="tl-panel tl-panel--tl tm-legend" id="tmLegend">
+        <div class="tl-panel__hd">
+          <span class="tl-panel__title">Marks</span>
+          <button type="button" class="tl-iconbtn tm-legend__x" id="tmLegendToggle" aria-expanded="true" aria-label="Collapse">−</button>
+        </div>
+        <div class="tl-panel__bd" id="tmLegendBody"></div>
+      </aside>
+
+      <!-- the reader: everything that has arrived by the index year, newest first -->
+      <aside class="tl-panel tl-panel--tr tm-reader" id="tmReader">
+        <div class="tl-panel__hd">
+          <span class="tl-panel__title">Arrivals</span>
+          <span class="tl-panel__count" id="tmReaderCount">0</span>
+        </div>
+        <div class="tl-panel__bd" id="tmReaderBody"></div>
+      </aside>
+
+      <div class="tm-tip" id="tmTip" hidden></div>
+    </div>
+
+    <!-- the corpus's own answer to the same question, on the same axis -->
+    <div class="tm-corpus" id="tmCorpus">
+      <div class="tm-corpus__label">
+        <span class="tl-label">Corpus <code>spread</code></span>
+        <span class="tl-meta" id="tmCorpusMeta"></span>
+      </div>
+      <canvas id="tmSpark" class="tm-spark"></canvas>
+    </div>
+
+    <!-- THE TIME RAIL — the app's own, class for class -->
+    <div class="tl-timerail tm-rail">
+      <div class="tl-timerail__year">
+        <span class="tl-year" id="tmYear">—</span>
+        <span class="tl-year__era" id="tmEra">CE</span>
+      </div>
+      <div class="tl-scale" id="tmScale">
+        <span class="tl-scale__ticks" aria-hidden="true"></span>
+        <span class="tl-scale__ticks tl-scale__ticks--major" aria-hidden="true"></span>
+        <span class="tl-scale__label tl-scale__label--start" id="tmScaleA"></span>
+        <span class="tl-scale__label tl-scale__label--end" id="tmScaleB"></span>
+        <span class="tm-scale__marks" id="tmScaleMarks" aria-hidden="true"></span>
+        <input class="tl-range" id="tmRange" type="range" min="0" max="1000" value="0" step="1" aria-label="Year">
+        <span class="tl-index" id="tmIndex"><span class="tl-index__flag" id="tmFlag"></span></span>
+      </div>
+      <div class="tm-transport">
+        <button type="button" class="tl-btn tl-btn--sm" id="tmPlay" aria-label="Play">▶ Play</button>
+        <button type="button" class="tl-btn tl-btn--sm tl-btn--quiet" id="tmEnd" aria-label="Jump to the end">⇥ End</button>
+      </div>
+    </div>
+  </section>
+
+  <p class="tm-caption">
+    The base map is the app’s <b>own</b> atlas — <code>web/public/data/worlds.json</code>,
+    eight snapshots of it, simplified in <code>build-data.py</code> and re-encoded in the
+    atlas’s own delta format, then decoded here by a copy of
+    <code>render/shared.ts&nbsp;decodeSnapshot()</code>. The borders step to the snapshot
+    nearest the index year, the way <code>MapView.syncToYear()</code> already does.
+    Internal borders are drawn at low contrast on purpose: on this page the polities are
+    ground, not figure.
+  </p>
+
+  <!-- ══ THE DATA SHAPE ════════════════════════════════════════════════════ -->
+  <section class="tm-plate">
+    <div class="tm-sechd">
+      <h2>The data shape</h2>
+      <p>The starting point held. Four fields were added, and every one of them was added
+         because a real row would otherwise have had to lie.</p>
+    </div>
+
+    <pre class="tm-code"><code>diffusion = {
+  id, name, cat,          <span class="tm-c">// cat is one of the corpus's eight; it colours every mark</span>
+  spread,                 <span class="tm-c">// the relations.json spread this corresponds to, or null</span>
+  unit,                   <span class="tm-c">// ADDED. what is actually spreading. one sentence, shown to the reader</span>
+  claim,                  <span class="tm-c">// ADDED. what "arrival" means FOR THIS DIFFUSION. one sentence, shown</span>
+  span: [y0, y1],
+  origin:     { place, year, note, contested? },
+  precursors: [{ place, year, note }],            <span class="tm-c">// ADDED. older than the origin, no path</span>
+  hops:       [{ place, year, via?, from?, note?, contested?, route?, fate? }]
+}
+
+place = { id: { name, lat, lon, src: 'corpus' | 'hand', key? } }
+
+via      'trade' | 'conquest' | 'migration' | 'print' | 'institution' | 'copy'
+         drawn as a GLYPH on the arc. Never a colour (the eight category hues are
+         the corpus's data system) and never a dash (tokens.css already spends
+         dash on confidence). 'copy' was ADDED: Slater, Bauwens, Lowell and the
+         Soviet System/360 clone are not trade, not migration, not conquest.
+
+from     the place the arc is drawn FROM. ABSENT = an arrival with no drawable
+         parent — which on this map is a claim, not a gap. Mainz 1450 has no
+         `from` and that is the single most important cell in the file.
+
+contested   the DATE is argued about  → the arrival dot is a slashed ring
+route       the PATH is inferred      → the arc is dashed
+            ADDED. Gunpowder forced these apart on its first European hop:
+            Florence 1326 is a rock-solid date on a completely unknown road.
+
+fate     'faded' — it arrived, it ran, and it stopped. ADDED for Nagasaki 1590,
+         Muhammad Ali's Cairo mills, Müteferrika's press, Colossus. Four of the
+         four diffusions needed it, and no weight curve can say it per place.</code></pre>
+
+    <p class="tm-note">
+      Small enough to fill: <b id="tmStatHops">—</b> hops across four diffusions, at
+      <b id="tmStatPlaces">—</b> places, of which <b id="tmStatCorpus">—</b> came straight
+      out of the corpus’s <code>PLACEMAP</code> by name and the rest had to be typed. The
+      generator validates every row on build — that every <code>from</code> resolves, that
+      no parent is younger than its child, that every <code>via</code> is in the
+      vocabulary — and it currently reports <b id="tmStatProblems">—</b> problems, having
+      reported seven the first time it ran. Those seven are in the section below.
+    </p>
+  </section>
+
+  <!-- ══ WHAT THE FOUR PROVED OR BROKE ═════════════════════════════════════ -->
+  <section class="tm-plate">
+    <div class="tm-sechd">
+      <h2>What authoring the four actually taught</h2>
+      <p>One paragraph each. The interesting output of this prototype is not the map; it
+         is the list of things the map could not say until a field was added.</p>
+    </div>
+
+    <div class="tm-lessons">
+      <article class="tm-lesson" style="--tm-dot: var(--tl-cat-sci)">
+        <h3><span class="tm-lesson__dot"></span>Printing</h3>
+        <p><b>It proved the shape, and it broke the <code>from</code> field on the most
+          famous row in the file.</b> Kaifeng 1040 → Ganghwa 1234 → Cheongju 1377 is a real
+          chain and draws beautifully. Mainz 1450 is not on it. No evidence of transmission
+          from East Asia has ever been produced and the field treats Gutenberg as
+          independent, so the honest hop has <b>no <code>from</code> at all</b> — and the
+          map has to render an arrival with no arc as a deliberate statement rather than as
+          missing data. Then Istanbul: the press arrives in <b>1493</b> with Sephardic
+          refugees printing Hebrew and again in <b>1727</b> with an imperial licence to print
+          Arabic script — two arrivals, same coordinates, 234 years apart, and the second one
+          closes in 1742. One place, several arrivals, one of them fatal. Any shape that
+          keys arrivals by place is already wrong.</p>
+      </article>
+
+      <article class="tm-lesson" style="--tm-dot: var(--tl-cat-war)">
+        <h3><span class="tm-lesson__dot"></span>Gunpowder</h3>
+        <p><b>It split <code>contested</code> in two and then broke chronology.</b> Florence,
+          11 February 1326, is one of the firmest dates on this page — a municipal order for
+          brass cannon — sitting at the end of a road nobody can name. A doubtful date and a
+          doubtful route are different doubts and need different marks, so <code>route</code>
+          was added and the arc is dashed while the dot stays solid. Then Niebla 1262 broke
+          the tree outright: its natural parent, al-Rammah at Damascus, is dated <b>1280</b> —
+          eighteen years <i>after</i> the child. That is not a data error; it is what happens
+          whenever you build a tree over “earliest surviving evidence”, because evidence and
+          transmission are not the same sequence. The build script caught it, and the fix
+          (re-parent to Baghdad 1258) is exactly the silent lie an ETL would tell.</p>
+      </article>
+
+      <article class="tm-lesson" style="--tm-dot: var(--tl-cat-society)">
+        <h3><span class="tm-lesson__dot"></span>Mechanised spinning &amp; weaving</h3>
+        <p><b>It forced <code>via: copy</code> and <code>fate: faded</code>, and it showed
+          that two diffusions can run on one map at different speeds.</b> Slater memorised
+          Arkwright and sailed under a false trade; Bauwens smuggled mule-jennies and the men
+          to run them; Lowell toured Lancashire and rebuilt the loom from memory. None of that
+          is trade, migration or conquest — the transfer has no willing sender, and the
+          vocabulary needed a sixth word. Cartwright’s 1785 power-loom patent is the loudest
+          trap on the page: <i>the machine did not work</i>, and weaving does not actually
+          mechanise until Roberts in 1822, so a patent date used as an arrival date would put
+          the dot 37 years early. Cairo is the clearest <code>faded</code>: thirty state mills
+          by the 1830s, gone after the 1841 settlement stripped the tariff. And Bombay 1854
+          arrives twenty-five years <i>after</i> Lancashire yarn had already destroyed the
+          Indian handloom’s export trade — the goods diffused decades ahead of the machine,
+          and this shape can only draw one of the two.</p>
+      </article>
+
+      <article class="tm-lesson" style="--tm-dot: var(--tl-cat-sci)">
+        <h3><span class="tm-lesson__dot"></span>Computing</h3>
+        <p><b>It broke the shape three times and it should be shipped broken.</b> The origin
+          is a <i>design</i> — Babbage 1837, never built — and a design cannot spread the way
+          a press can. Then Zuse, Atanasoff and Lebedev all arrive with no parent, because
+          they genuinely had none. Then Bletchley: Colossus worked in 1944 and transmitted
+          <i>nothing</i>, classified until 1975 — a node whose outgoing arcs were legally
+          forbidden to exist, which is one of the main ways a technology fails to spread and
+          which no diffusion shape models. Then the unit changes under you: a machine
+          (1941–51), a component (1947–71), a protocol (1969–93). By Mosaic in 1993 the thing
+          arrives everywhere a wire goes, at once, and “printing reached Venice in 1469” has
+          no 1995 equivalent. <b>The map stops at 1993 and says why.</b> That is the honest
+          rendering, and it is better than faking a dot in every capital.</p>
+      </article>
+    </div>
+
+    <div class="tm-strains" id="tmStrains"></div>
+  </section>
+
+  <!-- ══ ETL ═══════════════════════════════════════════════════════════════ -->
+  <section class="tm-plate">
+    <div class="tm-sechd">
+      <h2>What an ETL would need, and how bad the data is</h2>
+      <p>Honest answer first: <b>there is no “arrival of technology X at place Y” predicate
+        in Wikidata, and there never has been.</b> The nodes are partly recoverable. The
+        arcs are not recoverable at all.</p>
+    </div>
+
+    <h3 class="tm-h3">The properties that plausibly carry a node</h3>
+    <table class="tm-table">
+      <thead><tr><th>Property</th><th>What it actually gives you</th><th>Fitness</th></tr></thead>
+      <tbody>
+        <tr><td><code>P575</code> time of discovery or invention</td>
+            <td>On the technology item. One date, sometimes a range. Gives you the
+                <b>origin row and nothing else</b>.</td><td class="tm-good">good, once</td></tr>
+        <tr><td><code>P1071</code> location of creation</td>
+            <td>Pairs with P575 on the same item. Again: the origin.</td><td class="tm-good">good, once</td></tr>
+        <tr><td><code>P571</code> inception + <code>P276</code> location</td>
+            <td>The real workhorse — but on the <b>local instance</b>, not on the
+                technology: a specific press, mill, or machine. Requires you to know what
+                class of object counts as “the technology arriving”.</td><td class="tm-ok">the whole game</td></tr>
+        <tr><td><code>P31</code> instance of</td>
+            <td>How you find those instances: <i>printing house</i>, <i>cotton mill</i>,
+                <i>early computer</i>. Coverage varies by two orders of magnitude between
+                those three.</td><td class="tm-ok">uneven</td></tr>
+        <tr><td><code>P625</code> coordinate location</td>
+            <td>On the place item. Reliable, and the one part of this that is genuinely
+                solved.</td><td class="tm-good">solved</td></tr>
+        <tr><td><code>P1480</code> sourcing circumstances<br><code>P1319 / P1326</code> earliest / latest date</td>
+            <td>Qualifiers meaning <i>circa</i>, <i>presumably</i>, <i>allegedly</i>, or a
+                bracket. These map <b>cleanly onto <code>contested</code></b> — the one
+                place where the model and the source agree without translation.</td><td class="tm-good">exact fit</td></tr>
+        <tr><td><code>P793</code> significant event + <code>P585</code> point in time</td>
+            <td>Where a “first use” fact would live if anyone modelled it. Almost nobody
+                does.</td><td class="tm-bad">sparse</td></tr>
+        <tr><td><code>P737</code> influenced by, <code>P155/156</code> follows</td>
+            <td>The nearest thing to an <code>arc</code>. They connect <b>people and works</b>,
+                not places, and they carry no direction of transmission and no date.</td><td class="tm-bad">wrong object</td></tr>
+      </tbody>
+    </table>
+
+    <h3 class="tm-h3">How bad, per diffusion, guessing honestly</h3>
+    <ul class="tm-list">
+      <li><b>Printing 1450–1500 in Europe: near-perfect, and not from Wikidata.</b> The
+        Incunabula Short Title Catalogue and the <i>Gesamtkatalog der Wiegendrucke</i> record
+        the first press in roughly 280 European towns with dates and imprints; Iowa’s Atlas
+        of Early Printing is literally this map already. A loader against ISTC would fill
+        the European half of the printing diffusion better than a person could, in an
+        afternoon. <b>Outside 1450–1500 and outside Europe, it collapses to zero.</b></li>
+      <li><b>Computing: about half.</b> Early machines are unusually well curated — an item
+        per machine, with <code>P571</code>, <code>P276</code> and often the lab. You would
+        get Z3, ENIAC, SSEM, EDSAC, MESM, the ICs and the microprocessors. You would get
+        none of the arcs, and the ones that matter most (the EDVAC report; the 1973 ENIAC
+        judgment; the ES EVM decision) live in prose.</li>
+      <li><b>Textiles: maybe a fifth.</b> Some mills are items; most are not. The dates that
+        exist are patent dates, which this exercise showed are the exact wrong dates.</li>
+      <li><b>Gunpowder: essentially nothing.</b> Every hop on that map came out of a
+        historian’s argument — Needham, Partington, Chase, Andrade. There is no table
+        anywhere. It is a book.</li>
+    </ul>
+
+    <p class="tm-note">
+      <b>So the pipeline shape is not “one Wikidata sweep”.</b> It is a small hand-curated
+      spine — origin, unit, claim, and the dozen hops that carry the story — with
+      <i>per-diffusion adapters</i> that can bulk-fill where a real catalogue happens to
+      exist. Printing gets an ISTC adapter and 250 extra dots. Gunpowder never gets one and
+      should not pretend otherwise. Which means the honest engineering answer is:
+      <b>build the shape and the renderer, hand-author ten diffusions, and treat automated
+      fill as a bonus for the two or three where a catalogue exists.</b> Twenty
+      well-authored diffusions is roughly one focused week of a historian’s time; it is
+      also, by a distance, the most defensible content on this page.
+    </p>
+    <p class="tm-note">
+      One more, found by accident: the corpus’s own <code>printing</code> spread
+      <b>starts at 1439 in Mainz</b>, and <code>industrial-revolution</code> starts at 1760
+      “Lancashire outward”. The weight curves encode a claim about where these things began.
+      Put Kaifeng 1040 and Cheongju 1377 on the map and the first frame of the scrubber
+      contradicts the corpus. That has to be resolved in the data, not in the UI.
+    </p>
+  </section>
+
+  <!-- ══ THREE QUESTIONS ═══════════════════════════════════════════════════ -->
+  <section class="tm-plate tm-plate--ask">
+    <div class="tm-sechd">
+      <h2>Three questions only you can answer</h2>
+      <p>Each one changes the schema, not the styling. None of them can be deferred past the
+         first ETL run.</p>
+    </div>
+    <ol class="tm-qs">
+      <li>
+        <h3>What counts as arrival — and is it one answer, or one per diffusion?</h3>
+        <p>First contact, first local production, first sustained production, or mass
+          adoption. They are decades apart and they disagree about who gets to be first.
+          Printing “arrives” in Istanbul in 1493 or in 1727 depending on whether you mean the
+          machine or the permission. Computing arrives in India in 1955 (a machine at the
+          Indian Statistical Institute) or 1985 (an industry in Bangalore). Gunpowder
+          “arrives” in Mexico in 1519 pointed at the people it arrives among, which is not
+          adoption by anybody. <b>This prototype answers it per diffusion, in a
+          <code>claim</code> field shown to the reader on every map.</b> That is a real
+          position and you may hate it — the alternative is one global rule, which would
+          make three of these four maps wrong.</p>
+      </li>
+      <li>
+        <h3>When does a diffusion stop being about places — and does the map admit it?</h3>
+        <p>Computing’s unit changes three times: a machine at a place, then a component in a
+          supply chain, then a protocol on a wire. After Mosaic in 1993 there is no next
+          city. Printing’s equivalent moment is the steam press; the loom’s is the container
+          ship. Do these maps <b>stop and say why</b> — which is what this prototype does —
+          or do they change what a dot means halfway through and hope nobody notices?
+          Related and unavoidable: is a diffusion ever <i>finished</i>, and does a place ever
+          <i>lose</i> a technology? Four <code>faded</code> rows say yes, and nothing in the
+          existing model can hold that.</p>
+      </li>
+      <li>
+        <h3>Is this a new object beside <code>spreads</code>, or is it what <code>spreads</code> should have been?</h3>
+        <p>A <code>spread</code> today is a weight curve plus a moving blob: <b>when</b> and
+          <b>how big</b>, hand-tuned. A diffusion is <b>where-next</b>, and it can
+          <i>generate</i> the blob — a footprint is derivable from arrivals; the reverse is
+          not. So the cheap answer is that <code>footprint</code> becomes computed and
+          <code>hops</code> becomes the source of truth, which also fixes the 1439-Mainz
+          problem above. The expensive question underneath it: <b>who signs the arcs?</b> The
+          dots can be sourced. Every arc on these four maps is a scholarly judgement, and
+          publishing them under the app’s name — with no citation field in the shape yet —
+          is the app making historical claims rather than displaying them. If the answer is
+          “we cite”, the shape needs a <code>src</code> on every hop before the first ETL
+          run, not after.</p>
+      </li>
+    </ol>
+  </section>
+
+  <footer class="tm-foot">
+    <p><code>experiments/techmap</code> — nothing here is deployed and nothing under
+      <code>web/src</code> or <code>design/</code> was touched. Open <code>index.html</code>
+      from disk, or serve the repo root and visit
+      <code>/experiments/techmap/</code>. Regenerate with
+      <code>python3 build-data.py</code>.</p>
+  </footer>
+
+</main>
+<script src="data.js"></script>
+<script src="app.js"></script>
+</body>
+</html>
