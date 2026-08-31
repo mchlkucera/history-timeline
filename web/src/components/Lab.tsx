@@ -40,7 +40,7 @@ import { Horizon } from '@/render/horizon';
 import { Pop, loadPopulation } from '@/render/population';
 import { buildGallery } from '@/render/gallery';
 import { Conn, initConn, loadRelations } from '@/render/connections';
-import { searchCorpus, searchLayers, type Hit, type LayerHit } from '@/render/search';
+import { searchCorpus, searchLayers, queryMatch, yearOf, type Haystack, type Hit, type LayerHit } from '@/render/search';
 import { Layers, planReveal, reveal, type RevealPlan } from '@/render/layers';
 import { describe, perspectiveSpan, setPolityAliases, type Subject } from '@/render/subject';
 import { railPos, railYear, railNum, railEraOf, SNAPSHOTS } from './rail';
@@ -208,6 +208,18 @@ const VIEWS: Record<ViewId, ViewMeta> = {
 };
 
 const ORDER: ViewId[] = ['zoom', 'vertical', 'map', 'pop', 'horizon', 'flow', 'braid', 'ideology', 'conn', 'cube', 'concepts'];
+
+/* A VIEW IS A HAYSTACK TOO. The three kinds of row in the dropdown used to be
+   matched three different ways; they are all queryMatch() now, so "usa" cannot
+   reach a view through a syllable buried in its gist any more than it can reach
+   the First Crusade. Built once, at module level, because search.ts folds a
+   haystack against the OBJECT and a fresh literal per keystroke would fold ten
+   views on every letter. The seg is the word on the rail (matched like a tag,
+   because that is what a reader types) and the gist is prose (matched like a
+   note). No span: a view was never alive in 1776. */
+const VIEW_HAY = Object.fromEntries(
+  ORDER.map(v => [v, { name: VIEWS[v].name, tags: VIEWS[v].seg, note: VIEWS[v].gist }]),
+) as Record<ViewId, Haystack>;
 
 // ── Which views dock the panel column instead of floating it ────────────────
 // A floating panel is honest over a MAP — it sits on ocean, and the map has no
@@ -484,22 +496,36 @@ type SRow =
   | { k: 'v'; v: ViewId };
 
 /**
- * THE ROW'S SECOND LINE — what stands between this hit and the canvas, in the
- * fewest words that are still true. Null when nothing does, which is the
- * common case and draws no line at all.
+ * THE ROW'S SECOND LINE — ONE GRAMMAR: WHERE THIS THING IS.
+ *
+ * It used to be four shapes in one list — "in Europe · Wars — not added",
+ * "shown on Beliefs", "in Europe · States & empires — needs more detail", and
+ * nothing — and the third was an editorial to-do ("needs more detail" is a note
+ * to whoever curates the dial) printed under a reader's search result.
+ *
+ * So it answers one question now, always in the same shape: a prepositional
+ * phrase naming the place. IN a lane, ON another view, or nowhere at all. What
+ * pressing the row will TAKE — adding the lane, raising its dial — is not the
+ * reader's problem: search reveals what it finds, that is what search is for,
+ * and the row's title carries the whole sentence for anyone who hovers. Null
+ * when the thing is already on the board in front of them, which is the common
+ * case and draws no line at all.
  */
-function needLine(r: { p: RevealPlan; to: ViewId | null }, here: ViewId): string | null {
+function needLine(r: { p: RevealPlan; to: ViewId | null; h: Hit }, here: ViewId): string | null {
   // A ROW THAT IS ABOUT TO MOVE YOU SAYS SO FIRST. It is the more surprising
   // fact of the two, and it is the one the reader can act on by pressing the
   // seg instead. The layer verdict below only ever applied to the timeline
   // family anyway, so on any other landing it would have been describing work
   // that is not going to happen.
-  if (r.to === null) return r.p.why || 'not drawn anywhere in the app';
-  if (r.to !== here) return `shown on ${VIEWS[r.to].seg}`;
-  if (!r.p.layerName) return null;
-  if (r.p.need === 'add') return `in ${r.p.layerName} — not added`;
-  if (r.p.need === 'detail') return `in ${r.p.layerName} — needs more detail`;
-  return null;
+  if (r.to === null) return 'not drawn anywhere in the app';
+  if (r.to !== here) return `shown on ${destWord(r.to)}`;
+  if (r.p.need === 'ready' || !r.p.layerName) return null;
+  // AND NEVER THE SAME WORDS TWICE ON ONE ROW. The dates line already names the
+  // band the mark lives in, and for a curated lane the band IS the layer —
+  // "1620 · Czech history" over "in Czech history". When the second line would
+  // only repeat the first it is not a second line.
+  if (r.p.layerName === r.h.lane) return null;
+  return `in ${r.p.layerName}`;
 }
 
 /** The same verdict as a whole sentence, for the row's title attribute. */
@@ -508,12 +534,14 @@ function needTitle(r: { p: RevealPlan; to: ViewId | null }, name: string, here: 
   const raise = p.detailWord ? ` and sets it to “${p.detailWord}”` : '';
   if (r.to === null) return `${name} is ${p.why || 'not drawn on this timeline'}, and no other view draws it either — there is nothing to go to.`;
   // THE HONEST SENTENCE FOR A VIEW THAT CANNOT SHOW IT. Habitation and the
-  // information horizon draw aggregates, Concepts is documentation: none of
-  // them can put one named thing on screen, so taking the row travels, and it
-  // says where and why before it is pressed rather than after.
+  // information horizon draw aggregates and cannot put one named thing on
+  // screen at all; Beliefs can, but not a Roman polity. One sentence covers
+  // both, because both are the same fact from the reader's side: this view does
+  // not draw THIS. Taking the row travels, and it says where before it is
+  // pressed rather than after.
   if (r.to !== here) {
-    return `${VIEWS[here].seg} cannot show one thing on its own, `
-      + `so this opens ${name} on ${VIEWS[r.to].name}.`;
+    return `${destWord(here)} does not draw ${name}, `
+      + `so this opens it on ${VIEWS[r.to].name}.`;
   }
   if (p.need === 'add') return `Adds the “${p.layerName}” layer${raise}, then selects ${name} and frames it.`;
   if (p.need === 'detail') return `Raises “${p.layerName}” to “${p.detailWord}”, then selects ${name} and frames it.`;
@@ -1819,7 +1847,12 @@ export default function Lab() {
   const [sTotal, setSTotal] = useState(0);          // content matches BEYOND the cap
   const [sSel, setSSel] = useState(0);
   const [sBox, setSBox] = useState<{ left: number; top: number; width: number } | null>(null);
-  const sOpen = sRows.length > 0 && !!sBox;
+  /* THE WORDS THE OPEN LIST IS ANSWERING. A list with rows explains itself; a
+     list with NONE cannot, and "graz" used to close the dropdown, print
+     nothing, and leave the board at 12% — indistinguishable from a hang. So the
+     query is kept, and an empty answer is still an answer that gets drawn. */
+  const [sQ, setSQ] = useState('');
+  const sOpen = (sRows.length > 0 || sQ.length >= 2) && !!sBox;
   const sRowsRef = useRef<SRow[]>([]);
   const sSelRef = useRef(0);
   useEffect(() => { sRowsRef.current = sRows; sSelRef.current = sSel; });
@@ -1841,7 +1874,7 @@ export default function Lab() {
     setSBox({ left: Math.max(8, Math.min(fr.left, innerWidth - w - 8)), top: fr.bottom + 4, width: w });
   }, []);
 
-  const closeSearch = useCallback(() => { setSRows([]); setSTotal(0); setSSel(0); }, [setSRows, setSTotal, setSSel]);
+  const closeSearch = useCallback(() => { setSRows([]); setSTotal(0); setSSel(0); setSQ(''); }, [setSRows, setSTotal, setSSel, setSQ]);
 
   /* ── EMPTYING THE FIELD IS ONE ACT, AND IT IS THIS ONE ─────────────────────
      "Search bar is missing X to remove contents of search."
@@ -2316,10 +2349,24 @@ export default function Lab() {
     if (q.length < 2) return { rows: [], total: 0 };
     const { hits, total } = searchCorpus(raw, SEARCH_CAP);
     const layers = searchLayers(raw, LAYER_CAP);
-    const views = ORDER.filter(v => {
-      const m = VIEWS[v];
-      return (m.name + ' ' + m.seg + ' ' + m.gist).toLowerCase().includes(q);
-    }).slice(0, VIEW_CAP);
+    /* CONCEPTS IS NOT AN ANSWER TO A WORD. It is the founder's own design deck
+       — ten rated sketches of ways to see history — and he ordered it hidden
+       under the wordmark ("Hide concepts under the main Timeline brand view
+       dropdown, make it hidden"). A view row that hands it to anyone who types
+       "concepts" is not hidden; it is the same door with a longer key. The
+       wordmark menu keeps it, ?v=concepts keeps working, and ORDER still holds
+       it for exactly that — this list does not.
+
+       And the match is queryMatch now, like every other row: the old test read
+       name+seg+gist as one string and asked for a substring, which is how "usa"
+       used to reach a view through the middle of a word. */
+    const views = ORDER
+      .filter(v => v !== 'concepts')
+      .map(v => ({ v, s: queryMatch(VIEW_HAY[v], raw) }))
+      .filter(x => x.s > 0)
+      .sort((a, b) => b.s - a.s)
+      .slice(0, VIEW_CAP)
+      .map(x => x.v);
     const navFirst = views.some(v => {
       const g = GROUPS.find(gr => gr.members.includes(v));
       return VIEWS[v].seg.toLowerCase() === q
@@ -2420,10 +2467,26 @@ export default function Lab() {
     if (!box) return;
 
     const onInput = () => {
+      const q = box.value.trim();
       setHasQ(!!box.value);
       const { rows, total } = buildRows(box.value);
       setSRows(rows); setSTotal(total); setSSel(firstSel(rows));
-      if (rows.length) placeSearch(); else setSBox(null);
+      setSQ(q);
+      // Two characters is where a query begins — under that there is nothing to
+      // answer and nothing to say about it, which is why the list stays shut
+      // rather than offering three rows nobody asked for.
+      if (rows.length || q.length >= 2) placeSearch(); else setSBox(null);
+      /* A DIM OF EVERYTHING IS A CLAIM THAT SOMETHING MATCHED SOMEWHERE.
+         timeline.ts drops every mark that is not a hit to 12%, so a query with
+         no hits at all dimmed the whole board to make exactly nothing stand
+         out — the founder's own board, greyed by the word "graz". The canvas
+         reads the same corpus through the same matcher this list does, so no
+         content row means no lit mark, and the honest picture is the full one.
+         TL.setQuery rather than TL.clearSearch: the reader's words stay in the
+         field (clearSearch blanks the input), only the dim goes. This runs
+         after timeline.ts's own listener on the same event — it is bound at
+         boot, this one on ready — so it has the last word. */
+      if (!rows.some(r => r.k === 'c')) TL.setQuery('');
     };
     const onKey = (ev: KeyboardEvent) => {
       const k = ev.key;
@@ -2452,7 +2515,7 @@ export default function Lab() {
         if (pick && canTake(pick)) takeRow(pick);
       }
     };
-    const onFocus = () => { if (box.value.trim().length >= 2) onInput(); };
+    const onFocus = () => onInput();
     const onBlurOut = (ev: FocusEvent) => {
       // a click on a row is a mousedown that never blurs (the row prevents it),
       // so any real blur means the field has genuinely been left
@@ -2627,7 +2690,10 @@ export default function Lab() {
     const box = document.getElementById('cmdk') as HTMLInputElement | null;
     if (!box) return;
     box.focus(); box.select();
-    if (box.value.trim().length >= 2) box.dispatchEvent(new Event('input', { bubbles: true }));
+    // UNCONDITIONALLY, so what is on screen is always the answer to what is in
+    // the field: the guard that used to sit here (only re-run for two
+    // characters or more) is how ⌘K could put a stale list under an empty box.
+    box.dispatchEvent(new Event('input', { bubbles: true }));
   };
 
   useEffect(() => {
@@ -4027,8 +4093,15 @@ export default function Lab() {
           rect, so a positioned ancestor would silently shift it — and
           .tl-panel__bd scrolls, which would clip it. */}
       {sOpen && sBox && (
-        <div className="tl-sugg" id="searchSugg" role="listbox" aria-label="Search results"
+        <div className="tl-sugg" id="searchSugg" aria-label="Search results"
+          /* A listbox with no options is not a listbox. With nothing to choose
+             it is a message, and a status is what a screen reader should be
+             told it just heard. */
+          role={sRows.length ? 'listbox' : 'status'}
           style={{ left: sBox.left, top: sBox.top, width: sBox.width }}>
+          {/* NOTHING IS AN ANSWER. One quiet line, in the reader's own words,
+              instead of a dropdown that vanishes and a board that dims. */}
+          {!sRows.length && <div className="tl-sugg__miss">nothing for “{sQ}”</div>}
           {sRows.map((r, i) => {
             // A header wherever the KIND changes: the three groups are
             // contiguous by construction, so this needs no grouping pass — it
@@ -4100,7 +4173,7 @@ export default function Lab() {
                     <i className="tl-sugg__dot tl-sugg__dot--view" aria-hidden="true" />
                     <span className="tl-sugg__name">{VIEWS[r.v].name}</span>
                     <span className="tl-sugg__meta">
-                      {GROUPS.find(g => g.members.includes(r.v))?.label || 'Concepts'}
+                      {GROUPS.find(g => g.members.includes(r.v))?.label || 'Views'}
                     </span>
                   </button>
                 )}
@@ -4108,7 +4181,12 @@ export default function Lab() {
             );
           })}
           {sTotal > 0 && (
-            <div className="tl-sugg__more">+{sTotal} more in history — keep typing</div>
+            /* "Keep typing" is advice, and it is only good advice for words. A
+               year is already the whole question — there is no third character
+               that narrows 1776 — so it gets the count and no instruction. */
+            <div className="tl-sugg__more">
+              +{sTotal} more in history{yearOf(sQ) === null ? ' — keep typing' : ''}
+            </div>
           )}
         </div>
       )}

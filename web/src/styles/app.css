@@ -987,12 +987,14 @@ body.tl-dragging { cursor: grabbing; }
    already wearing the one accent ring this gesture is allowed; a second accent
    on the highlighted row would be the double line again, one element down. */
 
-/* ── WHY THIS ONE CANNOT BE SHOWN YET ─────────────────────────────────────────
+/* ── WHERE THIS ONE IS ────────────────────────────────────────────────────────
    The phantom-zoom fix in layers.ts resolves every hit to the layer that would
-   draw it, and this line is that verdict in words: "in Arts & movements — not
-   added". Quiet ink, never accent — it is a fact about the board, not a place
-   the reader is. It sits under the name rather than beside the dates because
-   the dates are the disambiguator and must not be pushed out of the row. */
+   draw it, and this line names that place: "in Arts & movements". One grammar,
+   always a preposition — in a lane, on another view, or nowhere at all — never
+   a to-do about the board's dial. Quiet ink, never accent: it is a fact about
+   where the thing lives, not a place the reader is. It sits under the name
+   rather than beside the dates because the dates are the disambiguator and must
+   not be pushed out of the row. */
 .tl-sugg__need {
   grid-column: 2 / -1;
   grid-row: 2;
@@ -1062,6 +1064,16 @@ body.tl-dragging { cursor: grabbing; }
   color: var(--tl-ink-3);
   border-top: var(--tl-border) solid var(--tl-rule-soft);
   margin-top: var(--tl-space-2);
+}
+/* NOTHING FOR THAT WORD. A search that finds nothing used to draw nothing at
+   all — no list, no message, and a board dimmed to 12% by a query that matched
+   none of it. This is the whole of the list in that case, so it wears the
+   overflow line's quiet ink WITHOUT its rule: there is nothing above it to be
+   separated from. */
+.tl-sugg__miss {
+  padding: var(--tl-space-3);
+  font-size: var(--tl-text-2xs);
+  color: var(--tl-ink-3);
 }
 
 /* ONE FIELD, TWO KINDS OF ANSWER, so the seam between them is named. The header
