@@ -419,8 +419,9 @@ SUBS.append({
 _dao_hyp_lane = 'as-ess'
 _dao = SUBS[0]
 _dao['derivedMiss'] = {
-    'reason': 'a belief stream has no EVENTS tuple, so it has no band, no category and no type — '
-              'layerIdFor() has nothing to compute from. It has no lat/lon either, so there is no place to fall back on.',
+    'reason': 'factsOf() has no belief: branch, so the stream never reaches layerIdFor at all; '
+              'and it carries no lat/lon, so the region axis has no coordinate to fall back on. '
+              'The span and the weight curve it does carry are everything a spread has.',
     'hypothetical': {
         'band': 'AS',
         'basis': "its parent stream is chinese-folk-religion, and Confucius — its one link in the whole corpus — "
@@ -488,8 +489,8 @@ d0.update({
     'sayTail': 'in 0 of %d lanes — %d would take it' % (len(LANES), d0['more']),
     'onBoard': False,
     'shutReason': 'Daoism is in no lane, so no layer on this timeline draws it',
-    'emptyAxis': 'A belief stream has no EVENTS tuple and no coordinate, so layerIdFor() '
-                 'has nothing to compute from. Given a band it would land in %s (%d things) — '
+    'emptyAxis': 'A belief stream carries no coordinate, so THIS axis cannot place it — not '
+                 'that it cannot be drawn. Given a band it would land in %s (%d things); '
                  "facetOf('belief','spread') is 'ess', so belief has no facet of its own."
                  % (d0['derivedMiss']['hypothetical']['laneName'],
                     d0['derivedMiss']['hypothetical']['n']),
@@ -508,7 +509,81 @@ m0.update({
             'adopts it by name. Neither is on the default board.',
 })
 
+
+# ═══════════════════════════════════════════════════════════════════════════
+# THE DESTINATION ROW, DERIVED — NEVER HAND-COPIED.
+#
+# "Show the buttons in same order as they appear on top of page."
+#
+# Two sources, both read here so the prototype cannot drift from either:
+#   web/src/components/Lab.tsx        GROUPS — the switcher's tabs and their
+#                                     order, and each tab's member views
+#   web/src/render/selcard.ts         dests() — which views the card actually
+#                                     offers, as act/label pairs
+#
+# THE FLATTENING RULE, because the switcher is grouped and the card's row is
+# flat: a GROUP keeps its position in the switcher; a group holding more than
+# one card destination expands in place, in its own member order. So Flow's
+# tab position (between MAP and CONNECTIONS) is where Empires and Beliefs both
+# sit, adjacent, in the order the seg prints them — Empires, Beliefs,
+# Ideologies. Ideologies has no card destination today, so it is simply absent,
+# and the day one is added it lands immediately after Beliefs with nothing else
+# moving. Nothing is sorted; the array is built in this order and filtered.
+# ═══════════════════════════════════════════════════════════════════════════
+LAB = open(R('web/src/components/Lab.tsx')).read()
+SEL = open(R('web/src/render/selcard.ts')).read()
+
+gsrc = LAB.split('const GROUPS: { id: string; label: string; members: ViewId[] }[] = [', 1)[1]
+gsrc = gsrc.split('\n];', 1)[0]
+GROUPS = []
+for m in re.finditer(r"\{\s*id:\s*'([^']+)',\s*label:\s*'([^']+)',\s*members:\s*\[([^\]]*)\]", gsrc):
+    GROUPS.append((m.group(1), m.group(2), re.findall(r"'([^']+)'", m.group(3))))
+assert GROUPS, 'GROUPS did not parse — Lab.tsx changed shape'
+
+# view id -> the word the shell prints for it in the seg
+SEGS = dict(re.findall(r"^  ([a-z]+): \{\n    seg: '([^']+)'", LAB, re.M))
+
+dsrc = SEL.split('  dests(s: Subject): Dest[] {', 1)[1].split('\n  }\n', 1)[0]
+DEST_ACTS = re.findall(r"act:\s*'([a-z]+)',\s*label:\s*'([^']+)'", dsrc)
+assert DEST_ACTS, 'dests() did not parse — selcard.ts changed shape'
+
+# act -> the ViewId it lands on, as act() in selcard.ts routes it
+ACT_VIEW = {'persp': 'zoom', 'flow': 'flow', 'map': 'map', 'cube': 'cube',
+            'braid': 'braid', 'conn': 'conn', 'ideology': 'ideology'}
+def slot(act):
+    v = ACT_VIEW.get(act)
+    for gi, (_, _, members) in enumerate(GROUPS):
+        if v in members:
+            return (gi, members.index(v))
+    return (99, 0)
+
+VIEWS = []
+for act, label in DEST_ACTS:
+    gi, mi = slot(act)
+    VIEWS.append({'act': act, 'label': label, 'view': ACT_VIEW.get(act, act),
+                  'g': gi, 'm': mi, 'group': GROUPS[gi][1] if gi < len(GROUPS) else '?',
+                  'seg': SEGS.get(ACT_VIEW.get(act, ''), label)})
+VIEWS.sort(key=lambda v: (v['g'], v['m']))
+
+# WHICH DESTINATIONS APPLY, by selcard.ts's own gates — Timeline for anything
+# with a span, Flow/Map/Cube only for a polity, Beliefs only for a belief
+# stream, Connections only when the link table has something. Neither subject is
+# a polity, so three of the six are simply absent; the shipped card omits them
+# rather than drawing them shut, and that rule is unchanged here.
+for sub in SUBS:
+    polity = False
+    sub['dests'] = [v['act'] for v in VIEWS if (
+        v['act'] == 'persp' or
+        (v['act'] in ('flow', 'map', 'cube') and polity) or
+        (v['act'] == 'braid' and sub['id'].startswith('belief:')) or
+        (v['act'] == 'conn' and len(sub['links']) > 0))]
+
+print('\nswitcher order :', ' · '.join(g[1] for g in GROUPS), file=sys.stderr)
+print('card row       :', ' · '.join(v['label'] for v in VIEWS), file=sys.stderr)
+
 OUT = {
+    'views': VIEWS,
+    'groups': [{'id': g[0], 'label': g[1], 'members': g[2]} for g in GROUPS],
     'names': NAMES,
     'defs': defs,
     'lanes': [{'key': L['key'], 'label': L['label'], 'n': len(L.get('members', [])),

@@ -576,101 +576,151 @@ body {
 
 
 /* ═══ ARRANGEMENT D — THE FOUNDER'S CUT ════════════════════════════════════
-   "We just have a list of views. […] The moment we have him open in Timeline
-   […] we should see an expanded view to specify which lanes in the Timeline it
-   is a part of. Just show their names, nothing else, no other explanations."
+   Two revisions on top of the first pass:
 
-   So this block adds NO new vocabulary. It hangs off the destination strip the
-   card already has, it borrows that strip's two existing states, and it carries
-   nothing but names:
+   ROWS, NOT PILLS. "Make it rows, instead of pills." One lane per line, the
+   ones on your board first, then "Add new lane" over the ones that are not,
+   each with a plus. No count, no era, no neighbour, no reason. No custom-lane
+   row — "Remove the new lane idea for now." No Undo — 177bc6e took it out of
+   the app, and you take a lane off in the panel instead.
 
-     ON YOUR BOARD    the inverted ink block — the strip's own "this one is
-                      live", which is the same thing membership means here.
-     COULD ADD        the plain bordered cell — the strip's own "a door you can
-                      press", unchanged.
+   THE ROW OF VIEWS IS THE SWITCHER, QUOTED. "Show the buttons in same order as
+   they appear on top of page" and "Make the cards active state the same as top
+   of the page." So the destination row stops being a segmented strip of
+   bordered cells with one inverted block, and becomes a miniature of
+   .tl-switch: bare labels on the ink ramp, and the active one carrying the
+   shell's three cues — an ink step, a --tl-surface-3 ground, and a 2px ink rule
+   along the edge it owns. Every value below is read out of shell.css §03.
 
-   No hue, no accent, no count, no reason. The Minium is nowhere near it.
+   AND THAT IS WHY THERE ARE TWO SPECIMENS. Once the card speaks the switcher's
+   language for "which view you are in", the same language is available one
+   level down for "which lane you are seeing it in" — the rule rotates from the
+   bottom edge of a tab to the leading edge of a row. `--accent` is the founder's
+   minium version, `--ink` is the switcher's own. See §The accent, in the page.
    ══════════════════════════════════════════════════════════════════════════ */
 
-/* IT BELONGS TO THE TIMELINE CELL, so it is drawn attached to the strip rather
-   than floating under it: the strip's bottom corners go square and this block
-   picks up the radius, so the two read as one control that has opened. */
-.lp-lanes {
+/* ── the row of views: a miniature of .tl-switch ─────────────────────────── */
+.lp-tabs {
   display: flex;
   flex-wrap: wrap;
-  gap: var(--tl-space-2);
-  padding: var(--tl-space-3);
-  margin-top: calc(var(--tl-border) * -1);
-  border: var(--tl-border) solid var(--tl-rule);
-  border-radius: 0 0 var(--tl-radius-sm) var(--tl-radius-sm);
-  background: var(--tl-surface-2);
+  border-bottom: var(--tl-border) solid var(--tl-rule-soft);
 }
-.lp-selcard--open .tl-selcard__dest:first-child { border-bottom-left-radius: 0; }
-.lp-selcard--open .tl-selcard__dest:last-child { border-bottom-right-radius: 0; }
-
-.lp-chip {
-  flex: 0 1 auto;
-  min-width: 0;
-  max-width: 100%;
-  height: var(--tl-ctl-sm);
-  padding: 0 var(--tl-space-4);
+.lp-tab {
+  position: relative;
   display: inline-flex;
   align-items: center;
-  border: var(--tl-border) solid var(--tl-rule);
-  border-radius: var(--tl-radius-xs);
-  background: var(--tl-surface);
-  color: var(--tl-ink-2);
+  height: var(--tl-ctl-sm);
+  padding: 0 var(--tl-space-4);
   font-size: var(--tl-text-xs);
-  font-weight: var(--tl-w-medium);
-  white-space: nowrap;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  transition: background var(--tl-dur-fast) var(--tl-ease),
-              border-color var(--tl-dur-fast) var(--tl-ease),
-              color var(--tl-dur-fast) var(--tl-ease);
-}
-.lp-chip:hover { background: var(--tl-surface-3); border-color: var(--tl-rule-strong); color: var(--tl-ink); }
-.lp-chip:active { background: var(--tl-press); }
-
-/* ON YOUR BOARD. The destination strip's inverted block, verbatim — including
-   its neutral grey overlay on hover, which darkens a light block and lightens a
-   dark one and so cannot introduce a second hue. */
-.lp-chip[data-on="true"] {
-  background: var(--tl-ink);
-  border-color: var(--tl-ink);
-  color: var(--tl-ink-invert);
-  cursor: default;
-}
-.lp-chip[data-on="true"]:hover { box-shadow: inset 0 0 0 999px rgba(128, 128, 128, .16); }
-
-/* A lane of your own: the same chip, dashed, because it does not exist yet. */
-.lp-chip--new { border-style: dashed; border-color: var(--tl-rule-strong); color: var(--tl-ink-3); }
-.lp-chip--new:hover { color: var(--tl-ink-2); }
-
-/* ── prototype chrome: which view is active ──────────────────────────────── */
-/* NOT part of the card. The card cannot switch views — it reports the one you
-   are standing in — so the switch lives on the stage, where the page's own
-   furniture lives, and drives the specimen the way the app's top rail would. */
-.lp-viewwrap { display: inline-flex; align-items: center; gap: var(--tl-space-3); flex: none; }
-.lp-viewwrap__t { color: var(--tl-ink-3); }
-.lp-view { display: inline-flex; flex: none; }
-.lp-view button {
-  height: 22px;
-  padding: 0 var(--tl-space-3);
-  margin-left: calc(var(--tl-border) * -1);
-  border: var(--tl-border) solid var(--tl-rule);
-  background: var(--tl-surface);
-  color: var(--tl-ink-3);
-  font-family: var(--tl-font-mono);
-  font-size: var(--tl-text-2xs);
+  font-weight: var(--tl-w-semi);
   letter-spacing: var(--tl-track-caps);
   text-transform: uppercase;
+  white-space: nowrap;
+  color: var(--tl-ink-3);
+  transition: color var(--tl-dur-fast) var(--tl-ease),
+              background var(--tl-dur-fast) var(--tl-ease);
 }
-.lp-view button:first-child { margin-left: 0; border-radius: var(--tl-radius-xs) 0 0 var(--tl-radius-xs); }
-.lp-view button:last-child { border-radius: 0 var(--tl-radius-xs) var(--tl-radius-xs) 0; }
-.lp-view button:hover { background: var(--tl-surface-3); color: var(--tl-ink); }
-.lp-view button[aria-pressed="true"] {
-  background: var(--tl-ink); border-color: var(--tl-ink); color: var(--tl-ink-invert); z-index: 1;
+.lp-tab:hover { background: var(--tl-hover); color: var(--tl-ink-2); }
+/* shell.css: `.tl-switch__item[aria-selected="true"]` — ink, surface-3, and a
+   2px ink rule at bottom:-1px so it lands ON the hairline it owns. */
+.lp-tab[aria-selected="true"] { color: var(--tl-ink); background: var(--tl-surface-3); }
+.lp-tab[aria-selected="true"]::after {
+  content: "";
+  position: absolute;
+  left: 0; right: 0; bottom: calc(var(--tl-border) * -1);
+  height: 2px;
+  background: var(--tl-ink);
+}
+
+/* ── the lane list ───────────────────────────────────────────────────────── */
+.lp-lanes {
+  display: flex;
+  flex-direction: column;
+  padding: var(--tl-space-2);
+  background: var(--tl-surface-2);
+  border: var(--tl-border) solid var(--tl-rule-soft);
+  border-top: 0;
+}
+.lp-lanes__hd {
+  padding: var(--tl-space-4) var(--tl-space-3) var(--tl-space-2);
+  margin-top: var(--tl-space-2);
+  border-top: var(--tl-border) solid var(--tl-rule-soft);
+  font-size: var(--tl-text-2xs);
+  font-weight: var(--tl-w-semi);
+  letter-spacing: var(--tl-track-caps);
+  text-transform: uppercase;
+  color: var(--tl-ink-3);
+}
+
+.lp-row {
+  position: relative;
+  display: flex;
+  align-items: center;
+  gap: var(--tl-space-3);
+  width: 100%;
+  min-height: 26px;
+  padding: var(--tl-space-2) var(--tl-space-3);
+  border-radius: var(--tl-radius-xs);
+  font-size: var(--tl-text-sm);
+  color: var(--tl-ink-2);
+  transition: background var(--tl-dur-fast) var(--tl-ease),
+              color var(--tl-dur-fast) var(--tl-ease);
+}
+.lp-row:hover { background: var(--tl-hover); color: var(--tl-ink); }
+.lp-row__n {
+  flex: 1 1 auto;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+/* The plus is the row's affordance, not a second hit target: the whole row is
+   the button, so the tap area is a row and not an 18px square. */
+.lp-row__plus {
+  flex: none;
+  display: grid;
+  place-items: center;
+  width: 18px; height: 18px;
+  border: var(--tl-border) solid var(--tl-rule);
+  border-radius: var(--tl-radius-xs);
+  font-family: var(--tl-font-mono);
+  font-size: var(--tl-text-xs);
+  line-height: 1;
+  color: var(--tl-ink-3);
+}
+.lp-row--add:hover .lp-row__plus {
+  border-color: var(--tl-rule-strong);
+  background: var(--tl-surface);
+  color: var(--tl-ink);
+}
+
+/* THE ONE MARKED ROW — the lane you are seeing it in. Same three cues as the
+   active tab, rotated onto the row's own axis: a tab owns the region BELOW it,
+   so its rule is a bottom edge; a row owns itself, so its rule is the leading
+   edge. Never more than one, and never a row that is not on the board. */
+.lp-row[aria-current="true"] { color: var(--tl-ink); font-weight: var(--tl-w-medium); }
+.lp-row[aria-current="true"]::before {
+  content: "";
+  position: absolute;
+  left: 0; top: 3px; bottom: 3px;
+  width: 2px;
+  border-radius: 1px;
+}
+.lp-lanes--ink .lp-row[aria-current="true"] { background: var(--tl-surface-3); }
+.lp-lanes--ink .lp-row[aria-current="true"]::before { background: var(--tl-ink); }
+
+/* The founder's version. This is the ONLY minium in the card, and it is an
+   extension of the accent's one meaning — see §The accent in the page. */
+.lp-lanes--accent .lp-row[aria-current="true"] { background: var(--tl-accent-soft); }
+.lp-lanes--accent .lp-row[aria-current="true"]::before { background: var(--tl-accent); }
+
+/* ── stage caption ───────────────────────────────────────────────────────── */
+/* The demo board this specimen starts with, said on the stage rather than
+   implied by the card. The stage's own view switch is gone: the card's row of
+   views now switches views itself, which is what the row is. */
+.lp-viewwrap__t {
+  flex: none;
+  color: var(--tl-ink-3);
 }
 .lp-stage__label {
   display: flex; align-items: center; justify-content: space-between;
@@ -681,11 +731,12 @@ body {
 /* ── the recommended arrangement gets the full width, above the comparison ── */
 .lp-lead-row {
   display: grid;
-  grid-template-columns: repeat(2, minmax(0, 360px));
-  gap: var(--tl-space-6);
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: var(--tl-space-5);
   align-items: start;
 }
-@media (max-width: 800px) { .lp-lead-row { grid-template-columns: minmax(0, 1fr); } }
+@media (max-width: 1180px) { .lp-lead-row { grid-template-columns: repeat(2, minmax(0, 1fr)); } }
+@media (max-width: 620px) { .lp-lead-row { grid-template-columns: minmax(0, 1fr); } }
 .lp-badge {
   display: inline-block;
   padding: 2px var(--tl-space-3);

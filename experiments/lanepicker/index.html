@@ -88,11 +88,16 @@
       <div class="lp-fact">
         <dt>Daoism</dt>
         <dd><code>eventById('belief:daoism')</code> returns null, so <code>factsOf</code>
-          returns null and <code>planReveal</code> says <code>never</code>. A belief stream
-          has no band, no category, no type and no coordinate — <code>layerIdFor()</code> has
-          nothing to compute from. But <code>lanes.json</code> ships a <b>Religion</b> lane
-          with 40 members. “Daoism cannot be on the timeline” is a limitation of the model,
-          not a fact about Daoism.</dd>
+          returns null and <code>planReveal</code> says <code>never</code>. <b>That is the
+          whole obstacle — one missing branch.</b> The stream has a start (−350), an end
+          (2026) and a weight curve, which is everything a <code>spread:</code> has, and
+          spreads are drawn. <code>factsOf</code> has a <code>polity:</code> branch and a
+          <code>spread:</code> branch and no <code>belief:</code> branch, so a corpus of
+          <b>61 streams</b> falls through to “not drawn”. What it genuinely lacks is a
+          <i>coordinate</i>, so the derived region × domain axis cannot place it — but a
+          curated lane needs no coordinate, and <code>lanes.json</code> ships a
+          <b>Religion</b> lane with 40 members. “Daoism cannot be on the timeline” is a
+          limitation of the model, not a fact about Daoism.</dd>
       </div>
       <div class="lp-fact">
         <dt>Same conversation, two fates</dt>
@@ -107,9 +112,9 @@
         <dd>A count alone does not answer “what context am I adding”. Religion’s 40 members
           run from the Axial Age to the Iranian Revolution, and <b>36 of them sit west of
           longitude 62</b>; the easternmost is Buddhist expansion at 85°E. Nothing in it is
-          Chinese. Philosophy’s 35 members are <b>all</b> west of 28°E — it is a lane of
-          European philosophy that is not named that. Adding Daoism to either is a real
-          editorial act, and the card should say so before you click.</dd>
+          Chinese. Western philosophy’s 35 members are <b>all</b> west of 28°E, which is
+          now what the lane is called. Adding Daoism to either is a real editorial act, and
+          the card should say so before you click.</dd>
       </div>
     </dl>
   </section>
@@ -120,30 +125,63 @@
       <h2>Arrangement D — the list of views<span class="lp-badge">Recommended</span></h2>
       <p>“We just have a list of views. […] The moment we have him open in Timeline […] we
          should see an expanded view to specify which lanes in the Timeline it is a part of.
-         Just show their names, nothing else, no other explanations.”</p>
-      <p>The destination strip the card already ships <b>is</b> the list of views. The lane
-         list hangs off it, and only under <b>Timeline</b> — press Flow, Map or Cube on the
-         stage switch and it closes, because a lane is a timeline concept. Two states, both
-         borrowed from the strip rather than invented: the inverted ink block is a lane on
-         your board, the plain bordered cell is one you can press to add. Mozart starts with
-         <b>Music</b> already on the board so both states are visible at once; Daoism starts
-         with nothing, which is the case the founder described as a card that is in none of
-         your lanes yet.</p>
+         Just show their names, nothing else, no other explanations.” Then: “Make it rows,
+         instead of pills. […] there should be ‘Add new lane’ list with options under with a
+         plus button. […] The default is the on at the top. […] The accented one should be
+         only the picked lane — the one we’re seeing in the timeline.”</p>
+      <p><b>The row of views is the switcher, quoted.</b> Its order is read at build time out
+         of <code>GROUPS</code> in <code>Lab.tsx</code> and <code>dests()</code> in
+         <code>selcard.ts</code>, so the card’s row and the tabs at the top of the page
+         cannot drift. Its active state is the switcher’s own — an ink step, a
+         <code>--tl-surface-3</code> ground and a 2px ink rule — instead of the inverted
+         block the card used to draw. Which cells appear is <code>selcard.ts</code>’s
+         existing rule, untouched: Flow, Map and Cube need a polity and neither of these two
+         has one, so they are absent rather than shut.</p>
+      <p><b>The lanes are rows, names only.</b> On your board first, then <b>Add new lane</b>
+         over the ones that are not, each with a plus. No count, no era, no neighbour, no
+         reason, no custom-lane row, and no Undo — the app removed Undo in
+         <code>177bc6e</code>, and you take a lane off in the panel instead. Press a row and
+         it becomes the marked one; press one under <i>Add new lane</i> and it joins the
+         board and becomes the marked one. Mozart starts with <b>Music</b> on the board so
+         both states are legible at once; Daoism starts with nothing, which is why nothing is
+         marked on his card — he is in no lane, so there is no lane you are seeing him in.</p>
     </div>
+
+    <div class="lp-sechd" style="margin-top: var(--tl-space-7)">
+      <h3 style="font-size: var(--tl-text-2xs); font-weight: var(--tl-w-semi); letter-spacing: var(--tl-track-caps); text-transform: uppercase; color: var(--tl-ink-3); margin-bottom: var(--tl-space-3)">§ The accent — one rule, and the extension you are being asked for</h3>
+      <p><b>DESIGN.md §7 says minium means where you are in TIME, and nothing else.</b> The
+         two specimens on the left mark the picked lane in minium, as asked. The two on the
+         right mark it with the switcher’s own idiom instead — the same ink step, ground and
+         2px rule as the active tab, rotated from the bottom edge of a tab to the leading
+         edge of a row.</p>
+      <p>Marking the lane you are seeing something in <i>is</i> “where you are”, so the
+         extension is arguable rather than wrong. But it is an extension, it is the first
+         minium inside this card since the span strip was cut, and — now that the row of
+         views quotes the switcher — it is no longer necessary: <b>the same idiom already
+         carries both</b>, one level of nesting apart. The tab says which view; the row
+         inside the block that tab opened says which lane. Read the four cards and see
+         whether the right-hand pair loses anything. My reading is that it does not, and that
+         the accent stays spent on time alone.</p>
+    </div>
+
     <dl class="lp-verdict" style="max-width: 760px; margin-bottom: var(--tl-space-5)">
       <dt>Good at</dt>
-      <dd>It adds no vocabulary — one existing control grows one row of names — and it is the
-          only arrangement that answers “which have I added” at a glance instead of by
-          reading. Smallest of the four: 315px for Daoism, 422px for Mozart, both inside the
-          card’s 480px cap.</dd>
+      <dd>It adds no vocabulary at all — one existing control grows one list of names, in the
+          shell’s own order and the shell’s own active state — and it answers “which have I
+          added” before you have read a word.</dd>
       <dt>Costs</dt>
-      <dd>The order of the names is unexplained, so the ranking has to be right by feel; a
-          reader who does not know a lane cannot find out what is in it from here; and the
-          two states are carried by fill alone, which is one signal doing two jobs.</dd>
+      <dd>Rows are taller than pills. Daoism sits at <b>364px</b>, inside the card’s 480px
+          cap; Mozart’s six candidates take it to <b>510px</b>, just over — so at six the list
+          has to cap or the block has to scroll. The order of the names is unexplained, so the
+          ranking has to be right by feel; and a reader who does not know a lane cannot find
+          out what is in it from here.</dd>
     </dl>
+
     <div class="lp-lead-row">
       <div data-spec="d" data-sub="daoism"></div>
       <div data-spec="d" data-sub="mozart"></div>
+      <div data-spec="dink" data-sub="daoism"></div>
+      <div data-spec="dink" data-sub="mozart"></div>
     </div>
   </section>
 
@@ -285,12 +323,14 @@
            Philosophy (5). Here the default <i>is</i> a new opinion, so the card earns it by
            showing the reason on the row and the company it keeps. That is the whole reason
            the glimpse line exists.</p>
-        <p><b>Build D.</b> A is too quiet — it answers “pick from a list” with a control
-           that hides the list. B is the most informative and the most expensive: 921px at
-           Mozart’s six candidates against a 480px cap. C is the best teacher and the worst
-           card. D throws away everything the other three argue about and keeps the only two
-           facts a reader acts on — the name, and whether it is already yours — and it does
-           it inside a control the card already has, at 315px and 422px.</p>
+        <p><b>Build D, and build the right-hand pair of it.</b> A is too quiet — it answers
+           “pick from a list” with a control that hides the list. B is the most informative
+           and the most expensive: 921px at Mozart’s six candidates against a 480px cap. C is
+           the best teacher and the worst card. D throws away everything the other three argue
+           about and keeps the only two facts a reader acts on — the name, and whether it is
+           already yours — inside a control the card already has, at 364px and 510px. Of its
+           two markings, take the switcher’s: once the row of views quotes the shell, the same
+           idiom carries the lane one level down, and the minium stays spent on time alone.</p>
         <p><b>What the other three were for.</b> They are the argument D no longer makes out
            loud. The ranking below still orders D’s names; the default rule still decides
            which lane a bare press of <b>Timeline</b> uses; the scoring still decides which
@@ -308,11 +348,22 @@
               <code>anchors</code> is per-lane and hard-coded (<code>MZ_ANCHOR</code> is a
               constant in <code>layers.ts</code>). A picker writes a membership and there is
               no field to write it to.</li>
-          <li><b>A lane is not enough for Daoism.</b> Even after you pick Religion, the
-              timeline still cannot draw a belief stream: it has no start-shaped mark, no
-              category, no importance. Something must project a stream into an
-              <code>EVENTS</code> tuple. That is a data change, not a UI one, and this
-              prototype does not pretend otherwise.</li>
+          <li><b>Corrected:</b> I had this page saying a lane was not enough for Daoism —
+              that a belief stream has no mark to draw and something would have to project it
+              into an <code>EVENTS</code> tuple first. That was wrong, and the founder said
+              so: <i>“You could say Writing cant be drawn — we know from when it started and
+              can draw a Lane of Religions!”</i> He is right. Daoism runs 350 BC – 2026 and
+              carries a weight curve, exactly like a spread, and spreads are drawn as bars.
+              <b>The change is one branch in <code>factsOf</code>, not a data migration.</b></li>
+          <li><b>But its importance lands at the bottom of the scale.</b> Daoism’s weight
+              peaks at 2.5, and <code>lvlOfWeight</code> maps that to level <b>5</b> — the
+              weakest. <code>passesDetail</code> lets a span through at <i>normal</i> only to
+              level 4, so Daoism in Religion would need that lane’s dial at <b>detailed</b> to
+              appear at all. It is not just Daoism: of the 61 streams, <b>33 land at level 5
+              and 17 at level 4</b>, because the belief corpus’s 0–10 scale is share-of-
+              humanity and almost nothing scores high on it. The belief branch is one branch;
+              making beliefs legible beside events is a second, separate decision about how
+              that curve maps onto importance.</li>
           <li><b>Austria is not expressible.</b> Four regions, and the only nation-shaped
               lane in the corpus — Czech history — exists because someone hand-wrote 38
               members. “Mozart as part of Austria” needs either a fifth axis or a curated
@@ -356,24 +407,46 @@
               <code>tl.layers.v1</code> blob, and consulted by the renderer’s membership
               test. That is the smallest change that makes “add this to that lane” mean
               anything at all.</li>
-          <li><code>RevealUndo</code> gains <code>mem: string[] | undefined</code> and
-              <code>undoReveal</code> restores it through the same <code>put()</code>
-              delete-if-absent discipline — otherwise an undone add leaves a membership
-              behind, which is precisely the bug that record was built to prevent.</li>
-          <li><code>didLine()</code> gains one case. A reveal that also writes a membership
-              has to say both things, or Undo undoes something the reader was never told
-              about. The specimens above say <i>Added “Religion” and put Daoism in it</i>.</li>
+          <li><b>Removal, not undo.</b> <code>177bc6e</code> deleted <code>RevealUndo</code>,
+              <code>undoReveal</code> and the notice’s Undo — “you can just remove the lane if
+              you like” — so <code>reveal()</code> returns a boolean again. A membership has to
+              be written inside that same single emit, and taking a lane off the board in the
+              panel has to drop the memberships it carried, or a lane re-added later comes back
+              carrying a member the reader removed.</li>
+          <li><code>didLine()</code> gains one case. The notice survives without its Undo, and
+              a reveal that also writes a membership has to say both things — otherwise the
+              board changed in a way the line did not report.</li>
           <li>The <code>never</code> verdict shrinks to “there is genuinely nothing”, and the
-              “Show in Beliefs” offer goes away with it.</li>
-          <li><b>D only:</b> <code>dests()</code> in <code>selcard.ts</code> stops drawing the
+              “Show in Beliefs” offer goes away with it — <code>177bc6e</code> already did the
+              second half, making Beliefs a real destination.</li>
+          <li><b>D:</b> <code>dests()</code> in <code>selcard.ts</code> stops drawing the
               Timeline cell shut for a belief stream. It reads
               <code>planReveal(s.id).need === 'never'</code> today and puts “there is no lane
               to add” on the cell — once a lane is a choice, that sentence is false, and D’s
               Daoism card is live precisely there.</li>
-          <li><b>D only:</b> the card needs the reader’s board to draw its two states. That
-              part needs nothing new — <code>Layers.has(laneId)</code> already answers it —
-              but the card has never asked, so <code>paint()</code> has to subscribe to the
-              layer store the way it already subscribes to <code>TimeStore</code>.</li>
+          <li><b>D:</b> the card needs the reader’s board to draw its two groups. That part
+              needs nothing new — <code>Layers.has(laneId)</code> already answers it — but the
+              card has never asked, so <code>paint()</code> has to subscribe to the layer store
+              the way it already subscribes to <code>TimeStore</code>.</li>
+          <li><b>D — the row’s order stops being hand-written.</b> <code>dests()</code> pushes
+              its cells in an order argued in its own comments (time, then space:
+              Timeline · Flow · Map · Cube · Beliefs · Connections). <code>GROUPS</code> in
+              <code>Lab.tsx</code> says Timeline · Map · Flow · Connections · Cube. Export the
+              ordering from the switcher — a <code>(group index, member index)</code> for a
+              <code>ViewId</code> — and have <code>dests()</code> sort by it, so “same order as
+              the top of the page” is enforced rather than remembered. The flattening rule this
+              page uses: a group keeps its tab position, and a group with more than one card
+              destination expands in place in its member order, which is why Beliefs sits
+              immediately after Flow and why Ideologies would land right after Beliefs the day
+              it gets a cell.</li>
+          <li><b>D — the active cell becomes the switcher’s.</b>
+              <code>.tl-selcard__dest[aria-current="true"]</code> is a solid inverted ink
+              block; <code>.tl-switch__item[aria-selected="true"]</code> is an ink step, a
+              <code>--tl-surface-3</code> ground and a 2px ink rule. Take the second.
+              <b>This reverses part of <code>23e9554</code></b>, which collapsed the card to the
+              inverted block after “it looks like Timeline is always active” — but that
+              complaint was about a block hard-wired to Timeline on every view, not about the
+              block itself, and quoting the shell is the more consistent answer.</li>
         </ol>
       </div>
     </div>

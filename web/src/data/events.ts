@@ -3,6 +3,10 @@
 // in render/shared.ts once datasets.json has loaded:
 //   [0] start  [1] end (0 = a moment)  [2] title  [3] band  [4] importance level
 //   [5] tags   [6] category id         [7] type   [8] place [lat, lon, name, scope] | null
+// Slot [9] is OPTIONAL and hand-written: the edge sharpness of a span, 0 (a fuzzy
+// period that fades into its neighbours) .. 1 (founded on a dated afternoon). It is
+// the one classifier slot prepareEvents() does NOT overwrite, so a row whose type
+// the curated CATMAP does not yet carry can still say how hard its edges are.
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 export type TLEvent = any[];
 
@@ -20,6 +24,18 @@ export const EVENTS: TLEvent[] = [
 [-70000,0,"Out of Africa migration","CO",2,"human migration"],
 [-10000,0,"Farming begins","CO",1,"agriculture revolution"],
 [-3200,0,"Writing invented (Sumer)","CO",1,"writing"],
+// The named ages. The Three-Age system (Stone · Bronze · Iron) is OLD-WORLD
+// periodisation — it is dated off the Near East and Europe, and the Americas,
+// Australia and much of Africa do not run on it; the "old-world" tag says so.
+// Bronze Age lives in the LIVES dataset already; these are its neighbours, at
+// the same importance so the sequence arrives in one piece. Slot 9 = 0.25 is
+// the sharpness `era` gets by default, i.e. what Bronze Age draws at — every
+// one of these boundaries is a centuries-long fade, not a date.
+[-3300000,-3300,"Stone Age","CO",2,"stone tools flint technology prehistory three-age old-world",null,null,null,0.25],
+[-3300000,-10000,"Paleolithic (Old Stone Age)","CO",3,"palaeolithic stone tools hunter-gatherer technology ice-age",null,null,null,0.25],
+[-10000,-3300,"Neolithic (New Stone Age)","CO",3,"neolithic farming villages pottery polished-stone technology",null,null,null,0.25],
+[-1200,-550,"Iron Age","CO",2,"iron smelting metallurgy technology three-age old-world",null,null,null,0.25],
+[-115000,-9700,"Last Glacial Period (the Ice Age)","CO",2,"ice-age glacial climate pleistocene mammoths",null,null,null,0.25],
 [-2500,0,"Stonehenge raised","EU",4,"britain megalith"],
 [-1600,-1100,"Mycenaean Greece","EU",4,"greece bronze"],
 [-776,0,"First Olympic games","EU",4,"greece sport"],

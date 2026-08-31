@@ -5841,6 +5841,246 @@
      "place": "Prague"
     }
    ]
+  },
+  {
+   "id": "geology",
+   "label": "Geological time",
+   "key": "GE",
+   "si": 5,
+   "default": false,
+   "members": [
+    {
+     "name": "Hadean",
+     "type": "era",
+     "start": -4540000000,
+     "end": -4031000000,
+     "cat": "nature",
+     "imp": 1,
+     "sharpness": 0.25,
+     "tags": "eon precambrian molten earth-forms hadean",
+     "note": "from the Earth's formation to the oldest surviving rock — molten, bombarded, no record"
+    },
+    {
+     "name": "Archean",
+     "type": "era",
+     "start": -4031000000,
+     "end": -2500000000,
+     "cat": "nature",
+     "imp": 1,
+     "sharpness": 0.25,
+     "tags": "eon precambrian archean first-life stromatolites",
+     "note": "the first continents and the first life, under an atmosphere with no free oxygen"
+    },
+    {
+     "name": "Proterozoic",
+     "type": "era",
+     "start": -2500000000,
+     "end": -538800000,
+     "cat": "nature",
+     "imp": 1,
+     "sharpness": 0.25,
+     "tags": "eon precambrian proterozoic oxygen snowball-earth",
+     "note": "oxygen fills the air, complex cells appear, and the whole planet freezes over twice"
+    },
+    {
+     "name": "Phanerozoic",
+     "type": "era",
+     "start": -538800000,
+     "end": 2026,
+     "cat": "nature",
+     "imp": 1,
+     "sharpness": 0.25,
+     "tags": "eon phanerozoic visible-life shells bones",
+     "note": "'visible life' — the eon of shells, bones and everything a fossil hunter can see"
+    },
+    {
+     "name": "Paleozoic",
+     "type": "era",
+     "start": -538800000,
+     "end": -251900000,
+     "cat": "nature",
+     "imp": 2,
+     "sharpness": 0.25,
+     "tags": "era palaeozoic paleozoic ancient-life trilobites",
+     "note": "from the Cambrian explosion to the Great Dying: trilobites, fish, forests, Pangaea"
+    },
+    {
+     "name": "Mesozoic",
+     "type": "era",
+     "start": -251900000,
+     "end": -66000000,
+     "cat": "nature",
+     "imp": 2,
+     "sharpness": 0.25,
+     "tags": "era mesozoic dinosaurs reptiles middle-life",
+     "note": "the age of dinosaurs, from the recovery after the Great Dying to the Chicxulub impact"
+    },
+    {
+     "name": "Cenozoic",
+     "type": "era",
+     "start": -66000000,
+     "end": 2026,
+     "cat": "nature",
+     "imp": 2,
+     "sharpness": 0.25,
+     "tags": "era cenozoic mammals recent-life",
+     "note": "the age of mammals, birds and grasses — and, at the very end, of us"
+    },
+    {
+     "name": "Cambrian",
+     "type": "era",
+     "start": -538800000,
+     "end": -485400000,
+     "cat": "nature",
+     "imp": 3,
+     "sharpness": 0.25,
+     "tags": "period cambrian explosion trilobites burgess",
+     "note": "almost every animal body plan appears in a few tens of millions of years"
+    },
+    {
+     "name": "Ordovician",
+     "type": "era",
+     "start": -485400000,
+     "end": -443800000,
+     "cat": "nature",
+     "imp": 3,
+     "sharpness": 0.25,
+     "tags": "period ordovician reefs extinction",
+     "note": "great reefs and the first land plants; ends in the first of the big five extinctions"
+    },
+    {
+     "name": "Silurian",
+     "type": "era",
+     "start": -443800000,
+     "end": -419200000,
+     "cat": "nature",
+     "imp": 3,
+     "sharpness": 0.25,
+     "tags": "period silurian jawed-fish land-plants",
+     "note": "jawed fish spread and plants get a proper foothold on land"
+    },
+    {
+     "name": "Devonian",
+     "type": "era",
+     "start": -419200000,
+     "end": -358900000,
+     "cat": "nature",
+     "imp": 3,
+     "sharpness": 0.25,
+     "tags": "period devonian fishes forests tetrapods",
+     "note": "the age of fishes: the first forests, and the first four-legged animals to walk out"
+    },
+    {
+     "name": "Carboniferous",
+     "type": "era",
+     "start": -358900000,
+     "end": -298900000,
+     "cat": "nature",
+     "imp": 3,
+     "sharpness": 0.25,
+     "tags": "period carboniferous coal swamps giant-insects",
+     "note": "coal swamps, an oxygen peak, and dragonflies the size of gulls"
+    },
+    {
+     "name": "Permian",
+     "type": "era",
+     "start": -298900000,
+     "end": -251900000,
+     "cat": "nature",
+     "imp": 3,
+     "sharpness": 0.25,
+     "tags": "period permian pangaea great-dying extinction",
+     "note": "one supercontinent, Pangaea — and then the worst extinction the Earth has had"
+    },
+    {
+     "name": "Triassic",
+     "type": "era",
+     "start": -251900000,
+     "end": -201400000,
+     "cat": "nature",
+     "imp": 3,
+     "sharpness": 0.25,
+     "tags": "period triassic first-dinosaurs first-mammals",
+     "note": "life rebuilds from almost nothing; the first dinosaurs and the first mammals"
+    },
+    {
+     "name": "Jurassic",
+     "type": "era",
+     "start": -201400000,
+     "end": -143100000,
+     "cat": "nature",
+     "imp": 3,
+     "sharpness": 0.25,
+     "tags": "period jurassic dinosaurs archaeopteryx birds",
+     "note": "the big dinosaurs, the first birds, and Pangaea coming apart"
+    },
+    {
+     "name": "Cretaceous",
+     "type": "era",
+     "start": -143100000,
+     "end": -66000000,
+     "cat": "nature",
+     "imp": 3,
+     "sharpness": 0.25,
+     "tags": "period cretaceous flowers tyrannosaurus asteroid",
+     "note": "flowering plants take over the land; ends in an afternoon, with the asteroid"
+    },
+    {
+     "name": "Paleogene",
+     "type": "era",
+     "start": -66000000,
+     "end": -23030000,
+     "cat": "nature",
+     "imp": 3,
+     "sharpness": 0.25,
+     "tags": "period palaeogene paleogene mammals whales primates",
+     "note": "mammals inherit an emptied world and get large; whales go back to the sea"
+    },
+    {
+     "name": "Neogene",
+     "type": "era",
+     "start": -23030000,
+     "end": -2580000,
+     "cat": "nature",
+     "imp": 3,
+     "sharpness": 0.25,
+     "tags": "period neogene grasslands apes hominins",
+     "note": "grasslands spread, apes diversify, and the first hominins stand up in Africa"
+    },
+    {
+     "name": "Quaternary",
+     "type": "era",
+     "start": -2580000,
+     "end": 2026,
+     "cat": "nature",
+     "imp": 3,
+     "sharpness": 0.25,
+     "tags": "period quaternary ice-ages humans glaciation",
+     "note": "the period of the ice ages — and of us"
+    },
+    {
+     "name": "Pleistocene",
+     "type": "era",
+     "start": -2580000,
+     "end": -9700,
+     "cat": "nature",
+     "imp": 4,
+     "sharpness": 0.25,
+     "tags": "epoch pleistocene ice-age mammoths neanderthals",
+     "note": "the ice ages proper: mammoths, Neanderthals, and the peopling of the whole world"
+    },
+    {
+     "name": "Holocene",
+     "type": "era",
+     "start": -9700,
+     "end": 2026,
+     "cat": "nature",
+     "imp": 4,
+     "sharpness": 0.25,
+     "tags": "epoch holocene interglacial farming civilisation",
+     "note": "the warm interval we live in — farming, cities, and everything written down"
+    }
+   ]
   }
  ]
 }

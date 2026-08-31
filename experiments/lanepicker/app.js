@@ -352,90 +352,90 @@
      "We just have a list of views. […] The moment we have him open in Timeline
      […] we should see an expanded view to specify which lanes in the Timeline
      it is a part of. Just show their names, nothing else, no other
-     explanations."
+     explanations." Then, in revision: "Make it rows, instead of pills. […]
+     there should be 'Add new lane' list with options under with a plus button.
+     […] The default is the on at the top. […] The accented one should be only
+     the picked lane - the one we're seeing in the timeline."
 
-     So: the destination strip the card already ships IS the list of views, and
-     the lane list hangs off it — only under Timeline, because a lane is a
-     timeline concept. Names only. Two states, both borrowed from the strip
-     itself: the inverted ink block for a lane on your board, the plain bordered
-     cell for one you can press to add.
+     THE ROW OF VIEWS IS QUOTED, NOT INVENTED. Its order comes out of Lab.tsx's
+     GROUPS and selcard.ts's dests() at build time (see build-data.py), so the
+     card's row and the switcher at the top of the page cannot drift. Its ACTIVE
+     STATE is the switcher's own — a --tl-surface-3 ground and a 2px ink rule —
+     rather than the inverted block the card used to draw.
 
-     THE RANKING RULE STILL GOVERNS THE ORDER and says nothing. Within each of
-     the two states the names are in candidate rank; the added ones come first,
-     because "which have I added" is the question the two states exist to
-     answer and grouping answers it before the eye has to compare fills.
+     WHICH CELLS APPEAR is selcard.ts's rule, unchanged: Flow, Map and Cube need
+     a polity and neither of these subjects has one, so they are absent rather
+     than drawn shut. Beliefs appears for a belief stream, Connections when the
+     link table holds something.
      ═══════════════════════════════════════════════════════════════════════ */
-  var VIEWS = [
-    { act: 'persp', label: 'Timeline', view: 'zoom' },
-    { act: 'flow', label: 'Flow', view: 'flow' },
-    { act: 'map', label: 'Map', view: 'map' },
-    { act: 'cube', label: 'Cube', view: 'cube' },
-  ];
-  function shutReasonFor(act, sub) {
-    if (act === 'flow') return sub.name + ' carries no weight curve, so the flow of empires draws no ribbon for it';
-    if (act === 'map') return sub.name + ' holds no ground, so the atlas draws nothing for it';
-    if (act === 'cube') return sub.name + ' holds no ground, so the cube traces nothing for it';
-    return '';
+  var VIEWS = LP.views;
+  var VIEW_OF = {};
+  VIEWS.forEach(function (v) { VIEW_OF[v.act] = v; });
+
+  function tabs(sub, st, redraw) {
+    var row = el('div', 'lp-tabs');
+    row.setAttribute('role', 'group');
+    row.setAttribute('aria-label', 'Show this in');
+    sub.dests.forEach(function (act) {
+      var v = VIEW_OF[act];
+      var b = el('button', 'lp-tab', v.label);
+      b.type = 'button';
+      b.setAttribute('aria-selected', st.act === act ? 'true' : 'false');
+      b.addEventListener('click', function () { st.act = act; redraw(); });
+      row.appendChild(b);
+    });
+    return row;
+  }
+
+  /* THE LANE LIST. Names, and nothing else. Two groups: what is on your board,
+     then "Add new lane" over what is not. Exactly one row is marked, and it
+     means THE LANE YOU ARE SEEING IT IN — never more than one, and never a row
+     that is not on the board. */
+  function lanes(sub, st, redraw) {
+    var box = el('div', 'lp-lanes lp-lanes--' + st.mark);
+    var on = sub.cands.filter(function (c) { return st.board.indexOf(c.id) >= 0; });
+    var off = sub.cands.filter(function (c) { return st.board.indexOf(c.id) < 0; });
+
+    on.forEach(function (c) {
+      var r = el('button', 'lp-row');
+      r.type = 'button';
+      if (st.picked === c.id) r.setAttribute('aria-current', 'true');
+      r.appendChild(el('span', 'lp-row__n', c.name));
+      r.addEventListener('click', function () { st.picked = c.id; redraw(); });
+      box.appendChild(r);
+    });
+
+    if (off.length) {
+      /* HIS HEADING, AND IT IS NOT A CREATE ACTION. "Add new lane" names the
+         list of lanes you could add — the custom-lane idea is gone: "Remove
+         the new lane idea for now." */
+      box.appendChild(el('div', 'lp-lanes__hd', 'Add new lane'));
+      off.forEach(function (c) {
+        var r = el('button', 'lp-row lp-row--add');
+        r.type = 'button';
+        r.appendChild(el('span', 'lp-row__n', c.name));
+        var plus = el('span', 'lp-row__plus', '+');
+        plus.setAttribute('aria-hidden', 'true');
+        r.appendChild(plus);
+        r.setAttribute('aria-label', 'Add ' + c.name);
+        r.addEventListener('click', function () {
+          st.board.push(c.id);
+          st.picked = c.id;                 // added, and now the one you see it in
+          redraw();
+        });
+        box.appendChild(r);
+      });
+    }
+    return box;
   }
 
   function goD(sub, st, redraw) {
     var g = el('div', 'tl-selcard__go');
-    var lead = el('span', 'tl-selcard__lead', 'Show this in');
-    var id = 'showin-' + Math.random().toString(36).slice(2, 8);
-    lead.id = id;
-    g.appendChild(lead);
-
-    var row = el('div', 'tl-selcard__dests');
-    row.setAttribute('role', 'group');
-    row.setAttribute('aria-labelledby', id);
-    VIEWS.forEach(function (v) {
-      var c = el('button', 'tl-selcard__dest', v.label);
-      c.type = 'button';
-      if (st.view === v.view) c.setAttribute('aria-current', 'true');
-      /* Flow, Map and Cube need a polity — neither of these subjects has one —
-         so they are drawn SHUT with the reason on them, which is the card's own
-         idiom for a door that opens onto nothing. TIMELINE is live even for
-         Daoism, and that is the model change made visible: once a lane is a
-         choice, "there is no lane to add" stops being true. */
-      if (v.act !== 'persp') {
-        c.setAttribute('aria-disabled', 'true');
-        c.title = shutReasonFor(v.act, sub);
-      } else {
-        c.title = 'Frame the timeline on ' + span(sub.start, sub.end);
-      }
-      row.appendChild(c);
-    });
-    g.appendChild(row);
-
-    // ONLY UNDER TIMELINE. Lanes are a timeline concept; on Flow, Map or Cube
-    // there is no lane list at all, and the strip closes back up.
-    if (st.view !== 'zoom') return g;
-
-    var box = el('div', 'lp-lanes');
-    var on = sub.cands.filter(function (c) { return st.board.indexOf(c.id) >= 0; });
-    var off = sub.cands.filter(function (c) { return st.board.indexOf(c.id) < 0; });
-    on.concat(off).forEach(function (c) {
-      var chip = el('button', 'lp-chip', c.name);
-      chip.type = 'button';
-      var isOn = st.board.indexOf(c.id) >= 0;
-      if (isOn) {
-        chip.setAttribute('data-on', 'true');
-        chip.setAttribute('aria-pressed', 'true');
-        chip.title = 'On your board';
-      } else {
-        chip.setAttribute('aria-pressed', 'false');
-        chip.title = 'Add to your board';
-        chip.addEventListener('click', function () {
-          st.board.push(c.id); st.added = c.id; redraw();
-        });
-      }
-      box.appendChild(chip);
-    });
-    var mine = el('button', 'lp-chip lp-chip--new', '+ New lane');
-    mine.type = 'button';
-    mine.title = 'Name a lane of your own — sketch only';
-    box.appendChild(mine);
-    g.appendChild(box);
+    g.appendChild(el('span', 'tl-selcard__lead', 'Show this in'));
+    g.appendChild(tabs(sub, st, redraw));
+    // ONLY UNDER TIMELINE. A lane is a timeline concept; on Beliefs or
+    // Connections the block is not there at all.
+    if (st.act === 'persp') g.appendChild(lanes(sub, st, redraw));
     return g;
   }
 
@@ -515,39 +515,37 @@
   var OFFERS = { a: offerA, b: offerB, c: offerC };
   /* Which lanes the reader has already put on their board, per specimen. Mozart
      carries Music so that "added" and "could add" are legible side by side. */
-  var SEED = { 'd:mozart': ['mu'], 'd:daoism': [] };
+  var SEED = { mozart: ['mu'], daoism: [] };
+  var isD = function (a) { return a === 'd' || a === 'dink'; };
 
   function specimen(host, arrangement, sub) {
+    var seed = (SEED[sub.slug] || []).slice();
     var st = {
       pick: 0, open: false, added: null, group: arrangement + '-' + sub.id,
       view: 'zoom',
+      act: 'persp',                         // which view cell is selected
+      mark: arrangement === 'dink' ? 'ink' : 'accent',
       /* THE READER'S BOARD. Mozart starts with Music on it and everything else
-         off, so the two states are on screen at the same time; Daoism starts
-         with nothing, which is the founder's "a card that does not exist in any
-         of your lanes yet". Both are demo states, and the stage says so. */
-      board: (SEED[arrangement + ':' + sub.slug] || []).slice(),
+         off, so both states are legible at once; Daoism starts with nothing,
+         which is the founder's "a card that does not exist in any of your lanes
+         yet". Both are demo states, and the stage says so. */
+      board: seed,
+      /* THE ONE MARKED ROW — the lane you are seeing it in. Nothing on the
+         board means nothing marked, which is the truth for Daoism. */
+      picked: seed.length ? seed[0] : null,
     };
     var stage = el('div', 'lp-stage');
     var label = el('div', 'lp-stage__label');
     label.appendChild(el('span', null, sub.stageLabel));
-    if (arrangement === 'd') {
-      /* NOT part of the card — the card reports the view you are standing in,
-         it does not switch it. This is the page's stand-in for the top rail, so
-         the lane block can be watched opening and closing under Timeline. */
-      var vwrap = el('span', 'lp-viewwrap');
-      vwrap.appendChild(el('span', 'lp-viewwrap__t', 'active view'));
-      var vsw = el('span', 'lp-view');
-      vsw.setAttribute('role', 'group');
-      vsw.setAttribute('aria-label', 'Active view');
-      VIEWS.forEach(function (v) {
-        var b = el('button', null, v.label);
-        b.type = 'button';
-        b.setAttribute('aria-pressed', st.view === v.view ? 'true' : 'false');
-        b.addEventListener('click', function () { st.view = v.view; redraw(); });
-        vsw.appendChild(b);
+    if (isD(arrangement)) {
+      /* THE DEMO BOARD, said out loud on the stage rather than implied by the
+         card — which lanes this reader is standing with before they touch it. */
+      var seedNames = seed.map(function (id) {
+        var c = laneById(sub, id); return c ? c.name : id;
       });
-      vwrap.appendChild(vsw);
-      label.appendChild(vwrap);
+      label.appendChild(el('span', 'lp-viewwrap__t',
+        (arrangement === 'dink' ? 'switcher idiom' : 'minium accent') + ' · board: '
+        + (seedNames.length ? seedNames.join(', ') : 'empty')));
     }
     var slot = el('div');
     slot.style.width = '320px';
@@ -564,10 +562,11 @@
       card.setAttribute('role', 'dialog');
       card.setAttribute('aria-label', sub.name);
       card.appendChild(head(sub));
-      if (arrangement === 'd') {
-        /* No offer block, no confirmation block, no statement line. The list of
-           views is the whole control, and the lane names are the whole answer. */
-        if (st.view === 'zoom') card.className += ' lp-selcard--open';
+      if (isD(arrangement)) {
+        /* No offer block, no confirmation block, no statement line, no notice
+           and no Undo — 177bc6e took Undo out of the app, and you take a lane
+           off in the panel instead. The row of views is the whole control and
+           the lane names are the whole answer. */
         card.appendChild(goD(sub, st, redraw));
       } else {
         card.appendChild(st.added ? done(sub, st, redraw) : OFFERS[arrangement](sub, st, redraw));
@@ -576,13 +575,9 @@
       card.appendChild(rels(sub));
       slot.appendChild(card);
 
-      var sw = stage.querySelector('.lp-view');
-      if (sw) sw.querySelectorAll('button').forEach(function (b, i) {
-        b.setAttribute('aria-pressed', VIEWS[i].view === st.view ? 'true' : 'false');
-      });
       var old = stage.querySelector('.lp-notice');
       if (old) old.remove();
-      if (st.added) stage.appendChild(notice(sub, st, redraw));
+      if (st.added && !isD(arrangement)) stage.appendChild(notice(sub, st, redraw));
 
       /* MEASURED, NOT ESTIMATED. Synchronously (getBoundingClientRect forces
          the layout), then again when the webfonts land, because a card set in
