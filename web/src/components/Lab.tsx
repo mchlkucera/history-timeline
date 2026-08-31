@@ -946,6 +946,19 @@ export default function Lab() {
      documentation about the tool, which is exactly why it needed a home that is
      not a tab. */
   const [markOpen, setMarkOpen] = useState(false);
+  /* AND THE SAME MENU ON A GROUP TAB. Which group's list is showing, by id, or
+     null. One flag rather than one per tab, because two lists open at once is
+     not a state this rail can be in — opening either menu is what closes the
+     other, including the wordmark's. */
+  const [openGroup, setOpenGroup] = useState<string | null>(null);
+  /* WHERE THAT LIST IS ON SCREEN. The tab it hangs off lives inside
+     .tl-rail__mid, which is a horizontal scroller with overflow-y:hidden and an
+     edge mask at every width — so an absolutely-positioned popover in there is
+     clipped to the 44px row and faded at both ends. The list is rendered out of
+     the shell and placed in VIEWPORT coordinates instead, exactly as the search
+     suggestions, the tooltip and the selection card already are. Measured on
+     open, and again whenever the row scrolls or the window resizes under it. */
+  const [gBox, setGBox] = useState<{ left: number; top: number } | null>(null);
   /* TWO FLAGS FOR ONE POPOVER, because it has to be seen LEAVING.
      `notesOpen` is what the reader asked for; `notesVis` is whether the element
      is still in the layout. Opening sets both; closing drops `notesOpen` at
@@ -996,13 +1009,12 @@ export default function Lab() {
   const meta = VIEWS[view];
   // Concepts is outside the switcher, so NOTHING in the switcher is selected
   // while it is open — a rail that says MAP over a page of concept cards lies.
+  // (No `members`/`groupLabel` derivation any more: the group's word and its
+  // members are read straight off the GROUPS entry the tab is being built from,
+  // so the menu under MAP can never be Flow's list — which a derivation off the
+  // ACTIVE view would have made possible the moment a tab could open a group it
+  // is not standing in.)
   const group = view === 'concepts' ? '' : groupOf(view);
-  const members = group ? GROUPS.find(g => g.id === group)!.members : [];
-  // The group's own word, so the sub-switcher can NAME the thing it lives
-  // inside ("Map views") instead of repeating the generic "View" the six group
-  // tabs already carry. The chevron in the markup below is the same statement
-  // for the eye; this is it for a screen reader.
-  const groupLabel = group ? GROUPS.find(g => g.id === group)!.label : '';
 
   // ── view state ────────────────────────────────────────────────────────────
   // Tolerates unknown ids, and maps the legacy alias 'sketch' -> 'braid'.
@@ -1855,7 +1867,15 @@ export default function Lab() {
     if (box) { box.value = ''; if (keepFocus) box.focus(); else box.blur(); }
     setHasQ(false);
     closeSearch();
+    /* AND ON EVERY CANVAS THAT DIMS, not just the timeline. Two views hold a
+       query of their own and both learn it from the field's `input` EVENT —
+       which an assignment to `.value` does not fire. So blanking the box left
+       Conn.q holding the old words with nothing on screen to explain them, and
+       Connections sat at 12% until the reader typed a character and deleted it.
+       Reproduced with "venice": clear the field, cross to Connections, the whole
+       view is dark. A cleared field clears the dim everywhere. */
     TL.clearSearch();
+    Conn.setQuery('');
   }, [closeSearch]);
 
 
@@ -1902,6 +1922,105 @@ export default function Lab() {
       setTimeout(() => { const r = find(); if (r) r.classList.remove('is-found'); }, 1600);
     };
     requestAnimationFrame(tick);
+  }, []);
+
+  /* ═══ AND DOWN THE SHEET TO IT — THE OTHER HALF OF "SHOW ME THIS" ════════
+   *
+   * The founder: "Clicking 'timeline' on a card should scroll me on X on it but
+   * also on Y"
+   *
+   * Framing has always been an X-only act, and that was right while the plot
+   * was held to a stage-height budget: there was no Y to be wrong about. 47e4edf
+   * retired the budget so zooming in can only ADD marks and the sheet grows
+   * instead — about four viewports at the deep end — and the same gesture that
+   * used to land you on the thing now lands you on the right YEARS with the
+   * thing itself several hundred pixels below the fold. Asia · Dynasties is the
+   * standing reproduction: press TIMELINE on a Chinese polity from the map and
+   * the window is exactly right and the screen is empty.
+   *
+   * IT MOVES THE ONE SCROLLER, and by TL.scrollBy rather than by writing
+   * scrollTop: scrollBy nulls _yAnchor first, so a zoom anchor still settling
+   * from a moment ago yields instead of dragging the sheet straight back. Same
+   * rule the touch drag and the rail hold already obey — the reader (or, here,
+   * the reader's own gesture) is driving.
+   *
+   * THE TIMING IS THE WHOLE DIFFICULTY, and it is measured rather than guessed.
+   * Three things are moving after goToSubject() returns: frameTo's 650ms tween,
+   * which changes which marks are drawn and therefore how tall every band is;
+   * the slew limiter, which delivers a new band height over ~230ms and longer
+   * when it has far to travel; and flashLayer's own scrollIntoView, which fires
+   * immediately and AGAIN at 750ms. A rect measured before all three have
+   * finished is a rect from a layout that no longer exists — so this does not
+   * measure once, or twice. It follows the settle, and the loop below carries
+   * the numbers that proved two passes were not enough.
+   *
+   * IT IS NEVER A SECOND JUMP. Every tick asks the same absolute question and
+   * returns early while the mark is inside a generous middle band, so the only
+   * ticks that move anything are the ones where the layout genuinely carried the
+   * mark back out of view — the "absolute target, never incremental" property
+   * applyYAnchor is built on, for the same reason.
+   *
+   * HORIZONTAL ONLY, deliberately. The vertical projection has no sheet to
+   * scroll: vertical.ts fits its canvas to the stage every frame, so everything
+   * it draws is on screen by construction and there is nothing for this to do.
+   */
+  const centreMark = useCallback((id: string) => {
+    /* WHAT THIS LANDING HAS WRITTEN, so it can tell its own scroll from the
+       reader's. Every write is remembered; an offset that is not the one we left
+       came from a hand on the wheel, and the landing stands down at once — the
+       same "the reader is driving" rule TL.scrollBy encodes when it nulls the
+       zoom anchor. */
+    let mine = -1;
+    let done = false;
+    const bring = () => {
+      // NO "AM I STILL ON ZOOM" TEST, because the geometry already is one: an
+      // inactive .tl-view is display:none, so its clientHeight is 0 and the
+      // canvas anchorOf measures has no width either. A reader who leaves mid
+      // flight simply runs the window out and nothing moves; a reader who comes
+      // back inside it gets the landing they asked for.
+      const sc = TL.scroller();
+      if (!sc || !sc.clientHeight) return;
+      if (mine >= 0 && Math.abs(sc.scrollTop - mine) > 1) { done = true; return; }
+      const r = TL.anchorOf(id);
+      if (!r) return;                                   // not drawn yet — ask again
+      const port = sc.getBoundingClientRect();
+      // COMFORTABLE, NOT MERELY VISIBLE. A mark 8px off the bottom edge is on
+      // screen and unreadable; the band is inset by 15% of the window, capped so
+      // a tall screen does not demand half of itself.
+      const pad = Math.min(96, port.height * 0.15);
+      if (r.top >= port.top + pad && r.bottom <= port.bottom - pad) return;
+      const dy = (r.top + r.height / 2) - (port.top + port.height / 2);
+      if (Math.abs(dy) < 1) return;
+      TL.scrollBy(dy);                                  // browser clamps at both ends
+      mine = sc.scrollTop;
+    };
+    /* IT RUNS FOR THE WHOLE SETTLE, NOT ONCE — the same reason applyYAnchor
+       does, and it was measured the hard way. Two one-shot passes (820ms and
+       1250ms) landed the mark dead centre at 850ms and then WATCHED IT LEAVE:
+       the reveal had added lanes above it, the slew limiter walked the sheet
+       from 887px to 1474px over the next 850ms, and by 1400ms the mark was at
+       y=805 against a 692px fold again — with both passes already spent. Each
+       tick asks the same ABSOLUTE question of the current geometry, so nothing
+       accumulates and nothing oscillates: once the sheet stops growing the mark
+       is inside the band and every remaining tick is a no-op.
+
+       ON A TIMER, NOT requestAnimationFrame, and that is frameSettled's argument
+       one screen up: a hidden, occluded or throttled tab never receives a frame.
+       Reproduced by taking a search row in a background tab — the sheet grew
+       from 890px to 1829px, TL.anchorOf answered throughout, and an rAF-driven
+       version left scrollTop at 0 for the full two seconds. Timers are clamped
+       to about 1/s in that state but they do run.
+
+       780ms in (just past frameTo's 650ms tween, and past flashLayer's own
+       750ms re-bring so the two never argue over the same scroller) to 2400ms,
+       which is a second clear of the longest settle measured. */
+    const t0 = Date.now();
+    const tick = () => {
+      if (done) return;
+      bring();
+      if (Date.now() - t0 < 2400) setTimeout(tick, 80);
+    };
+    setTimeout(tick, 780);
   }, []);
 
   /**
@@ -1954,11 +2073,19 @@ export default function Lab() {
     const [a, b] = perspectiveSpan(sub);
     frameSettled(a, b);
     go(to);
+    // …AND ON Y. The frame above is the window in TIME; this is the window on
+    // the SHEET, which is four viewports tall at the deep end. Both routes into
+    // this function get it because there is only this function: the card's
+    // TIMELINE cell arrives through showOnTimeline, a search landing through
+    // landingFor's toTimeline, and a relation row through the same. It runs
+    // whether or not the board moved — a lane that was already up is exactly the
+    // case flashLayer never covered, and the case the founder hit.
+    if (to === 'zoom') centreMark(id);
     if (moved && plan.layer) {
       flashLayer(plan.layer);                          // …and locate the lane it took
       setNotice({ text: didLine(plan), n: ++noticeN });
     } else setNotice(null);                            // nothing changed, nothing to say
-  }, [go, flashLayer]);
+  }, [go, flashLayer, centreMark]);
   useEffect(() => { showTlRef.current = (id: string) => goToSubject(id, 'zoom', 'point'); }, [goToSubject]);
 
 
@@ -2250,11 +2377,21 @@ export default function Lab() {
     closeSearch();
     const box = document.getElementById('cmdk') as HTMLInputElement | null;
     if (box) { box.value = ''; box.blur(); }
+    // …AND THE ✕ GOES WITH THE WORDS. Same root as the line below: `hasQ` is
+    // written from the field's input event, which an assignment does not fire,
+    // so taking a row left the "clear search" button standing over an empty box
+    // where the ⌘K hint belongs. It is the third thing clearField already knew
+    // to do and this path did not.
+    setHasQ(false);
     // Any dim comes off BEFORE anything else happens, on every branch: the
     // framing has to land on a full world rather than on 12% of one, and a row
     // that navigates to a VIEW would otherwise leave the timeline dimmed by a
-    // query the reader can no longer see in the (now empty) field.
+    // query the reader can no longer see in the (now empty) field. BOTH canvases
+    // that dim, for the reason spelled out in clearField: the assignment above
+    // fires no input event, so Connections would never hear that the words are
+    // gone and would sit at 12% on a view the reader had not even reached yet.
     TL.clearSearch();
+    Conn.setQuery('');
 
     if (r.k === 'v') { go(r.v); return; }
 
@@ -2506,7 +2643,8 @@ export default function Lab() {
          never under them, so a reader with both open means the menu. Focus goes
          back to whatever was pressed to open it, in both cases. */
       if (e.key === 'Escape') {
-        if (markOpen) { setMarkOpen(false); document.getElementById('markBtn')?.focus(); }
+        if (openGroup) { const id = openGroup; setOpenGroup(null); document.getElementById(`tab-btn-${id}`)?.focus(); }
+        else if (markOpen) { setMarkOpen(false); document.getElementById('markBtn')?.focus(); }
         else if (notesOpen) { setNotesOpen(false); document.getElementById('notesBtn')?.focus(); }
         return;
       }
@@ -2544,6 +2682,56 @@ export default function Lab() {
     return () => removeEventListener('pointerdown', away);
   }, [markOpen]);
 
+  /* AND THE SAME FOR A GROUP TAB'S LIST — one rule, two menus. The slot is what
+     is tested rather than the tab, because the list is inside it: pressing a
+     member must not be read as "a click elsewhere" and close the menu out from
+     under the press. Pressing the TAB again is likewise inside the slot, so it
+     toggles through its own handler instead of being closed here and reopened
+     by the same gesture. Both menus also stand down for the OTHER one — that
+     is in the two click handlers, where opening happens. */
+  useEffect(() => {
+    if (!openGroup) return;
+    const away = (ev: PointerEvent) => {
+      const t = ev.target as HTMLElement | null;
+      if (!t?.closest?.('.tl-menu, .tl-switch__item')) setOpenGroup(null);
+    };
+    addEventListener('pointerdown', away);
+    return () => removeEventListener('pointerdown', away);
+  }, [openGroup]);
+
+  /* AND WHERE IT SITS. Under the tab, left edges flush, one pixel over the
+     rail's own bottom hairline so the list reads as hanging off the row rather
+     than as floating below it. Clamped to the window because the row SCROLLS
+     below 1024px: a tab dragged to the right-hand end would otherwise open a
+     168px list off the edge of a 390px screen. Re-measured on the row's scroll
+     and on resize, and torn down the moment the list closes — the same "no
+     listener without a reader behind it" rule the dismissal effect above
+     follows. */
+  const placeGroupMenu = useCallback((id: string) => {
+    const btn = document.getElementById(`tab-btn-${id}`);
+    if (!btn) return;
+    const r = btn.getBoundingClientRect();
+    const w = 168;                                     // .tl-menu's min-width
+    const pad = 8;
+    setGBox({
+      left: Math.round(Math.max(pad, Math.min(r.left, innerWidth - w - pad))),
+      top: Math.round(r.bottom - 1),
+    });
+  }, []);
+  /* MEASURED WHERE THE MENU IS OPENED, not in an effect that watches for it: a
+     setState run synchronously from an effect body is a second render for a
+     value the click already knew, and the list would flash at the last tab's
+     position for one frame on the way. The effect below owns only the FOLLOWING
+     — the anchor can still move under an open list, and both movers are events. */
+  useEffect(() => {
+    if (!openGroup) return;
+    const follow = () => placeGroupMenu(openGroup);
+    const row = midRef.current;
+    row?.addEventListener('scroll', follow, { passive: true });
+    addEventListener('resize', follow);
+    return () => { row?.removeEventListener('scroll', follow); removeEventListener('resize', follow); };
+  }, [openGroup, placeGroupMenu]);
+
   // ── derived flags ─────────────────────────────────────────────────────────
   const railOn = meta.rail !== 'off';
   const scaleCell = meta.rail === 'live'
@@ -2551,64 +2739,82 @@ export default function Lab() {
     : meta.rail === 'span' ? 'railRange' : 'none';
   const yearCell = view === 'map' ? 'map' : view === 'pop' ? 'pop' : 'rail';
 
-  // THE HEADER CARRIES THE SIX GROUPS AND GLOBAL CHROME, NOTHING ELSE.
-  //
-  // "Flow still has the ugly Empires - Beliefs - should be in controls!"
-  //
-  // It was the last of three sub-switchers and the argument had already been
-  // made twice. The Timeline group's seg (Vertical | Horizontal) came out of
-  // the header two rounds ago and became the "Projection" row of Controls,
-  // because two drawings of one state is a control of the view rather than a
-  // way to another one. Flow's is the same object: Empires and Beliefs are one
-  // ribbon engine, one span, one selection, one set of regions, drawn over two
-  // corpora. So is Map's — Borders, Habitation and Horizon are three readings of
-  // one atlas at one moment, and the rail already says you are in MAP.
-  //
-  // So EVERY group with siblings now states them the same way, as the first
-  // row of Controls, and the header is left with exactly one level: which of
-  // the six groups am I in. The breadcrumb chevron went with the seg — with
-  // nothing to point at, it was pointing at the fade.
-  //
-  // NOT THE TOP OF THE LAYER PANEL, the other candidate: every row in that
-  // panel is positioned from the canvas's own lane geometry, every frame, and a
-  // control row would be the one element in it with a height of its own —
-  // against the 0.000px lock the whole panel is built on. It is also absent in
-  // the vertical projection, which would make the switch a one-way door.
-  //
-  // THE ROW ITSELF, BUILT ONCE. Three groups have siblings — Timeline, Map and
-  // Flow — and Connections, Cube and Concepts have none, so this returns null
-  // for them and their Controls simply opens on its own first row. The label is
-  // the group's own word off GROUPS, so the row can never drift from the tab
-  // that leads to it, and `leaveSearch` is the same gesture the header tabs
-  // use: close the suggestion list, then move.
-  const groupSeg = (): React.ReactNode => {
-    if (members.length < 2) return null;
-    const timeline = group === 'g-time';
+  /* ═══ THE SECOND LEVEL OF THE SWITCH — A DISCLOSURE ON ITS OWN TAB ═══════
+   *
+   * "Put the main controls: Map / Borders / Habitation / Horizon and Timeline /
+   * Vertical / Horizontal to somewhere else. either a dropdown right where the
+   * tab is. or like in figma to center top on the screen right under header"
+   *
+   * This control has now moved three times, so the reasoning is written down
+   * rather than re-derived. It began in the TOP RAIL beside the group tabs
+   * ("Flow still has the ugly Empires - Beliefs"), went into Controls, then
+   * became the Controls MASTHEAD — and the third position is where the mistake
+   * became legible. Borders → Habitation is not a setting. It does not adjust
+   * the picture you are looking at; it replaces it. Filed with scale modes and
+   * region filters, at the top of a collapsible panel pinned bottom-right, the
+   * app's second most important navigation move was the one thing on screen you
+   * had to open a drawer to reach.
+   *
+   * THE FIGMA-STYLE FLOATING BAR WAS BUILT FIRST, AND MEASURED, AND FAILED.
+   * Top centre of the stage is free of every PANEL — the card parks top-right,
+   * Controls bottom-right, Reading bottom-left, the notice runs the bottom
+   * strip — which is what made it look like free ground. It is not free of the
+   * CANVAS. Every view here draws from its top edge down, and the top edge is
+   * the first thing a reader looks at: at 1440 the bar sat across the Deep time
+   * lane, over the Bronze/Iron Age boundary, on the default board. Reserving a
+   * band under the header instead would cost 40-64px of stage — and a band that
+   * exists on Map, Timeline and Flow but not on Cube, Connections and Concepts
+   * re-fits every canvas in the app each time the reader crosses between them,
+   * which is exactly the "chrome moves when you navigate" the rail was cleaned
+   * up to stop. So: the founder's other shape.
+   *
+   * THE TAB IS TWO CONTROLS IN ONE SILHOUETTE, and the rule is one sentence.
+   * The word takes you to the group, as it always has. The chevron opens the
+   * group's members. And once you ARE in the group the word opens them too,
+   * because going to the view you are already on is a no-op and the whole tab is
+   * a better target than 9px of glyph — which is what makes this reachable with
+   * a thumb without inventing a long-press nobody would find. The chevron turns
+   * over while the list is up, so the tab says which of its two jobs it is
+   * currently offering.
+   *
+   * ONE MENU SYSTEM, TWO TRIGGERS. This is the wordmark's popover (commit
+   * 177bc6e, Concepts under the mark), renamed .tl-menu and shared rather than
+   * copied: same plate, same radius, same tap floor, same dismissal rules. The
+   * member you are on is marked with the SWITCHER'S active idiom rather than a
+   * fourth one — the --tl-surface-3 ground and the same 2px ink rule, turned a
+   * quarter turn onto the leading edge because a rule under a row of a vertical
+   * list is a separator and reads as one. No accent: minium is where you are in
+   * TIME.
+   *
+   * NOT THE TOP OF THE LAYER PANEL, the candidate rejected last round and still
+   * rejected: every row in that panel is positioned from the canvas's own lane
+   * geometry, every frame, and a control row would be the one element in it with
+   * a height of its own — against the 0.000px lock the panel is built on. It is
+   * also absent in the vertical projection, which would make the switch a
+   * one-way door.
+   *
+   * ABSENT IS A SHAPE TOO. Cube, Connections and Concepts have no members, so
+   * their tabs render no chevron and no menu and are byte-for-byte the tabs they
+   * were. An empty group never shows an empty affordance.
+   */
+  const memberList = (): React.ReactNode => {
+    const g = GROUPS.find(x => x.id === openGroup);
+    if (!g || !gBox) return null;
+    const timeline = g.id === 'g-time';
     return (
-      /* THE MASTHEAD WEARS THE GROUP'S NAME ON EVERY GROUP, and this row used to
-         be the exception: the Timeline group's read "Projection" while Map's read
-         "Map" and Flow's read "Flow". One word for one thing — the cube's
-         Perspective/Isometric switch is the only "Projection" in the app now, it
-         lives in HOW IT IS DRAWN where a statement about the drawing belongs, and
-         a reader crossing views no longer meets the word in two different slots
-         meaning two different things. The buttons still say Vertical and
-         Horizontal, and the assistive labels still say "projection", so nothing
-         about what this row DOES has changed. */
-      <div className="tl-field-group">
-        <span className="tl-label">{groupLabel}</span>
-        <div className="tl-seg" id={timeline ? 'projSeg' : 'viewSeg'} role="group"
-          aria-label={timeline ? 'Projection' : `${groupLabel} views`}>
-          {members.map(m => (
-            <button key={m} className="tl-seg__item" aria-pressed={m === view}
-              aria-label={timeline ? `${VIEWS[m].seg} projection` : `${VIEWS[m].seg} — ${VIEWS[m].name}`}
-              title={timeline
-                ? `Draw the same timeline ${m === 'vertical' ? 'down the page' : 'across the page'}`
-                : VIEWS[m].gist}
-              onClick={() => leaveSearch(m)}>
-              {VIEWS[m].seg}
-            </button>
-          ))}
-        </div>
+      <div className="tl-menu tl-menu--at" id={`menu-${g.id}`} role="menu"
+        style={{ left: gBox.left, top: gBox.top }}
+        aria-labelledby={`tab-btn-${g.id}`}>
+        {g.members.map(m => (
+          <button key={m} type="button" role="menuitem" className="tl-menu__item"
+            aria-current={m === view || undefined}
+            title={timeline
+              ? `Draw the same timeline ${m === 'vertical' ? 'down the page' : 'across the page'}`
+              : VIEWS[m].gist}
+            onClick={() => { setOpenGroup(null); leaveSearch(m); }}>
+            {VIEWS[m].seg}
+          </button>
+        ))}
       </div>
     );
   };
@@ -2696,12 +2902,16 @@ export default function Lab() {
      push it down. `ctrlPanel` is the only way a Controls panel is built in this
      file, so that order is a fact about the code and not a habit.
 
-     THE GROUP SWITCH IS THE MASTHEAD, above all three. It is not a control of
-     this view — it chooses WHICH VIEW — so it sits outside the spine, on the
-     other side of a rule, in the one slot it has always had. */
+     AND THE MASTHEAD IS GONE, which is the spine's own argument finally applied
+     to the one row that was exempt from it. The group's view switch used to
+     stand above all three, on the far side of a rule, marked "not a control of
+     this view — it chooses WHICH VIEW". That was the correct reading of what it
+     is and the wrong conclusion about where it goes: a thing that is not a
+     control of this view does not belong in this view's control panel at all.
+     It hangs off its own group tab now (memberList above), so every Controls
+     panel in the app opens on WHERE YOU ARE — the same first row on all ten
+     views, with nothing above it that some views have and others do not. */
   const ctrlPanel = (views: ViewId[], g: {
-    /** the group's view switch, when the group has siblings */
-    seg?: React.ReactNode;
     where?: React.ReactNode;
     how?: React.ReactNode;
     what?: React.ReactNode;
@@ -2712,7 +2922,6 @@ export default function Lab() {
       <div className="tl-panel__grip" aria-hidden="true" />
       {hd('Controls')}
       <div className="tl-panel__bd">
-        {g.seg}
         {g.where && <div className="tl-group" data-g="where">{g.where}</div>}
         {g.how && <div className="tl-group" data-g="how">{g.how}</div>}
         {g.what && <div className="tl-group" data-g="what">{g.what}</div>}
@@ -2748,13 +2957,13 @@ export default function Lab() {
             <span className="tl-mark__glyph" aria-hidden="true">{I.mark}</span>
             <button type="button" id="markBtn" className="tl-mark__word"
               aria-haspopup="menu" aria-expanded={markOpen} aria-controls="markMenu"
-              onClick={() => setMarkOpen(o => !o)}>
+              onClick={() => { setOpenGroup(null); setMarkOpen(o => !o); }}>
               Timeline
               <span className="tl-mark__chev" aria-hidden="true">{I.chev}</span>
             </button>
-            <div className="tl-mark__menu" id="markMenu" role="menu"
+            <div className="tl-menu" id="markMenu" role="menu"
               aria-labelledby="markBtn" hidden={!markOpen}>
-              <button type="button" role="menuitem" className="tl-mark__item"
+              <button type="button" role="menuitem" className="tl-menu__item"
                 aria-current={view === 'concepts' || undefined}
                 onClick={() => { setMarkOpen(false); leaveSearch('concepts'); }}>
                 Concepts, rated
@@ -2764,22 +2973,76 @@ export default function Lab() {
 
           <div className="tl-rail__mid" ref={midRef} data-ovf={ovf || undefined}>
             <nav className="tl-switch" role="tablist" aria-label="View">
-              {GROUPS.map(g => (
-                <button key={g.id} className="tl-switch__item" role="tab"
-                  aria-selected={g.id === group}
-                  aria-controls={`tab-${GROUP_DEFAULT[g.id]}`}
-                  onClick={() => leaveSearch(g.members.includes(view) ? view : lastMember.current[g.id])}>
-                  {g.label}
-                </button>
-              ))}
+              {GROUPS.map(g => {
+                const many = g.members.length > 1;
+                const here = g.id === group;
+                return (
+                  <button key={g.id} id={`tab-btn-${g.id}`} className="tl-switch__item" role="tab"
+                      aria-selected={here}
+                      aria-controls={many && openGroup === g.id ? `menu-${g.id}` : `tab-${GROUP_DEFAULT[g.id]}`}
+                      aria-haspopup={many ? 'menu' : undefined}
+                      aria-expanded={many ? openGroup === g.id : undefined}
+                      title={many
+                        ? (here ? `${g.label} — choose a view` : `${g.label} · ${g.members.map(m => VIEWS[m].seg).join(' · ')}`)
+                        : undefined}
+                      onClick={e => {
+                        /* THE WHOLE RULE, IN ONE BRANCH, ON ONE CONTROL.
+                           The chevron is a SPAN inside this button rather than a
+                           second button beside it, and the difference is not
+                           laziness: the active tab's plate and its 2px underline
+                           are drawn on .tl-switch__item, so a chevron outside it
+                           would sit outside the mark that says you are here, and
+                           a second <button> would put a second focus stop in a
+                           row that already scrolls on a phone. Which half was
+                           pressed is a question the event can answer.
+
+                             · ON THE CHEVRON — the list, from anywhere. This is
+                               the founder's "a dropdown right where the tab is":
+                               standing on Flow, Map's members are one press away.
+                             · ON THE WORD, outside the group — a tab, unchanged:
+                               it takes you in, to whichever member you were on
+                               last.
+                             · ON THE WORD, inside the group — the list. Going to
+                               the view you are already on is a no-op, so the
+                               press spends itself on the only other thing the tab
+                               has to offer, and the target is the whole tab
+                               rather than 9px of glyph, which is what makes this
+                               work under a thumb.
+
+                           A KEYBOARD gets the word's behaviour (Enter targets
+                           the button itself): Tab to MAP, Enter to enter it,
+                           Enter again for the list. Two presses instead of one,
+                           no gesture to discover, everything reachable.
+
+                           A group with one member never reaches any of it — five
+                           tabs behave exactly as they did. */
+                        const onChev = !!(e.target as HTMLElement | null)?.closest?.('.tl-switch__disc');
+                        if (many && (onChev || here)) {
+                          setMarkOpen(false);
+                          placeGroupMenu(g.id);        // measure before the list exists
+                          setOpenGroup(o => o === g.id ? null : g.id);
+                          return;
+                        }
+                        setOpenGroup(null);
+                        leaveSearch(g.members.includes(view) ? view : lastMember.current[g.id]);
+                    }}>
+                    {g.label}
+                    {many && <span className="tl-switch__disc" aria-hidden="true">{I.chev}</span>}
+                  </button>
+                );
+              })}
             </nav>
 
-            {/* THE SEG IS GONE FROM HERE, and the breadcrumb chevron with it.
-                Empires | Beliefs, Borders | Habitation | Horizon and the projection
-                switch are all rows of the Controls panel now (see groupSeg
-                above) — one level in the header, one place to say how a view is
-                being drawn. The chevron existed only to say "the seg belongs to
-                the tab on its left"; with no seg it had nothing to join. */}
+            {/* THE SECOND LEVEL IS BACK IN HERE — BEHIND THE TABS, NOT BESIDE
+                THEM. It was a row of three or four segs sitting next to the six
+                tabs once ("Flow still has the ugly Empires - Beliefs"), which is
+                what a rail that already scroll-snaps below 1024px cannot afford
+                and what the founder objected to. What is here now is one 9px
+                chevron on each of the three tabs that has members, inside the
+                tab, and a popover that costs the row no width at all. The
+                breadcrumb chevron that used to point from the tabs AT a
+                free-standing seg is still gone: there is nothing beside them to
+                point at, because the list hangs off the tab itself. */}
           </div>
 
           {/* THE SCROLL AFFORDANCE — the second half of the data-ovf work above.
@@ -3076,7 +3339,6 @@ export default function Lab() {
                 for the same reason Play is the first row on the map: the top of
                 Controls is where a view says how it is being drawn. */}
             {ctrlPanel(['zoom', 'vertical'], {
-              seg: groupSeg(),
               where: (
                 <div className="tl-cluster">
                   <ResetBtn id="tlReset" title="Frame the whole recorded span"
@@ -3092,7 +3354,6 @@ export default function Lab() {
             })}
             {/* map */}
             {ctrlPanel(['map'], {
-              seg: groupSeg(),
               /* RESET FIRST, THEN THE TRANSPORT — the same two rows, in the same
                  order, as Habitation and the Cube. It used to be the other way
                  round here and only here, which is exactly the kind of small
@@ -3119,7 +3380,6 @@ export default function Lab() {
                 field is drawn, Names says WHAT is on it. population.ts binds
                 them and paints them, exactly as cube.ts has always done. */}
             {ctrlPanel(['pop'], {
-              seg: groupSeg(),
               /* No reset: this view has no zoom and no pan, so there is no
                  framing to put back. The row is omitted, not faked. */
               where: <Transport prevId="railPrevP" playId="popPlay" nextId="railNextP" unit="slice"
@@ -3159,7 +3419,6 @@ export default function Lab() {
                 by searching, while 1776 / 1492 / 1889 are the SUBJECT of this
                 view, and there is no other route to a year here. */}
             {ctrlPanel(['horizon'], {
-              seg: groupSeg(),
               where: (
                 <>
                   {field('Standing in', <select id="hzCity" aria-label="City" defaultValue="" style={{ width: '100%' }} />)}
@@ -3214,7 +3473,6 @@ export default function Lab() {
                 are on screen at once and aria-pressed says which is live. Same
                 control, same words, same corner on Beliefs. */}
             {ctrlPanel(['flow'], {
-              seg: groupSeg(),
               where: (
                 <div className="tl-cluster">
                   <ResetBtn id="flowAll" title="Frame the whole span" />
@@ -3267,7 +3525,6 @@ export default function Lab() {
                 must drive its own instance — a shared id would give the pair one
                 scale between them, which is the bug the split exists to end. */}
             {ctrlPanel(['braid'], {
-              seg: groupSeg(),
               where: (
                 <div className="tl-cluster">
                   {/* The framing belongs to the VIEW now — religions open on
@@ -3286,7 +3543,6 @@ export default function Lab() {
               )),
             })}
             {ctrlPanel(['ideology'], {
-              seg: groupSeg(),
               where: (
                 <div className="tl-cluster">
                   <ResetBtn title="Frame the whole span of the ideologies"
@@ -3315,7 +3571,6 @@ export default function Lab() {
                 row here, so the panel is short — it does not promote the Grammar
                 legend up into the space to look busy. */}
             {ctrlPanel(['conn'], {
-              seg: groupSeg(),
               where: (
                 <div className="tl-cluster">
                   {/* Wired from this file — a NEW id, so the hiding loop in
@@ -3380,7 +3635,6 @@ export default function Lab() {
                 helpers is null-safe, so a cut costs nothing. #cubeChain ships
                 EMPTY — cube.ts writes the lineage chips into it. */}
             {ctrlPanel(['cube'], {
-              seg: groupSeg(),
               where: (
                 <>
                   <div className="tl-cluster" id="cubeViews">
@@ -3759,6 +4013,14 @@ export default function Lab() {
           viewport coordinates against the anchor the renderer measured, so a
           positioned ancestor would silently shift every one of them. */}
       <div className="tl-selcard" id="selCard" role="dialog" aria-label="Selection" hidden />
+
+      {/* A GROUP TAB'S MEMBERS. Out here for the third version of the same
+          reason: the tabs live in .tl-rail__mid, which is a horizontal scroller
+          with overflow-y:hidden and an edge mask at every width, so a popover
+          anchored inside it is clipped to the 44px row. Placed against the
+          tab's own rect (see the placement effect) exactly as #tip and #selCard
+          are placed against theirs. */}
+      {memberList()}
 
       {/* THE SEARCH SUGGESTIONS. Out here with #tip and #selCard, for the same
           reason: it is positioned in VIEWPORT coordinates against the box's

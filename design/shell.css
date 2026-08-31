@@ -210,7 +210,16 @@ button.tl-mark__word {
 }
 button.tl-mark__word[aria-expanded="true"] .tl-mark__chev { transform: rotate(180deg); }
 
-.tl-mark__menu {
+/* ONE POPOVER MENU, TWO TRIGGERS — and that is why it is called .tl-menu and
+   not .tl-mark__menu any more. It was built for the wordmark, holding Concepts;
+   §03b's group tabs now open the same object holding the group's views, and a
+   second menu system built beside this one would have been two shapes, two
+   grounds and two ideas of what "the current item" looks like. Only the
+   PLACEMENT belongs to the trigger — the values below are the wordmark's, and
+   §03b re-aims the same box under a tab against its own positioned slot.
+   Everything else — the plate, the radius, the tap floor, the states — is here,
+   once. */
+.tl-menu {
   position: absolute;
   top: calc(100% - var(--tl-space-3));
   left: 0;
@@ -222,10 +231,9 @@ button.tl-mark__word[aria-expanded="true"] .tl-mark__chev { transform: rotate(18
   border-radius: var(--tl-radius-lg);
   box-shadow: var(--tl-shadow-pop);
 }
-.tl-mark__menu[hidden] { display: none; }
-/* One item today. A second would need no rule of its own — which is the point
-   of building it as a list rather than as a button that goes one place. */
-.tl-mark__item {
+.tl-menu[hidden] { display: none; }
+.tl-menu__item {
+  position: relative;
   appearance: none;
   display: flex;
   align-items: center;
@@ -242,8 +250,27 @@ button.tl-mark__word[aria-expanded="true"] .tl-mark__chev { transform: rotate(18
   color: var(--tl-ink);
   white-space: nowrap;
 }
-.tl-mark__item:hover { background: var(--tl-hover); }
-.tl-mark__item[aria-current="true"] { background: var(--tl-selected); }
+.tl-menu__item:hover { background: var(--tl-hover); }
+/* WHERE YOU ARE, IN THE SWITCHER'S OWN IDIOM (§03) rather than a fourth one:
+   the --tl-surface-3 ground whose stated job is "pressed / active control fill",
+   and the same 2px ink rule — turned a quarter turn onto the leading edge,
+   because a 2px rule along the BOTTOM of a row in a vertical list is a
+   separator and would be read as one. Ground, ink and a rule: the three cues
+   the group tabs stack, in the shape a list can carry them. */
+.tl-menu__item[aria-current="true"] {
+  background: var(--tl-surface-3);
+  color: var(--tl-ink);
+}
+.tl-menu__item[aria-current="true"]::before {
+  content: "";
+  position: absolute;
+  inset-inline-start: 0;
+  top: 4px;
+  bottom: 4px;
+  width: 2px;
+  border-radius: 1px;
+  background: var(--tl-ink);
+}
 
 .tl-rail__mid {
   display: flex;
@@ -385,21 +412,70 @@ button.tl-mark__word[aria-expanded="true"] .tl-mark__chev { transform: rotate(18
 .tl-switch__item svg { width: 13px; height: 13px; display: block; opacity: .75; }
 .tl-switch__item[aria-selected="true"] svg { opacity: 1; }
 
-/* THE JOIN BETWEEN THE TWO LEVELS. Six group tabs, then — for the groups that
-   have siblings — a seg holding them. Nothing said the seg belonged to the tab
-   rather than being a seventh independent control, so a reader had no reason
-   to conclude "I am in MAP, and inside Map I am on Borders". A breadcrumb
-   chevron does, in 8px of ink-3, and it pulls the seg in close: the row's own
-   16px gap is cancelled back to 6px on each side of the glyph so the seg reads
-   as hanging off the switcher rather than as sitting beside it. */
-.tl-switch__into {
+/* ── 03b  THE SECOND LEVEL — A DISCLOSURE ON THE TAB THAT OWNS IT ────────────
+   "either a dropdown right where the tab is. or like in figma to center top on
+   the screen right under header"
+
+   Borders | Habitation | Horizon and its two siblings are a NAVIGATION level,
+   not a setting, and they have now been in three places while everyone agreed
+   about that and disagreed about where it puts them: loose in the rail (the
+   founder called it ugly there), a row of Controls, then the Controls masthead
+   — buried behind a chevron in a bottom-right drawer, which is where the
+   mistake finally became legible. Switching from Borders to Habitation is a way
+   to another view, not a knob on this one.
+
+   THE FIGMA-STYLE FLOATING BAR WAS BUILT FIRST AND MEASURED, and that is why it
+   is not what shipped. Top centre of the stage is free of every PANEL — the
+   card parks top-right, Controls bottom-right, Reading bottom-left, the notice
+   runs the bottom strip — but it is not free of the CANVAS. Every view in this
+   app draws from the top edge down, and the top edge is where the reader looks
+   first: at 1440 the bar landed across the Deep time lane, over the Bronze/Iron
+   Age boundary. Reserving a band for it instead costs 40-64px of stage, and a
+   band that exists on Map, Timeline and Flow but not on Cube, Connections and
+   Concepts re-fits every canvas in the app each time you cross between them.
+   The rail is already there, on all ten views, and costs nothing more.
+
+   SO THE TAB BECOMES TWO CONTROLS IN ONE SILHOUETTE. The word takes you to the
+   group, exactly as it always has. The chevron opens the group's members. And
+   once you ARE in the group the word opens them too, because going to the view
+   you are already on is a no-op and a whole tab is a better target than 9px of
+   glyph — which is what makes this reachable with a thumb without inventing a
+   long-press. Three groups have members; the other three render no chevron and
+   no menu, so an empty group is not an empty affordance.
+
+   THE MENU IS THE WORDMARK'S MENU (§02), renamed rather than copied — one
+   popover system in the app, two triggers. The current member is marked with
+   the switcher's own active idiom rather than a new one: --tl-surface-3 ground,
+   full ink, and the same 2px ink rule, turned a quarter turn onto the leading
+   edge because a rule UNDER a row of a vertical list is a separator and would
+   read as one. No accent: minium means where you are in TIME. */
+/* THE LIST IS NOT INSIDE THE ROW IT HANGS OFF, and it cannot be: .tl-rail__mid
+   is a horizontal scroller with overflow-y:hidden AND an edge mask at every
+   width (app.css), so a popover anchored in there is clipped to 44px and faded
+   at both ends — measured, not guessed: the menu computed at 168x106 with
+   visibility:visible and elementFromPoint at its centre returned the canvas
+   behind it. So it goes where .tl-sugg, #tip and #selCard already go — out of
+   the shell, positioned in VIEWPORT coordinates against the tab's own rect —
+   and this modifier is the whole of the difference. The wordmark's copy is
+   untouched: .tl-mark sits in the rail's first column, which does not clip. */
+.tl-menu--at { position: fixed; }
+/* The chevron rides INSIDE the tab, after the word, so the plate and the 2px
+   underline of an active tab run under both and the pair reads as one object.
+   A step quieter than the word it follows, the same demotion the wordmark's
+   chevron takes, and it turns over when the menu is open. */
+.tl-switch__disc {
   display: inline-flex;
   align-items: center;
   flex: none;
+  width: 9px;
+  height: 9px;
+  margin-inline-start: var(--tl-space-3);
   color: var(--tl-ink-3);
-  margin-inline: calc(var(--tl-space-3) - var(--tl-space-6));
+  transition: transform var(--tl-dur-fast) var(--tl-ease);
 }
-.tl-switch__into svg { display: block; width: 12px; height: 12px; }
+.tl-switch__disc svg { display: block; width: 100%; height: 100%; }
+.tl-switch__item[aria-expanded="true"] .tl-switch__disc { transform: rotate(180deg); }
+.tl-switch__item[aria-selected="true"] .tl-switch__disc { color: var(--tl-ink-2); }
 
 
 /* ── 04  Stage + canvas ───────────────────────────────────────────────────── */

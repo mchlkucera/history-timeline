@@ -295,7 +295,7 @@ const attr = (s: string) => esc(s).replace(/"/g, '&quot;');
  *  Lab.tsx closes both from its ONE Escape branch, and this is the one place
  *  that has to know the card stands down while either is up. */
 const modalOpen = () =>
-  !!document.querySelector('#fieldNotes:not([hidden]), #markMenu:not([hidden])');
+  !!document.querySelector('#fieldNotes:not([hidden]), #markMenu:not([hidden]), .tl-menu--at:not([hidden])');
 
 export const SelCard = {
   el: null as HTMLElement | null,
