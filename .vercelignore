@@ -1,0 +1,35 @@
+# When this file exists the Vercel CLI reads it INSTEAD of .gitignore,
+# so the first block mirrors .gitignore exactly.
+node_modules/
+.next/
+.next-geobuild/
+out/
+.DS_Store
+*.log
+.env
+.env.local
+.envrc
+.vercel
+*.tsbuildinfo
+next-env.d.ts
+__pycache__/
+*.pyc
+experiments/cube3d/verify/shots/
+data/geo/*.geojson
+/shots/
+
+# CLI-deploy extras: agent worktrees and session state live under .claude/
+# (ignored only via .git/info/exclude, which the CLI does not read) — a
+# worktree carrying its own node_modules is ~600MB and aborts the upload.
+.claude/
+
+# The Vercel build runs in web/ (Root Directory) and touches nothing else.
+# data/ and design/ feed MANUAL scripts (npm run data / design:sync) whose
+# outputs are committed under web/; experiments and prototypes are standalone.
+# Excluding them turns a ~100MB upload that dies mid-flight into a ~10MB one.
+data/
+design/
+experiments/
+prototypes/
+review.html
+BACKLOG.md
