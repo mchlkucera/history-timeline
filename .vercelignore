@@ -27,9 +27,15 @@ data/geo/*.geojson
 # data/ and design/ feed MANUAL scripts (npm run data / design:sync) whose
 # outputs are committed under web/; experiments and prototypes are standalone.
 # Excluding them turns a ~100MB upload that dies mid-flight into a ~10MB one.
-data/
-design/
-experiments/
-prototypes/
-review.html
-BACKLOG.md
+#
+# ANCHORED WITH A LEADING SLASH, and this is load-bearing: this file applies
+# to GIT deployments too, not only CLI uploads, and gitignore syntax makes an
+# unanchored `data/` match a directory named data at ANY depth — which
+# stripped web/src/data/ (the app's entire corpus) out of the deployment and
+# failed the production build in nine seconds. Root-level only, by name.
+/data/
+/design/
+/experiments/
+/prototypes/
+/review.html
+/BACKLOG.md
