@@ -25,7 +25,7 @@
 // legacy carto* ids accepted as a fallback so this survives the shell rewrite either way.
 
 import {
-  $, GEO, POPS, clamp, fitCanvas, fmtY, fontMono, fontUI, hideTip, reduceMotion, repaintOnFonts, showTip,
+  $, GEO, POPS, TimeStore, clamp, fitCanvas, fmtY, fontMono, fontUI, hideTip, reduceMotion, repaintOnFonts, showTip,
   tokens, type Tokens,
 } from './shared';
 
@@ -491,7 +491,8 @@ export const Pop = {
   names: true,
   playing: null as any,
   _init: false,
-  _path: null as Path2D | null, _pw: 0, _ph: 0,
+  _path: null as Path2D | null, _pw: 0, _ph: 0, _pg: null as any[] | null,
+  _wantYear: null as number | null,
   proj: { ox: 0, oy: 0, mw: 1, mh: 1 },
   _capAt: 0, _capNamed: true,
   _off: null as HTMLCanvasElement | null,
@@ -502,6 +503,27 @@ export const Pop = {
     const S = this.slices(); if (!S.length) return 2025;
     const i0 = clamp(Math.floor(this.ix), 0, S.length - 1), i1 = clamp(i0 + 1, 0, S.length - 1);
     return S[i0].year + (S[i1].year - S[i0].year) * (this.ix - i0);
+  },
+  /** year() in reverse: the fractional slice index whose interpolated year is y,
+   *  clamped to the range the data can actually stand in. */
+  ixForYear(y: number): number {
+    const S = this.slices();
+    if (y <= S[0].year) return 0;
+    if (y >= S[S.length - 1].year) return S.length - 1;
+    let i = 0;
+    while (i < S.length - 2 && S[i + 1].year < y) i++;
+    const d = S[i + 1].year - S[i].year;
+    return d ? i + (y - S[i].year) / d : i;
+  },
+  /** Adopt the global moment WITHOUT writing back — WorldMap and Horizon's
+   *  contract, same name. The slices may not have landed yet (POPDATA loads
+   *  late); remember the year and render() applies it on the first frame that
+   *  has data, so an arrival before the payload still lands on the moment. */
+  syncToYear(y: number) {
+    const S = this.slices();
+    if (!S.length) { this._wantYear = y; return; }
+    this._wantYear = null;
+    this.ix = this.ixForYear(y);
   },
 
   // -------------------------------------------------- DOM (new ids, legacy fallback)
@@ -527,7 +549,7 @@ export const Pop = {
       if (sl) {
         if (!w.sliderEvt) {
           sl.setAttribute('aria-label', 'Year');
-          sl.addEventListener('input', (e: any) => { this.stop(); this.ix = +e.target.value; this.render(); });
+          sl.addEventListener('input', (e: any) => { this.stop(); this.ix = +e.target.value; TimeStore.set(Math.round(this.year()), 'pop'); this.render(); });
           w.sliderEvt = true;
         }
         // The range depends on POPDATA, which may not have landed yet. Do not latch the
@@ -624,6 +646,7 @@ export const Pop = {
   // -------------------------------------------------- paint
   render() {
     if (!this.ensureDom()) return;
+    if (this._wantYear != null && this.slices().length) this.syncToYear(this._wantYear);
     const d = fitCanvas(this.cv, this.H); if (!d) return;
     const { cw, ctx } = d; const H = this.H; const T = tokens();
     const dark = lum(parseRGB(T.bg, [245, 247, 246])) < 0.4;
@@ -651,15 +674,28 @@ export const Pop = {
     ctx.fillStyle = T.sea; ctx.fillRect(ox, oy, mw, mh);
 
     // land silhouette (present-day coastline; coastlines are the one thing that barely moves)
-    if (!this._path || this._pw !== mw || this._ph !== mh) {
-      const p = new Path2D(); const geo = GEO[1994] || [];
+    //
+    // KEYED ON THE GEOMETRY AS WELL AS THE PLATE. The path is a function of both, but
+    // the memo used to be keyed on the size alone. Habitation paints before the atlas
+    // lands (Lab warms it after first paint and repaints every view through onAtlas),
+    // and on that first pass GEO answers with the empty snapshot — so an EMPTY Path2D
+    // was latched and, the size being unchanged when the geometry arrived, never
+    // rebuilt. Plate only fills and strokes this path, and filling nothing is a silent
+    // no-op, so it merely lost its coastline; Field CLIPS to it, and an empty clip
+    // discards the entire density raster, leaving the blank plate with the place names
+    // still on it (they are drawn after the clip is restored). Same failure map.ts
+    // documents at buildPaths(); GEO's arrays are built once and never replaced, so
+    // identity is the honest key.
+    const geo = GEO[1994] || [];
+    if (!this._path || this._pw !== mw || this._ph !== mh || this._pg !== geo) {
+      const p = new Path2D();
       const px = (lo: number) => (lo + 180) / 360 * mw, py = (la: number) => (85 - la) / 145 * mh;
       for (const f of geo) for (const r of f.rings) {
         p.moveTo(px(r[0]), py(r[1]));
         for (let i = 2; i < r.length; i += 2) p.lineTo(px(r[i]), py(r[i + 1]));
         p.closePath();
       }
-      this._path = p; this._pw = mw; this._ph = mh;
+      this._path = p; this._pw = mw; this._ph = mh; this._pg = geo;
     }
     ctx.save();
     ctx.translate(ox, oy);
@@ -901,6 +937,12 @@ export const Pop = {
     this.ensureDom();
     this.render();
     repaintOnFonts(() => this.render());
+    TimeStore.subscribe(() => {
+      if (TimeStore.source === 'pop') return;         // our own write — no-op (anti-loop)
+      this.stop();
+      this.syncToYear(TimeStore.year);
+      this.render();
+    });
   },
   play() {
     const S = this.slices(); if (!S.length) return;
@@ -923,7 +965,8 @@ export const Pop = {
       } else {
         this.ix += dt / 1000 * RATE;
       }
-      if (this.ix >= S.length - 1) { this.ix = S.length - 1; this.render(); this.stop(); return; }
+      if (this.ix >= S.length - 1) { this.ix = S.length - 1; TimeStore.set(Math.round(this.year()), 'pop'); this.render(); this.stop(); return; }
+      TimeStore.set(Math.round(this.year()), 'pop');
       this.render();
       this.playing = requestAnimationFrame(tick);
     };

@@ -937,7 +937,7 @@ export function clearTextCache() { _twCache.clear(); _elCache.clear(); _varyCach
 // stores are WRITTEN only from user-input handlers (pointerup, input, click) — never
 // from render(), never from inside a subscriber. Subscribers only repaint/refresh. The
 // source tag lets a writer's own subscriber no-op (the map ignores source==='map').
-export type TimeSource = 'map' | 'tl' | 'vt' | 'ui' | 'boot';
+export type TimeSource = 'map' | 'pop' | 'tl' | 'vt' | 'ui' | 'boot';
 export const TimeStore = {
   year: 1783,
   source: 'boot' as TimeSource,

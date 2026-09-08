@@ -399,14 +399,14 @@ function renderTab(v: ViewId) {
   sizeRenderers();
   switch (v) {
     case 'map': WorldMap.render(); break;
-    case 'pop': Pop.render(); break;
-    // THE STANDPOINT ADOPTS THE MOMENT. Horizon draws ONE year, so arriving on
-    // it with the app standing at 1621 and drawing 1776 is the same lie the map
-    // was fixed of: syncToYear takes the moment (nearest it can serve) and
+    // THE STANDPOINT ADOPTS THE MOMENT. Horizon and Habitation draw ONE year, so
+    // arriving with the app standing at 1621 and drawing 1776 is the same lie the
+    // map was fixed of: syncToYear takes the moment (nearest it can serve) and
     // writes nothing back, exactly as WorldMap.syncToYear does. Idempotent, so
     // the resize and sheet-collapse calls into renderTab cost nothing and a
-    // year the reader set HERE is never yanked back — setYear published it, so
-    // the store already agrees.
+    // year the reader set HERE is never yanked back — the gesture published it,
+    // so the store already agrees.
+    case 'pop': Pop.syncToYear(TimeStore.year); Pop.render(); break;
     case 'horizon': Horizon.syncToYear(TimeStore.year); Horizon.render(); break;
     case 'zoom': TL.ensureYearVisible(); TL.render(); break;
     case 'vertical': TL.ensureYearVisible(); VT.render(); break;
@@ -1892,11 +1892,9 @@ export default function Lab() {
       TimeStore.set((WorldMap as any).year(), 'map'); return;
     }
     if (v === 'pop') {
-      const S = Pop.slices();
-      if (!S.length) return;
-      let best = 0;
-      for (let i = 0; i < S.length; i++) if (Math.abs(S[i].year - y) < Math.abs(S[best].year - y)) best = i;
-      Pop.stop(); Pop.ix = best; Pop.render(); return;
+      if (!Pop.slices().length) return;
+      Pop.stop(); Pop.syncToYear(y); Pop.render();
+      TimeStore.set(Math.round(Pop.year()), 'pop'); return;
     }
     if (v === 'horizon') {
       const inp = document.getElementById('hzYear') as HTMLInputElement | null;
@@ -2775,7 +2773,9 @@ export default function Lab() {
     if (v === 'map') { WorldMap.stop(); WorldMap.ix = Math.max(0, Math.min(17, WorldMap.ix + d)); WorldMap.render(); TimeStore.set((WorldMap as any).year(), 'map'); }
     else if (v === 'pop') {
       const n = Pop.slices().length;
+      if (!n) return;
       Pop.stop(); Pop.ix = Math.max(0, Math.min(n - 1, Math.round(Pop.ix) + d)); Pop.render();
+      TimeStore.set(Math.round(Pop.year()), 'pop');
     } else if (v === 'horizon') {
       const inp = document.getElementById('hzYear') as HTMLInputElement | null;
       if (inp) { inp.value = String(Horizon.year + d); inp.dispatchEvent(new Event('input', { bubbles: true })); }
