@@ -35,7 +35,10 @@ Open questions when this is picked up:
 
 Prototype built and committed at `experiments/lanepicker/` — four arrangements
 on the real corpus and the real tokens, **design D recommended and first on the
-page**. Awaiting a decision before anything touches the app.
+page**. **Decided 2026-09-08: design D, switcher idiom** — the one marked row
+(the lane you are seeing it in) inverts like an active tab; the minium-accent
+variant is rejected, minium keeps its single meaning. Implementation in flight;
+remove this entry when it ships.
 
 D is: the card's existing destination strip is the list of views; under
 **Timeline**, and only there, it opens into the lane names this subject belongs
@@ -46,6 +49,27 @@ The model change it implies is written into the prototype page. The short
 version: `factsOf()` stops returning one lane and returns a ranked list; it needs
 a `belief:` branch so belief streams stop resolving to `never`; and lane
 membership needs somewhere to live, since nothing stores it today.
+
+---
+
+## The map of technology — parked 2026-09-08, "we'll get back to it"
+
+Prototype built and committed at `experiments/techmap/` — four hand-authored
+diffusions (printing, gunpowder, textiles, computing), 77 hops across 71
+places, with routes, contested claims and dead ends. Parked by decision before
+any ETL work; the prototype page carries the full data-shape notes.
+
+The three questions that must be answered when it is picked up (they are argued
+on the page itself):
+
+- **What counts as "arrival"?** Proposed: each diffusion carries its own
+  one-line `claim` of what "having it" means, because arrival-of-printing and
+  arrival-of-computing are not the same kind of fact.
+- **May the map admit placelessness?** Some hops have no honest coordinates —
+  proposed a `faded` fate that lets a diffusion trail off rather than pretend
+  precision.
+- **Who signs the arcs?** A `src` citation field per hop, added **before** the
+  first real data run, not retrofitted after.
 
 ---
 
