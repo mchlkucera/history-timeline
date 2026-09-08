@@ -60,14 +60,29 @@
 
    That same "permanently dead" reasoning had been quietly reversed in three
    later cells, which hatched a NEVER instead of dropping it: Timeline for a
-   belief stream (on no lane, and no lane can be added that would draw one),
-   Flow for a polity carrying no weight curve, Map for a polity drawn in none
-   of the eighteen snapshots. The Buddhism card was the proof — a TIMELINE chip
-   you could focus and press, that did nothing, whose whole explanation lived in
-   a title attribute and a screen-reader span. The argument for hatching was
-   that hiding would imply the subject is the wrong KIND of thing for the view;
-   but the destination row is not a claim about kinds, it is a set of doors, and
-   a door that opens onto nothing is not a door. Those three now do not render.
+   belief stream, Flow for a polity carrying no weight curve, Map for a polity
+   drawn in none of the eighteen snapshots. The Buddhism card was the proof — a
+   TIMELINE chip you could focus and press, that did nothing, whose whole
+   explanation lived in a title attribute and a screen-reader span. The argument
+   for hatching was that hiding would imply the subject is the wrong KIND of
+   thing for the view; but the destination row is not a claim about kinds, it is
+   a set of doors, and a door that opens onto nothing is not a door. Those three
+   went un-rendered — and the first has since come BACK, live, because its
+   premise ("on no lane, and no lane can be added that would draw one") stopped
+   being true: factsOf grew a belief: branch, a stream resolves to its curated
+   lane (Religion, Political ideologies), and the cell is a door again.
+
+   THE TIMELINE CELL OPENS INTO LANES. On the timeline view — and only there,
+   because a lane is a timeline concept — the strip grows a disclosure under
+   itself: the lanes this subject belongs to, names only, on-your-board first,
+   then "Add new lane" with a plus per row. Exactly one row is ever marked, and
+   it means THE LANE YOU ARE SEEING IT IN — the switcher's own active idiom
+   (ink step, surface-3 ground, 2px ink rule), never the accent, one level down
+   from the tabs it quotes. Pressing an on-board row picks it, and planReveal
+   answers for the pick from then on, so the next press of TIMELINE lands the
+   subject in that lane; pressing an "Add new lane" row adds the lane through
+   the same Layers.add the library uses — same notice, same panel flash — and
+   marks it. See laneList() and chooseLane().
 
    ONE hatched state survives, and it is the recoverable one: the atlas is
    fetched lazily and can fail, so a polity with real territory can be
@@ -128,7 +143,9 @@ import { FOLD, roleWord } from './fold';
 // The layer MODEL, not a renderer — it is the file that knows whether any lane
 // on the board (or in the library) would draw a given id, and it knows nothing
 // about the canvas. See "THIS FILE IMPORTS NO RENDERER" above.
-import { planReveal } from './layers';
+// Layers/lanesOf/pickLane feed the Timeline disclosure: the ranked lanes a
+// subject belongs to, which of them are on the board, and the reader's pick.
+import { Layers, lanesOf, pickLane, pickedLane, planReveal } from './layers';
 
 const GAP = 10;          // breathing room between the card and the thing it names
 const MARGIN = 10;       // hard viewport inset
@@ -361,6 +378,9 @@ export const SelCard = {
         this.act(act.dataset.act!);
         return;
       }
+      // A row in the Timeline disclosure — see chooseLane().
+      const lane = t?.closest?.('[data-lane]') as HTMLElement | null;
+      if (lane) { e.preventDefault(); this.chooseLane(lane.dataset.lane!); return; }
       const row = t?.closest?.('[data-goid]') as HTMLElement | null;
       if (row) { e.preventDefault(); this.go(row.dataset.goid!); }
     });
@@ -415,6 +435,16 @@ export const SelCard = {
     TimeStore.subscribe(() => {
       if (!this.open) return;
       queueMicrotask(() => { if (this.open) this.paint(); });
+    });
+    // THE BOARD IS PART OF THE CARD NOW. The Timeline disclosure draws its two
+    // groups from Layers.has, so a lane arriving or leaving — this card's own
+    // add, the panel's ×, a library add — has to repaint the open card the way
+    // a year move does. Same microtask, same reason: other subscribers of the
+    // same emit may still be mid-move. placeSoon too, because the disclosure
+    // changes the card's height and a parked card measures the column below it.
+    Layers.subscribe(() => {
+      if (!this.open) return;
+      queueMicrotask(() => { if (this.open) { this.paint(); this.placeSoon(); } });
     });
   },
 
@@ -737,7 +767,9 @@ export const SelCard = {
           (d.off ? `<span class="tl-selcard__sr">unavailable — ${esc(d.title)}</span>` : '') +
           `</button>`;
       }
-      html += `</div></div>`;
+      html += `</div>`;                                 // /dests
+      html += this.laneList(s, dests);                  // Timeline's disclosure — '' on every other view
+      html += `</div>`;                                 // /go
     }
 
     // ── connections: a ranked micro-chart, never a list of links ───────────
@@ -786,18 +818,20 @@ export const SelCard = {
     const out: Dest[] = [];
 
     // TIMELINE — for everything the timeline could ever draw, which is all but
-    // two kinds of subject. A bare border feature has no span of its own worth
-    // framing (its dates ARE one snapshot's stratum), and a belief stream is
-    // drawn by no lane at all; everything else in the corpus reaches it.
+    // one kind of subject. A bare border feature has no span of its own worth
+    // framing (its dates ARE one snapshot's stratum); everything else in the
+    // corpus reaches it — a belief stream included, now that factsOf resolves
+    // one to its curated lane (Religion, Political ideologies). "We know from
+    // when it started and can draw a Lane of Religions!"
     //
     // NEVER IS NOT RENDERED. A subject whose lane is merely absent or
     // under-detailed is NOT NOW — pressing this adds it (see act('persp')), so
-    // the cell stays live. A belief stream is on no lane at all and no lane can
-    // be added that would draw it, so the cell is DROPPED rather than hatched:
-    // hatching it printed a permanently dead control whose only explanation was
-    // a title attribute and a screen-reader span, on the one card where the row
-    // is otherwise all live. (Without the guard this framed five thousand empty
-    // years, which is the phantom zoom the search box was fixed for.)
+    // the cell stays live. `never` is left for the genuinely laneless, and a
+    // dead cell is DROPPED rather than hatched: hatching printed a permanently
+    // dead control whose only explanation was a title attribute and a screen-
+    // reader span, on the one card where the row is otherwise all live.
+    // (Without the guard this framed five thousand empty years, which is the
+    // phantom zoom the search box was fixed for.)
     if (!s.minimal && planReveal(s.id).need !== 'never') {
       const [a0, a1] = perspectiveSpan(s);
       const deep = fmtBig(a0) !== fmtY(a0);            // beyond 20,000 years
@@ -937,6 +971,60 @@ export const SelCard = {
   },
 
   /**
+   * THE TIMELINE DISCLOSURE — the lanes this subject belongs to, opened under
+   * the destination strip. "The moment we have him open in Timeline we should
+   * see an expanded view to specify which lanes in the Timeline it is a part
+   * of. Just show their names, nothing else, no other explanations."
+   *
+   * ONLY UNDER TIMELINE — it renders exactly while the TIMELINE cell is the
+   * current view. A lane is a timeline concept; on Map or Beliefs the block is
+   * not there at all. Pressing the cell still means "go to Timeline" (it
+   * frames and scrolls, exactly as shipped); arriving there is what opens the
+   * list, so the disclosure costs no second affordance and no second tap.
+   *
+   * ROWS, NOT PILLS, in factsOf's rank: what is on your board first, then
+   * "Add new lane" over what is not, a plus per row. No counts, no reasons,
+   * no custom-lane row, and no Undo — removing a lane in the panel is the
+   * undo. Exactly ONE row is ever marked, and it means THE LANE YOU ARE
+   * SEEING IT IN: the reader's own pick while its lane is on the board,
+   * otherwise the lane that is actually drawing the mark (planReveal's
+   * `ready`), otherwise nothing — which is the truth for a subject no lane on
+   * the board draws. The mark speaks the switcher's active idiom, one level
+   * down from the tabs it quotes (selcard.css §06b); the accent stays spent
+   * on time alone.
+   */
+  laneList(s: Subject, dests: Dest[]): string {
+    const tl = dests.find(d => d.act === 'persp');
+    if (!tl || !tl.current) return '';
+    const lanes = lanesOf(s.id);
+    if (!lanes.length) return '';
+    const on = lanes.filter(l => Layers.has(l.id));
+    const off = lanes.filter(l => !Layers.has(l.id));
+    const pick = pickedLane(s.id);
+    let mark: string | null = pick && on.some(l => l.id === pick) ? pick : null;
+    if (!mark) { const p = planReveal(s.id); if (p.need === 'ready') mark = p.layer; }
+
+    let html = `<div class="tl-selcard__lanes" role="group" aria-label="Timeline lanes">`;
+    for (const l of on) {
+      html += `<button type="button" class="tl-selcard__lane" data-lane="${attr(l.id)}"` +
+        (l.id === mark ? ` aria-current="true"` : '') + `>` +
+        `<span class="tl-selcard__lane-n">${esc(l.name)}</span></button>`;
+    }
+    if (off.length) {
+      // The heading names the list of lanes you could add — not a create
+      // action. There is no custom-lane row.
+      html += `<div class="tl-selcard__laneshd">Add new lane</div>`;
+      for (const l of off) {
+        html += `<button type="button" class="tl-selcard__lane tl-selcard__lane--add" ` +
+          `data-lane="${attr(l.id)}" aria-label="${attr('Add ' + l.name)}">` +
+          `<span class="tl-selcard__lane-n">${esc(l.name)}</span>` +
+          `<span class="tl-selcard__lane-plus" aria-hidden="true">+</span></button>`;
+      }
+    }
+    return html + `</div>`;
+  },
+
+  /**
    * WHAT THE MAP IS ACTUALLY DRAWING — a measurement, never a warning.
    *
    * This used to also print the DISTANCE from the year you are standing on to
@@ -1015,6 +1103,23 @@ export const SelCard = {
       case 'braid': w?.showInBeliefs(s.id); break;
       case 'conn': if (SelStore.id) w?.showInConnections(SelStore.id); break;
     }
+  },
+
+  /**
+   * A ROW IN THE TIMELINE DISCLOSURE. Choosing an on-board lane moves the
+   * mark — pickLane() makes planReveal answer for that lane from now on, so
+   * the next press of TIMELINE lands the subject in it. Choosing one under
+   * "Add new lane" adds it through Layers.add — the SAME route the library
+   * uses, so Lab's arrival announcer fires the same notice and the same panel
+   * flash, and this file stays free of chrome — and the fresh lane is marked.
+   * The repaint arrives through the Layers subscription in init(); only the
+   * board-untouched case repaints here.
+   */
+  chooseLane(laneId: string) {
+    const id = SelStore.id; if (!id) return;
+    pickLane(id, laneId);
+    if (!Layers.has(laneId)) Layers.add(laneId);
+    else { this.paint(); this.placeSoon(); }
   },
 
   // ── placement ─────────────────────────────────────────────────────────────

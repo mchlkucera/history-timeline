@@ -29,8 +29,13 @@
    and asks membership questions of it; layerpanel.ts draws it.
    ============================================================================= */
 
-import { CATBY, EVENTS, LANES, POLITIES, clamp, evId } from './shared';
+import { BELIEFS, CATBY, EVENTS, LANES, POLITIES, clamp, evId } from './shared';
 import { REL, SPREADCAT, lvlOfWeight, peakOf, regionOf } from './relations';
+// The one fact about a belief stream this model needs that the raw corpus row
+// does not carry: where the tradition actually ENDS once its schisms are
+// followed. Same import relations.ts already makes; no cycle — subject.ts does
+// not import this file.
+import { beliefLifeEnd } from './subject';
 
 // ── detail: three named steps, and each word means something concrete ────────
 // The founder's semantics, verbatim: LOW answers "when", NORMAL answers "what
@@ -551,10 +556,31 @@ function eventById(id: string): any[] | null {
 interface MarkFacts {
   own: string | null;      // the layer that OWNS it
   adopted: string[];       // layers that ALSO draw it, through `anchors`
+  /** THE RANKED LANE LIST — every lane this subject belongs to, deduped.
+   *  Curated lanes first, then derived region lanes; within a tier the owning
+   *  lane leads its adopters. First is the main lane: the one a bare press of
+   *  TIMELINE lands in when nothing is on the board and the reader has picked
+   *  nothing. This is what the card's Timeline disclosure draws. */
+  lanes: string[];
   lvl: number;
   type: string;
   start: number;
   end: number;             // 0 for a moment — what the event stratum passes
+}
+
+/** Rank a subject's lanes: curated membership first, then derived. A lane
+ *  built from LANES (a hand-made list — Religion, Mozart, Czech history) says
+ *  more about what a thing IS than the region × facet coordinate the model
+ *  computes, so it leads. Within a tier the owning lane stays ahead of its
+ *  adopters, which keeps planReveal's tie-break exactly what it always was. */
+function rankLanes(own: string | null, adopted: string[]): string[] {
+  const out: string[] = [];
+  for (const c of [own, ...adopted]) if (c && !out.includes(c) && layerDef(c)) out.push(c);
+  const curated = (lid: string) => {
+    const d = layerDef(lid)!;
+    return d.facet === 'all' && d.subject !== 'CO';        // deep time is derived, not curated
+  };
+  return [...out.filter(curated), ...out.filter(l => !curated(l))];
 }
 
 function factsOf(id: string): MarkFacts | null {
@@ -563,8 +589,9 @@ function factsOf(id: string): MarkFacts | null {
     const p = POLITIES.find((x: any) => x.id === id.slice(7));
     if (!p) return null;
     const band = p.region === 'AF' ? 'ME' : p.region;
+    const own = layerIdFor(band, 'power', 'polity');
     return {
-      own: layerIdFor(band, 'power', 'polity'), adopted: [],
+      own, adopted: [], lanes: rankLanes(own, []),
       lvl: polityLvl(p), type: 'polity', start: p.start, end: p.end,
     };
   }
@@ -574,20 +601,69 @@ function factsOf(id: string): MarkFacts | null {
     const fp = s.footprint && s.footprint.length ? s.footprint[0] : null;
     const band = fp ? regionOf(fp.lat, fp.lon) : null;
     if (!band) return null;                    // no footprint, no band, no lane
+    const own = layerIdFor(band, SPREADCAT[s.kind] || 'society', 'spread');
     return {
-      own: layerIdFor(band, SPREADCAT[s.kind] || 'society', 'spread'), adopted: [],
+      own, adopted: [], lanes: rankLanes(own, []),
       lvl: lvlOfWeight(peakOf(s.weight)), type: 'spread', start: s.start, end: s.end,
     };
   }
+  // A BELIEF STREAM LIVES IN A CURATED LANE. It carries no band and no
+  // coordinate, so the derived region × facet axis cannot place it — but it
+  // has a start, an end and a weight curve, which is everything a spread has,
+  // and the corpus that holds it says which shelf it is from: the religion
+  // system's streams belong to the Religion lane, the ideology system's to
+  // Political ideologies. The founder, on "beliefs can't be drawn": "We know
+  // from when it started and can draw a Lane of Religions!" This branch is
+  // what turns planReveal's `never` into an answer for all 61 streams; it
+  // used to fall through to eventById below and miss.
+  if (id.startsWith('belief:')) {
+    const sid = id.slice(7);
+    for (const sys of (BELIEFS.systems || [])) for (const st of (sys.streams || [])) {
+      if (st.id !== sid) continue;
+      const lane = sys.id === 'ideology' ? 'pi' : 'rl';
+      const own = layerDef(lane) ? lane : null;
+      return {
+        own, adopted: [], lanes: rankLanes(own, []),
+        lvl: lvlOfWeight(peakOf(st.weight)), type: 'belief',
+        // the end the card claims: a division is not a death (subject.ts)
+        start: st.start, end: beliefLifeEnd(st.id),
+      };
+    }
+    return null;
+  }
   const e = eventById(id);
-  if (!e) return null;                         // beliefs, and anything else the timeline never draws
+  if (!e) return null;                         // anything else the timeline never draws
   const adopted: string[] = [];
   for (const d of _defs!) if (d.anchors && d.anchors.indexOf(id) >= 0) adopted.push(d.id);
+  const own = layerIdOfEvent(e);
   return {
-    own: layerIdOfEvent(e), adopted,
+    own, adopted, lanes: rankLanes(own, adopted),
     lvl: e[4] || 3, type: e[7] || (e[1] ? 'episode' : 'moment'),
     start: e[0], end: e[1] || 0,
   };
+}
+
+/* ── the reader's lane pick ──────────────────────────────────────────────────
+   THE MARKED ROW IN THE CARD'S TIMELINE DISCLOSURE. A subject can belong to
+   several lanes; the pick is the reader saying which one the subject means to
+   them, and from then on planReveal answers for THAT lane — so "view in
+   Timeline" lands where the marked row says it will.
+
+   SESSION STATE, DELIBERATELY NOT PERSISTED. The board is the durable
+   arrangement and it already survives (tl.layers.v1); the pick is only ever a
+   choice AMONG lanes that are on it, and a pick whose lane has left the board
+   is simply ignored — removing the lane is the undo, exactly as it is for a
+   reveal. Nothing here re-adds a lane nobody asked for. */
+const LANE_PICK = new Map<string, string>();
+export function pickLane(id: string, laneId: string) { LANE_PICK.set(id, laneId); }
+export function pickedLane(id: string): string | null { return LANE_PICK.get(id) ?? null; }
+
+/** The ranked lanes a subject belongs to, named — what the card's Timeline
+ *  disclosure draws. Empty for anything the timeline can never draw. */
+export function lanesOf(id: string): { id: string; name: string }[] {
+  const f = factsOf(id);
+  if (!f) return [];
+  return f.lanes.map(l => ({ id: l, name: layerDef(l)?.name ?? l }));
 }
 
 /** The lowest detail step at or above `from` that lets this mark through. */
@@ -617,16 +693,24 @@ export interface RevealPlan {
 /**
  * WHAT WOULD IT TAKE TO SEE THIS? Read-only — it decides, it never acts.
  *
- * A mark can have more than one candidate layer: Mozart's lifespan is banded MU
+ * A mark can have more than one candidate lane: Mozart's lifespan is banded MU
  * and ADOPTED by the Mozart study, the big wars sit in a region's Wars facet and
- * are adopted by its Essentials. If any candidate already draws it, the answer
- * is `ready` and nothing is touched — a reader who has Europe · Essentials open
- * should not have Europe · Wars added underneath them for a mark that is
- * already on their screen.
+ * are adopted by its Essentials. The candidates are factsOf's ranked lane list.
  *
- * Otherwise the CHEAPEST candidate wins, in the order of how much of the
- * reader's arrangement it disturbs: raising a dial < adding a lane. Ties go to
- * the owning layer, which is where the mark actually belongs.
+ * THE READER'S PICK WINS. The card's Timeline disclosure lets a reader say
+ * which lane a subject means to them (pickLane); while that lane is on the
+ * board, this answers for it and nothing else — ready when it draws the mark,
+ * a dial raise when it does not — so the marked row and the landing can never
+ * disagree. A pick whose lane has left the board is ignored, not obeyed:
+ * removing the lane is the undo, and a stale pick must never re-add one.
+ *
+ * Otherwise: if any candidate already draws it, the answer is `ready` and
+ * nothing is touched — a reader who has Europe · Essentials open should not
+ * have Europe · Wars added underneath them for a mark that is already on their
+ * screen. Failing that the CHEAPEST candidate wins, in the order of how much
+ * of the reader's arrangement it disturbs: raising a dial < adding a lane.
+ * Ties go to the first in rank, which is the owning layer for everything that
+ * has one — where the mark actually belongs.
  */
 export function planReveal(id: string): RevealPlan {
   // THIS FILE DOES NOT KNOW ABOUT THE CANVAS, and it certainly does not know
@@ -641,9 +725,21 @@ export function planReveal(id: string): RevealPlan {
     why: 'not drawn on this timeline',
   };
   const f = factsOf(id);
-  if (!f || !f.own) return none;
+  if (!f || !f.lanes.length) return none;
 
-  const cands = [f.own, ...f.adopted];
+  const pick = LANE_PICK.get(id);
+  if (pick && f.lanes.includes(pick) && Layers.has(pick)) {
+    const def = layerDef(pick);
+    if (def) {
+      if (passesDetail(Layers.detail(pick), def.kind, f.lvl, f.type, f.start, f.end)) {
+        return { need: 'ready', layer: pick, layerName: def.name, detail: null, detailWord: null, why: null };
+      }
+      const want = detailFor(f, def.kind, Layers.detail(pick));
+      return { need: 'detail', layer: pick, layerName: def.name, detail: want, detailWord: DETAIL_WORDS[want], why: null };
+    }
+  }
+
+  const cands = f.lanes;
   // already drawn by one of them? then there is nothing to do.
   for (const c of cands) {
     const def = layerDef(c); if (!def) continue;

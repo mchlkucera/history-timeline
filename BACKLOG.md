@@ -31,24 +31,24 @@ Open questions when this is picked up:
 
 ---
 
-## The lane picker card
+## The lane picker card — SHIPPED 2026-09-08, two follow-ons left
 
-Prototype built and committed at `experiments/lanepicker/` — four arrangements
-on the real corpus and the real tokens, **design D recommended and first on the
-page**. **Decided 2026-09-08: design D, switcher idiom** — the one marked row
-(the lane you are seeing it in) inverts like an active tab; the minium-accent
-variant is rejected, minium keeps its single meaning. Implementation in flight;
-remove this entry when it ships.
+Design D with the switcher idiom, decided and built. The prototype stays at
+`experiments/lanepicker/` as the record of the four arrangements. What is left
+is in the renderer, not the model:
 
-D is: the card's existing destination strip is the list of views; under
-**Timeline**, and only there, it opens into the lane names this subject belongs
-to. Two states — on your board, or press to add. Names only, no counts, no
-reasons.
+- **A belief stream has a lane but still no bar of its own.** `factsOf()` now
+  answers `belief:` — Daoism resolves to Religion — so landing it frames its
+  span with the lane's curated members around it, but `timeline.ts` draws no
+  mark for the stream itself. The model supplies the lane; the renderer branch
+  is a separate step.
+- **A mark in two lanes lands on whichever copy `anchorOf` reports first.**
+  Mozart is in Music and in Mozart; picking one does not yet choose which copy
+  the Y-landing centres on. Needs an `anchorOf` that takes a lane.
 
-The model change it implies is written into the prototype page. The short
-version: `factsOf()` stops returning one lane and returns a ranked list; it needs
-a `belief:` branch so belief streams stop resolving to `never`; and lane
-membership needs somewhere to live, since nothing stores it today.
+Also noted while building: most belief streams score lvl 4–5, which is why
+revealing one raises its lane to "detailed". Whether the belief importance
+curve is right is its own decision.
 
 ---
 

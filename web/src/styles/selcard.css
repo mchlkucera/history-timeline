@@ -375,6 +375,100 @@
 }
 
 
+/* ── 06b  The lanes — Timeline's disclosure ───────────────────────────────────
+
+   "The moment we have him open in Timeline we should see an expanded view to
+   specify which lanes in the Timeline it is a part of. Just show their names,
+   nothing else, no other explanations." Rows, not pills: what is on your board
+   first, then ADD NEW LANE over what is not, a plus per row. The app renders
+   the block only while the TIMELINE cell is the current view — a lane is a
+   timeline concept, so on every other view it is not there at all.
+
+   THE ONE MARKED ROW is the lane you are seeing the subject in, and it speaks
+   the switcher's own active idiom — the ink step, the --tl-surface-3 ground
+   and the 2px ink rule of .tl-switch__item[aria-selected] (shell.css §03) —
+   rotated from the bottom edge of a tab to the leading edge of a row: a tab
+   owns the region below it, a row owns itself. NOT the accent: minium means
+   "where you are in time" and nothing else (DESIGN.md §7), and this is a
+   control state. Never more than one, and never a row that is not on the
+   board.
+*/
+.tl-selcard__lanes {
+  display: flex;
+  flex-direction: column;
+  padding: var(--tl-space-2);
+  background: var(--tl-surface-2);
+  border: var(--tl-border) solid var(--tl-rule-soft);
+  border-radius: var(--tl-radius-sm);
+}
+.tl-selcard__laneshd {
+  padding: var(--tl-space-4) var(--tl-space-3) var(--tl-space-2);
+  margin-top: var(--tl-space-2);
+  border-top: var(--tl-border) solid var(--tl-rule-soft);
+  font-size: var(--tl-text-2xs);
+  font-weight: var(--tl-w-semi);
+  letter-spacing: var(--tl-track-caps);
+  text-transform: uppercase;
+  color: var(--tl-ink-3);
+}
+.tl-selcard__lane {
+  position: relative;
+  display: flex;
+  align-items: center;
+  gap: var(--tl-space-3);
+  width: 100%;
+  min-height: 26px;
+  padding: var(--tl-space-2) var(--tl-space-3);
+  border-radius: var(--tl-radius-xs);
+  font-size: var(--tl-text-sm);
+  color: var(--tl-ink-2);
+  transition: background var(--tl-dur-fast) var(--tl-ease),
+              color var(--tl-dur-fast) var(--tl-ease);
+}
+.tl-selcard__lane:hover { background: var(--tl-hover); color: var(--tl-ink); }
+.tl-selcard__lane-n {
+  flex: 1 1 auto;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+/* The plus is the row's affordance, not a second hit target: the whole row is
+   the button, so the tap area is a row and never an 18px square. Always drawn
+   — a touch screen gets no hover to discover it with. */
+.tl-selcard__lane-plus {
+  flex: none;
+  display: grid;
+  place-items: center;
+  width: 18px; height: 18px;
+  border: var(--tl-border) solid var(--tl-rule);
+  border-radius: var(--tl-radius-xs);
+  font-family: var(--tl-font-mono);
+  font-size: var(--tl-text-xs);
+  line-height: 1;
+  color: var(--tl-ink-3);
+}
+.tl-selcard__lane--add:hover .tl-selcard__lane-plus {
+  border-color: var(--tl-rule-strong);
+  background: var(--tl-surface);
+  color: var(--tl-ink);
+}
+/* THE SWITCHER'S ACTIVE STATE, one level down — see the header above. */
+.tl-selcard__lane[aria-current="true"] {
+  color: var(--tl-ink);
+  font-weight: var(--tl-w-medium);
+  background: var(--tl-surface-3);
+}
+.tl-selcard__lane[aria-current="true"]::before {
+  content: "";
+  position: absolute;
+  left: 0; top: 3px; bottom: 3px;
+  width: 2px;
+  border-radius: 1px;
+  background: var(--tl-ink);
+}
+
+
 /* ── 07  Connections — a ranked micro-chart, not a list of links ──────────────
 
    The founder calls these garnish, so the preview has to buy its ~120px with
@@ -502,6 +596,7 @@
    container — both take the ring INSIDE the control instead of around it. */
 .tl-selcard .tl-selcard__dest:focus-visible { outline-offset: -2px; z-index: 2; }
 .tl-selcard .tl-selcard__rel:focus-visible  { outline-offset: -2px; }
+.tl-selcard .tl-selcard__lane:focus-visible { outline-offset: -2px; }
 .tl-selcard :focus:not(:focus-visible) { outline: none; }
 
 
@@ -566,6 +661,7 @@
   }
   .tl-selcard__dest { height: var(--tl-tap); }
   .tl-selcard__rel { min-height: var(--tl-tap); }
+  .tl-selcard__lane { min-height: var(--tl-tap); }
   /* THE ONLY WAY OUT OF THE SHEET. On a phone Escape does not exist, so the ×
      is the whole dismissal, and at its desktop 20px it is smaller than a
      fingertip. It grows to the tap floor here — the glyph stays 12px, only the
